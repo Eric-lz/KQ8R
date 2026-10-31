@@ -3971,3 +3971,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | A character's model comes from its `animFile` movement list; there is no shape key for characters | `characters.md` rule 6 (traced) | `viewer.log` "animated … [Sylph]"; `characters.log` Barren `Witchdr` shown with `Docstop.kqs` (its file names the Sylph's `sylfstop.kqs`) |
 | So `move` reaches the Sylph as any character | `objects.md` / the scripts' `move` (as built) | `traps.log`: update 2 `move Sylph 0` → (0, 0, 0); `--command "move Sylph 2 70662 105677 1584"` → back at the well |
+
+## T-1 2026-10-31: the tower skeleton is a character — data `characters.rs` (`Class::TowerSkeleton`, keys, `tower_alarm`); core `tower_skeleton.rs`, `character.rs`, `active.rs` (Cue 201); viewer `anim_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQTowerSkeleton` is a character with its own states | `fighting.md` 7a | `characters.log` "[Skeltowr] KQTowerSkeleton … 11 movements" |
+| Keys `realAlarm`, `stunPause` (default 3), `reactPause` (default 2), `moveTime` (starts 0), `timeToRun` (enter + 5 s, kept only) | `fighting.md` 7a "Keys" | unit test `defaults_and_the_data` |
+| On entering the world its alarm radius is 0; Cue 201 sets it to `realAlarm` | `fighting.md` 7a | `fight.log` "alarm radius 0 -> 5000" |
+| It enters at game time 0 (it is in the start's monster list) | **ours** | — |
+| Who sends Cue 201: not in the data or the note | Q195 | — |

@@ -427,6 +427,11 @@ pub fn spawn_animated(
             let k = &c.keys;
             ch.flying = k.flying;
             ch.mouth_moves = k.class == kq8_data::characters::Class::Death;
+            // fighting.md 7a (T-1): the tower skeleton's own values; it
+            // enters the world at the start (game time 0).
+            if k.class == kq8_data::characters::Class::TowerSkeleton {
+                ch.tower = Some(kq8_core::tower_skeleton::TowerSkeleton::new(k.real_alarm, k.stun_pause, k.react_pause, 0.0));
+            }
             ch.hits_buildings = k.collider_mask & 0x8 != 0;
             // M4 4d-12-3: what Connor's scene needs to make it solid.
             (ch.collision_type, ch.collision_mask) = (k.collider_type, k.collider_mask);

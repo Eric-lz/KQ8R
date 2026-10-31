@@ -3514,6 +3514,31 @@ kill.
   while playing (M5 5d-3) only cover still and plain animated objects,
   so this is a new kind of copy: characters made while playing.
 
+**T: the tower skeleton (`KQTowerSkeleton`, `fighting.md` section 7a;
+planned 2026-10-31, the user's choice before K).** Dead City's
+`skeltowr.kq` (at (185,481, 124,053, 9,814), on the tower). One commit
+per step:
+- **T-1: it is a character.** `KQTowerSkeleton` joins the character
+  classes (it was a marker: "no model"), so it is drawn, clickable and
+  fights by the ordinary rules for now. Its keys are read (`realAlarm`,
+  `stunPause`, `reactPause`, `moveTime`, `timeToRun`); on entering the
+  world its alarm radius is 0 and `timeToRun` = now + 5 s (kept only);
+  Cue 201 sets the alarm radius to `realAlarm`. Check: `characters.log`
+  "[Skeltowr] … KQTowerSkeleton", alarm radius 0, then 5,000 after a
+  `sendEvent 0 Skeltowr KQCueEvent 201 0`.
+- **T-2: standing and moving** (7a "Standing", "Moving"): the ground
+  probes (1,000 ahead before moving or while moving; 400 behind during
+  `reactback`), `moveTime`, no leash, no attack while Connor is on a
+  rope, stop at reach, run after Connor when hit.
+- **T-3: the fall** (7a "Dying"): `teeter`, the camera from below,
+  `die`, `die2`, `fallend`, the drop of its chain mail (`chainmal.cs`),
+  Cue 50 twice, then the ordinary finish.
+- **T-4: what it hears and says**: the greeting the first time Connor
+  climbs a rope (controls off, camera on it, line 16/0/18, then the
+  music `mtower.aud`), the line when he readies a ranged weapon
+  (16/0/102), Cue 50's first line (16/12/22) and second (camera behind
+  Connor, the fight starts).
+
 11. **D-11 and later**: `ThrowRock` (`ranged-weapons.md` 8),
     `KQWeepBolt` (9), `RiverControl` (`objects.md`), `KQDeath`'s mouth
     movements (`talking.md` 18a), `KQAttackEvent` on objects

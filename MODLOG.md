@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-1: the tower skeleton is a character
+
+**Changed:** Data `characters.rs`: `Class::TowerSkeleton`, keys `realAlarm` and `stunPause`, alarm radius 0 on entering. New core `tower_skeleton.rs` (its values); `character.rs` (`tower`), `active.rs` (Cue 201 → `realAlarm`). Viewer `anim_view.rs` attaches the values. 1 unit test. DESIGN T plan (T-1 to T-4). Provenance. New Q195.
+**Why:** The user's choice: the tower skeleton before `KQMonster::add`. `fighting.md` section 7a. It was not in our world at all ("no model (uses an .anm file)", a marker), since its class was unknown.
+**Tested how:** `cargo test --workspace` (all pass, 570 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 600 --command "sendEvent 0 Skeltowr KQCueEvent 201 0",30`; `viewer.log`, `characters.log`, `fight.log`.
+**Result:** "[Skeltowr] KQTowerSkeleton: from monsters.kq monster75 (type towerSkeleton) at (185481, 124053, 9814) …; 11 movements, shown at load 'stop'"; its AI "alarm radius 0 until Cue 201"; update 30: "alarm radius 0 -> 5000 (realAlarm)".
+**Still broken / not tested:** **Not looked at by eye.** For now it stands, chases and dies by the ordinary rules (T-2, T-3 to come). Nothing in the data sends Cue 201 (Q195), so without a hit it never notices Connor.
+**Next:** T-2 (standing and moving).
+
 ## 2026-10-31 K: `KQMonster::add` tried and undone (they are respawns)
 
 **Changed:** DESIGN (K: the dead end and what it needs). No code (the try was undone).

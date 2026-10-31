@@ -82,6 +82,8 @@ pub enum Class {
     Monster,
     GeometryTalker,
     Death,
+    /// `KQTowerSkeleton` (`fighting.md` section 7a): Dead City's tower.
+    TowerSkeleton,
 }
 
 impl Class {
@@ -95,6 +97,8 @@ impl Class {
             Some(Class::GeometryTalker)
         } else if c.eq_ignore_ascii_case("KQDeath") {
             Some(Class::Death)
+        } else if c.eq_ignore_ascii_case("KQTowerSkeleton") {
+            Some(Class::TowerSkeleton)
         } else {
             None
         }
@@ -105,6 +109,7 @@ impl Class {
             Class::Monster => "KQMonster",
             Class::GeometryTalker => "KQGeometryTalker",
             Class::Death => "KQDeath",
+            Class::TowerSkeleton => "KQTowerSkeleton",
         }
     }
 }
@@ -617,6 +622,10 @@ pub struct CharacterKeys {
     /// `reactPause` (in the data, not in `fighting.md`: Q136; none in
     /// Daventry). Read for the log only.
     pub react_pause: Option<f32>,
+    /// The tower skeleton (`fighting.md` 7a): `realAlarm` (its alarm radius
+    /// from Cue 201 on) and `stunPause` (rule 23).
+    pub real_alarm: Option<f32>,
+    pub stun_pause: Option<f32>,
 }
 
 /// A character's own collision type and mask when its file sets none
@@ -670,6 +679,8 @@ impl CharacterKeys {
             likely_to_flee: number("likelyToFlee").map(|v| v as f32),
             must_flee: switch("mustFlee", false),
             react_pause: number("reactPause").map(|v| v as f32),
+            real_alarm: number("realAlarm").map(|v| v as f32),
+            stun_pause: number("stunPause").map(|v| v as f32),
         })
     }
 
@@ -814,6 +825,17 @@ impl AiSettings {
             do_mode: keys.do_mode,
             from: "its .kq keys".into(),
         }
+        .tower_alarm(keys)
+    }
+
+    /// `fighting.md` 7a: the tower skeleton's alarm radius is set to 0 when
+    /// it enters the world (Cue 201 gives it `realAlarm`).
+    fn tower_alarm(mut self, keys: &CharacterKeys) -> Self {
+        if keys.class == Class::TowerSkeleton {
+            self.alarm_radius = 0.0;
+            self.from.push_str("; alarm radius 0 until Cue 201 (fighting.md 7a)");
+        }
+        self
     }
 
     /// For a monster-list line of type `kind`: its movement, alarm radius,
@@ -835,7 +857,7 @@ impl AiSettings {
             src(line.chase == Field::FromType),
             src(line.attack_dist == Field::FromType)
         );
-        s
+        s.tower_alarm(keys)
     }
 
     /// One line for the logs.

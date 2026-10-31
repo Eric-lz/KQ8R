@@ -181,6 +181,8 @@ pub struct Character {
     /// Its movement rules and what it knows (M5 5a-4), set by the loader;
     /// `None` = none (it only does what it is told).
     pub ai: Option<crate::character_ai::Ai>,
+    /// `KQTowerSkeleton` (`fighting.md` 7a, T-1): its own values.
+    pub tower: Option<crate::tower_skeleton::TowerSkeleton>,
     /// Its part in the fight (M5 5c, `fighting.md`), set by the loader for
     /// a monster-list line; `None` = it never fights.
     pub fight: Option<crate::fight::Fight>,
@@ -263,6 +265,7 @@ impl Character {
         Character {
             geometry,
             mouth_moves: false,
+            tower: None,
             random_stop: flags & kq8_data::characters::RANDOM_STOP != 0,
             birth_delay,
             has_birth,

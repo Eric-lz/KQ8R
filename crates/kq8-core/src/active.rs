@@ -5678,6 +5678,20 @@ impl Active {
             self.attack_event(&e, &from);
             return;
         }
+        // fighting.md 7a (T-1): Cue 201 gives the tower skeleton its
+        // real alarm radius.
+        if e.kind == "KQCueEvent" && e.data.first().map(String::as_str) == Some(crate::tower_skeleton::CUE_REAL_ALARM) {
+            if let Some(j) = self.world.character_index(&e.target) {
+                if let Some(c) = self.world.anims[j].character.as_deref_mut() {
+                    if let (Some(t), Some(ai)) = (c.tower.as_ref(), c.ai.as_mut()) {
+                        let old = std::mem::replace(&mut ai.settings.alarm_radius, t.real_alarm);
+                        let line = format!("KQCueEvent 201 to {}{from}: alarm radius {old} -> {} (realAlarm, fighting.md 7a)", e.target, t.real_alarm);
+                        self.world.fight_note(&e.target, line);
+                        return;
+                    }
+                }
+            }
+        }
         // objects.md "Loops that move the whole object" rule 3 (batch 2,
         // D-1): on an object it is a `move` with the same flag bits; only
         // 7 numbers are read after the flags (the 8th is ignored).
