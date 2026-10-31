@@ -3814,3 +3814,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | In the state the weapon swap is refused with his line 0/0/37/23 | `tile-puzzle.md` rule 18 | `talk.log` update 350 |
 | Bottom-bar slot clicks are refused too, with the line; a script's request without it | **Ours** (rule 18 names the swap key; rule 20 refuses other states); asked in Q181 (c) | `fight.log` "refused in the Tile state" |
 | With a weapon out he says 0/0/37/23 on entering | **The user's check in the original**; asked in Q181 | `talk.log` update 250 |
+
+## Fixes G-2 2026-10-30: the camera's roll drawn — viewer `game_camera.rs` (`camera_draw`, `roll_before`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The roll (radians) turns the view about its line of sight; a flight steps it evenly to its end roll | `camera.md` "`move KQCamera`" (ry = roll), "Camera flights and cuts" rules 3–4 | `camera.log` "roll … -0.600" |
+| A negative roll turns the picture anticlockwise | **The user's check in the original** (`azrieltp.cs` Cue 2); asked in Q182 | not checked by eye |
+| Drawn blended between updates; a `move KQCamera` sets it at once | **Ours** (as the camera's place is drawn) | not checked by eye |

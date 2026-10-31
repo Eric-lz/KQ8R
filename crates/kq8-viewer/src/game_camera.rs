@@ -138,6 +138,9 @@ pub struct GameCam {
     /// (the rope climb, [`GameCam::glide_look_from`]): the next tick's
     /// `previous`.
     glide_from: Option<([f32; 3], f32, f32)>,
+    /// The roll at the start of this update, drawn blended to `view.roll`
+    /// (G-2).
+    roll_before: f32,
     keys: Keys,
     /// Mouse movement (pixels) and presses gathered between updates.
     mouse: Vec2,
@@ -377,7 +380,7 @@ impl GameCam {
         self.previous = self.current;
         let height = c.height.map_or(String::new(), height_note);
         let line = format!(
-            "cut to the spot ({:.0}, {:.0}, {:.0}){}; at ({:.1}, {:.1}, {:.1}), view heading {:.3}, tilt {:+.3}, roll {:.3} (not drawn); places {}, aims {}{height}{flying}",
+            "cut to the spot ({:.0}, {:.0}, {:.0}){}; at ({:.1}, {:.1}, {:.1}), view heading {:.3}, tilt {:+.3}, roll {:.3}; places {}, aims {}{height}{flying}",
             spot[0], spot[1], spot[2],
             from.map_or(String::new(), |d| format!(", pulled onto the range from {d:.1}")),
             p[0], p[1], p[2], self.view.heading, self.view.tilt, self.view.roll, self.places, self.aims
@@ -448,7 +451,8 @@ impl GameCam {
         // A flight under way goes on from here; with "aims" on it turns
         // back to its aim at the next update (flights rule 6).
         self.view = View { tilt, heading, roll: if flags & 2 != 0 { self.view.roll + turn[1] } else { turn[1] }, locked: false };
-        let roll = if turn[1] != 0.0 { format!("; roll {:.3} not drawn", turn[1]) } else { String::new() };
+        self.roll_before = self.view.roll;
+        let roll = if turn[1] != 0.0 { format!("; roll {:.3}", self.view.roll) } else { String::new() };
         // While following (camera.md "`move KQCamera` while following"):
         // this place and view stand until the next camera update; its
         // heading then goes by the four states, from this one.
@@ -541,6 +545,7 @@ pub fn make(
         previous: (position, cam.view_tilt, cam.heading),
         current: (position, cam.view_tilt, cam.heading),
         glide_from: None,
+        roll_before: 0.0,
         cam,
         keys,
         mouse: Vec2::ZERO,
@@ -636,6 +641,7 @@ pub fn camera_step(
     let (Some(mut game), Some(sim), Some(lookup)) = (game, sim, lookup) else { return };
     let g = &mut *game;
     g.updates += 1;
+    g.roll_before = g.view.roll;
     // A gliding move since the last tick (the rope climb) is drawn from
     // where the camera was before it.
     g.previous = match g.glide_from.take() {
@@ -809,4 +815,12 @@ pub fn camera_draw(
         return;
     }
     *t = Transform::from_translation(eye).looking_at(aim, Vec3::Y);
+    // camera.md rules 3-4 (G-2): the roll, about the line of sight. Which
+    // way: the user's check in the original (`azrieltp.cs` `flyToCamLoc …
+    // -.6`: the picture turns anticlockwise), so a negative roll turns the
+    // camera clockwise as seen from behind it (Bevy's +Z points back).
+    let roll = game.roll_before + (game.view.roll - game.roll_before) * a;
+    if roll != 0.0 {
+        t.rotate_local_z(roll);
+    }
 }

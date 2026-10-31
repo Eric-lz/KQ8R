@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 G-2: the camera's roll is drawn
+
+**Changed:** Viewer `game_camera.rs`: the drawn camera turns about its line of sight by the view's roll, blended from the roll at the start of the update to the roll now (`roll_before`), like its place; a `move KQCamera` sets it at once. The log lines lose "(not drawn)". DESIGN (G-2), QUESTIONS Q182 (with G-1), provenance.
+**Why:** The user's check: the tilt of Death's camera flight (`azrieltp.cs` `flyToCamLoc … 2.5 -.6`) did not show; in the original the picture turns about 45° anticlockwise. The roll was worked out (F-5) and logged, but never drawn. `camera.md` rules 3–4 give the roll in radians but not which way it turns: taken from the user's check (Q182).
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings as before. The D-4 solve run (`--frames 42000`); `camera.log`.
+**Result:** `camera.log`: the flight's roll goes 0 → −0.600 over its 38 updates, as in F-5; now drawn: a negative roll turns the camera clockwise seen from behind it, so the picture turns anticlockwise.
+**Still broken / not tested:** **Not looked at by eye** (the direction and the amount: the user saw about 45°, −0.6 is 34°; Q182).
+**Next:** G-3, the stones' boxes.
+
 ## 2026-10-30 G-1: the death-hall stones put Connor's weapon away for good
 
 **Changed:** Core `weapons.rs`: `WorldState::put_weapon_away` (a state puts the weapon away itself: mode and ready item none at once). Viewer `door_view.rs`: entering the `Tile` state calls it before Connor's `away`; with a weapon out he says 0/0/37/23; in the state every weapon request is refused (bottom-bar slot clicks too, not only Delete / Alt), keys and slots with that line, a script's without. 1 new unit test (`the_tile_state_puts_the_weapon_away_itself`). DESIGN (plan G-1 to G-4), QUESTIONS Q181 and Q182, provenance.
