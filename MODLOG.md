@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 D-9a: the trap `Lookup` call
+
+**Changed:** Core `trap.rs` (`lookup_call`), `active.rs`: a trap posts itself an internal lookup notice when it enters the world (after its `Init` at the start, or at its `loadKQ`); on arrival a trap with `lookupCall=1` and a script runs `Lookup`. Viewer `load.rs` reads `lookupCall`. 1 unit test. DESIGN step 9 split into D-9a / D-9b. Provenance.
+**Why:** Batch 2 D-9 (`traps.md` rule 15a): Dead City's Sylph plates (`trptrp12`–`15`) use it to make their objects always active and to place the Sylph once the world exists.
+**Tested how:** `cargo test --workspace` (all pass, 565 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 300`; `traps.log`.
+**Result:** "trap trptrp15: lookup notice … lookupCall=1: Lookup" for all four at update 0; their `makeActive` lines applied at update 1; Cue 1 at update 2 (0.1 s): "Sylph away 12", as the data says (`worldvar.cs` starts all four plates `down`). The other traps: "no lookupCall; nothing".
+**Still broken / not tested:** **Not played by hand.** The notice after loading a saved game (no saving). Seen in the log, older: `move Sylph 0 0 0 0` "no collider to know its place; not moved".
+**Next:** D-9b spirit traps (the user's choice on the "possible original bug" first).
+
 ## 2026-10-31 D-8b: `matchHeights` (the blood drains)
 
 **Changed:** New core `terrain_drain.rs` (`Drain`: the rectangle's corners, even steps to the floor grid, at most 32); `active.rs`: the command becomes the request `MatchHeights`. New viewer `ground_drain_view.rs`: on the 15-per-second update after the scripts, steps the drains, writes the live terrain and puts the drawn surface (normal ground meshes and animated squares) back on it; `ground_anim_view.rs` (`meshes_in`), `door_view.rs`, `main.rs`. 4 unit tests. Provenance.

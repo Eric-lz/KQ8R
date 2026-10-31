@@ -3927,3 +3927,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | First step in the update after the call | **ours** (the note gives only one step every 1/15 s) | `ground_drain.log` updates 31 → 32 |
 | In-between steps rounded to whole pixel values; `frames` below 1 does nothing; no floor grid does nothing | **ours** (the grids are whole values; not in the data) | unit tests |
 | The live terrain is changed (water depth, camera, shadows read it) and the drawn surface and animated squares are put back on it | **ours** (drawing) | `ground_drain.log` "39704 vertices moved" |
+
+## Batch 2 D-9a 2026-10-31: the trap `Lookup` call — core `trap.rs` (`lookup_call`), `active.rs` (`post_lookup`, `TRAP_LOOKUP`); viewer `load.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A trap entering the world (start, after its `Init`; or `loadKQ`) posts itself a lookup notice through the event queue; on arrival `lookupCall=1` with a script runs `<trap> Lookup` | `traps.md` rule 15a | unit test `a_trap_with_lookup_call_gets_lookup_after_init_through_the_queue`; `traps.log` `trptrp12`–`15` Lookup at update 0, Cue 1 at update 2 |
+| Delay 0 (handled with the first update's events); a trap being loaded gets it when it is handed over (held as any event) | **ours**: the note says "after the current load or script step (the exact moment: not sure)" | — |
+| Not done: the same notice after a saved game is restored | `traps.md` rule 15a (no saving yet) | — |

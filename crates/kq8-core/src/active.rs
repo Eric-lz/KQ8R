@@ -87,6 +87,9 @@ pub const CUE_END_LOOP: &str = "3333";
 pub const CUE_PROJECTILE: &str = "500";
 /// What a `getEndLoop` listener is told: `Cue 300 0 <movement>`.
 pub const CUE_HEARD_END: &str = "300";
+/// The notice a trap posts itself when it enters the world (traps.md rule
+/// 15a, D-9a): our own event kind, never sent by a script.
+pub const TRAP_LOOKUP: &str = "TrapLookup";
 
 /// Event types we know (doors.md "Commands door scripts use"). Any other
 /// is an error and is not sent.
@@ -2079,6 +2082,9 @@ impl WorldState {
         let trap = match self.trap_index(&name) {
             Some(i) => {
                 self.traps[i].gone = false;
+                // traps.md rule 15a (D-9a): held until it is handed over.
+                let now = self.now();
+                self.queue.send(now, 0.0, &name, TRAP_LOOKUP, &[], &format!("trap {name} entered the world ({at}: loadKQ; traps.md rule 15a)"));
                 "; its trap box is in place now (traps.md rules 1, 2)"
             }
             None => "",
@@ -4445,7 +4451,16 @@ impl Active {
                 continue;
             }
             self.call_trap(i, &["Init"]);
+            self.post_lookup(i, "the start");
         }
+    }
+
+    /// traps.md rule 15a (D-9a): the trap posts itself the lookup notice
+    /// through the event queue (delay 0: after what is running now).
+    fn post_lookup(&mut self, i: usize, why: &str) {
+        let name = self.world.traps[i].settings.name.clone();
+        let now = self.world.now();
+        self.world.queue.send(now, 0.0, &name, TRAP_LOOKUP, &[], &format!("trap {name} entered the world ({why}; traps.md rule 15a)"));
     }
 
     /// The nearest clickable box the ray `origin + t × dir` meets (rule
@@ -5493,7 +5508,16 @@ impl Active {
         }
         if let Some(i) = self.world.trap_index(&e.target) {
             let was = std::mem::replace(&mut self.world.in_trap, true);
-            if e.kind == "KQCueEvent" {
+            if e.kind == TRAP_LOOKUP {
+                // traps.md rule 15a (D-9a).
+                let t = &self.world.traps[i].settings;
+                if t.lookup_call && t.script.is_some() {
+                    self.world.note(format!("trap {}: lookup notice{from}: lookupCall=1: Lookup (traps.md rule 15a)", e.target));
+                    self.call_trap(i, &["Lookup"]);
+                } else {
+                    self.world.note(format!("trap {}: lookup notice{from}: {}; nothing", e.target, if t.lookup_call { "no script" } else { "no lookupCall" }));
+                }
+            } else if e.kind == "KQCueEvent" {
                 // traps.md rule 14, as doors (rule 23).
                 let args = cue_args(&e.data);
                 self.world.note(format!("KQCueEvent {} to trap {}{from}", e.data.join(" "), e.target));
@@ -6013,6 +6037,7 @@ KQObject::setScript nobody new.cs
             mask: 4,
             trap_type: 0,
             inner_percent: None,
+            lookup_call: false,
         })]);
         a.start();
         a
@@ -6119,7 +6144,7 @@ endif
         // `henchtp.kq` when Connor takes the axe; its box counts from then.
         use crate::trap::TrapSettings;
         let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("trap.cs".to_string(), TRAP.as_bytes().to_vec())]);
-        let settings = TrapSettings { name: "Henchtp".into(), position: [0.0; 3], min: [-500.0, -500.0, 0.0], max: [500.0, 500.0, 500.0], script: Some("trap.cs".into()), mask: 4, trap_type: 0, inner_percent: None };
+        let settings = TrapSettings { name: "Henchtp".into(), position: [0.0; 3], min: [-500.0, -500.0, 0.0], max: [500.0, 500.0, 500.0], script: Some("trap.cs".into()), mask: 4, trap_type: 0, inner_percent: None, lookup_call: false };
         a.add_traps([Trap { gone: true, ..Trap::new(settings) }]);
         a.set_dormant([("henchtp.kq".to_string(), "Henchtp".to_string(), Some("trap.cs".to_string()))]);
         a.start();
@@ -6131,6 +6156,34 @@ endif
         assert!(a.take_log().join("
 ").contains("its trap box is in place now"));
         assert_eq!(connor_at(&mut a, 0.0), vec!["Henchtp On Connor".to_string()]);
+    }
+
+    #[test]
+    fn a_trap_with_lookup_call_gets_lookup_after_init_through_the_queue() {
+        // traps.md rule 15a (D-9a): Dead City trptrp12-15.
+        use crate::trap::TrapSettings;
+        let script = "if test $2 == Init\n set T::Init $1\nelse if test $2 == Lookup\n set T::Lookup $1\nendif\nendif\n";
+        let settings = |name: &str, lookup_call: bool| TrapSettings {
+            name: name.into(),
+            position: [0.0; 3],
+            min: [-500.0, -500.0, 0.0],
+            max: [500.0, 500.0, 1000.0],
+            script: Some("trap.cs".into()),
+            mask: 4,
+            trap_type: 0,
+            inner_percent: None,
+            lookup_call,
+        };
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("trap.cs".to_string(), script.as_bytes().to_vec())]);
+        a.add_traps([Trap::new(settings("trptrp12", true)), Trap::new(settings("plain", false))]);
+        a.start();
+        // Not yet: the notice waits in the queue for the first update.
+        assert_eq!((a.scripts.vars.get("T::Init"), a.scripts.vars.get("T::Lookup")), (Some("plain"), None));
+        a.update();
+        assert_eq!(a.scripts.vars.get("T::Lookup"), Some("trptrp12"));
+        let log = a.take_trap_log().join("\n");
+        assert!(log.contains("trap trptrp12: lookup notice") && log.contains("lookupCall=1: Lookup"), "{log}");
+        assert!(log.contains("trap plain: lookup notice") && log.contains("no lookupCall; nothing"), "{log}");
     }
 
     #[test]

@@ -3973,10 +3973,11 @@ impl Placer<'_> {
             mask,
             trap_type,
             inner_percent: num("innerPercent"),
+            lookup_call: num("lookupCall").is_some_and(|v| v != 0.0),
         };
         self.log.detail(format!(
-            "trap {label}[{}] at ({:.0}, {:.0}, {:.0}): box {:?}..{:?}, mask {mask:#x}, trapType {trap_type}, innerPercent {:?}, script {:?}",
-            p.name, p.position[0], p.position[1], p.position[2], settings.min, settings.max, settings.inner_percent, settings.script
+            "trap {label}[{}] at ({:.0}, {:.0}, {:.0}): box {:?}..{:?}, mask {mask:#x}, trapType {trap_type}, innerPercent {:?}, lookupCall {}, script {:?}",
+            p.name, p.position[0], p.position[1], p.position[2], settings.min, settings.max, settings.inner_percent, settings.lookup_call, settings.script
         ));
         self.traps.push(settings);
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });

@@ -58,6 +58,9 @@ pub struct TrapSettings {
     pub trap_type: u32,
     /// `innerPercent` (a share, e.g. 0.9), `None` if not given.
     pub inner_percent: Option<f32>,
+    /// `lookupCall=1`: the script gets `Lookup` after the trap enters the
+    /// world (traps.md rule 15a).
+    pub lookup_call: bool,
 }
 
 /// A trap in the world.
@@ -234,6 +237,7 @@ mod tests {
             mask: 4,
             trap_type,
             inner_percent: inner,
+            lookup_call: false,
         })
     }
 

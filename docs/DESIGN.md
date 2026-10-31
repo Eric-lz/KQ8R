@@ -3434,7 +3434,20 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    **Done** 2026-10-31, D-8a and D-8b (logs and unit tests; run with the
    script lines as `--command`, since the scales object is D-10).
 9. **D-9: the `Lookup` call and spirit traps** (`traps.md` 15a,
-   "Spirit traps").
+   "Spirit traps"). Two commits (planned 2026-10-31):
+   - **D-9a: `Lookup`.** A trap's `lookupCall=1` is read. When a trap
+     enters the world (at the start after its `Init`, or by `loadKQ`),
+     it posts itself an internal "lookup" event at delay 0 through the
+     event queue (a trap being loaded gets it once it is handed over,
+     like any held event); on arrival a trap with `lookupCall=1` and a
+     script runs `<trap> Lookup`. Check: Dead City `doors.log`,
+     `trptrp12`–`15` run `Lookup`, then their Cue 1 0.1 s later.
+   - **D-9b: spirit traps** (`KQSpiriTrap`): loaded as traps with their
+     `damage`; Cue 1 = a spirit is there, Cue 0 = gone, Cue 2 ignored;
+     Connor entering first while a spirit is there, or Cue 1 while he
+     is inside: health − damage × maximum, not below 1 % of maximum,
+     and a 1-point flinch hit. Waits for the user's choice on the
+     "possible original bug" (the data never sends Cue 0).
 10. **D-10: `ConnorCollision`** (`connor-collision.md`), then **the
     `Scales` state** (`tile-puzzle.md` rules 23–27).
 11. **D-11 and later**: `ThrowRock` (`ranged-weapons.md` 8),
