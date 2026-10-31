@@ -3510,3 +3510,31 @@ each:
 - **G-5: the roll turns the other way.** The user's check of G-2: the
   picture turned the opposite way to the original's. The drawn camera
   now turns by minus the roll. Still asked in Q182 (sign and size).
+
+**Fixes after the user's check of 2026-10-30 (not the death hall)**, one
+commit each:
+
+- **H-1: Connor wears the armour he picked up.** His stats changed but
+  his model kept his starting clothes. `Connor.kq`'s `ConnerSkinList`
+  has one body picture per combination of worn items (item N = bit 2^N:
+  gloves 1, boots 2, leather armour 4, …); the potion code already
+  reads it for Strength and the faces. Now his body skin is the entry
+  for the armour applied to him; a missing combination takes the entry
+  with most of the bits (as the face list, "Do not reproduce" 3: ours
+  for this list); Strength's entry wins. Every picture of the list this
+  world has is loaded at the start (36 in Daventry). Check:
+  `items.log` "skin list bits … body skin drawn as …". Asked in Q184.
+- **H-2: no jump forward when running out of deep water.** `waterrun`
+  hands over to `run` at phase 1.000000 (the only transition in the
+  game that ends at 1). Our step code read phase 1 of a repeating loop
+  as frame 0 but then counted every frame to the end, so the first
+  update of `run` stepped a whole run loop (2,558 units). A repeating
+  loop entered at phase 1 now starts at 0, the same point of the loop.
+  Check: `connor.log` around "waterrunrun ended": no step above ~200.
+- **H-3: monsters put back home again and again.** Ours follows
+  `character-movement.md` rule 21 (put back home when it goes off,
+  27,000 from Connor in Daventry, and he is more than twice its alarm
+  radius away). The user sees a monster run off, reappear at home, run
+  off again forever; the original doesn't. Not built: asked in Q185
+  with the user's guess (it stops where it is and wakes when he comes
+  back).

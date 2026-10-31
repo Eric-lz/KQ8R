@@ -851,6 +851,43 @@ mod tests {
         assert!(played[..=first_wet].iter().all(|p| !p.starts_with("water") && *p != "walkwaterwalk"));
     }
 
+    /// `waterrun` hands over to `run` at phase 1.000000 (`CONNER2.anm`):
+    /// that is run's start again, not a whole loop to step at once (H-2).
+    #[test]
+    fn running_out_of_deep_water_takes_no_whole_loop_at_once() {
+        let mut list = wading_list();
+        let at = |from, to, to_phase, via| Transition { from, to, to_phase, via };
+        for (name, l) in list.iter_mut() {
+            match *name {
+                // run and waterrun with their frames' own steps (the
+                // frame rule, as the game's loops).
+                "run" => {
+                    l.frame_steps = vec![[0.0, -2350.2 / 15.0, 0.0]; 15];
+                }
+                "waterrun" => {
+                    l.frame_steps = vec![[0.0, -1800.0 / 19.0, 0.0]; 19];
+                    l.transitions.push(at(0.947368, "run", 1.0, "waterrunrun"));
+                }
+                _ => {}
+            }
+        }
+        list.push(("waterrunrun", one_shot(vec![[0.0, -136.0, 0.0]; 10])));
+        let loops = lookup(&list);
+        let river = River { from: -1500.0, to: -6000.0 };
+        let mut m = Mover::new([0.0; 3], true);
+        let mut w = Walker::new(0.0);
+        let mut played = Vec::new();
+        for _ in 0..150 {
+            let before = m.position[1];
+            let t = tick(&mut m, &mut w, RUN, false, &loops, &river);
+            let moved = before - m.position[1];
+            assert!(moved < 400.0, "{moved:.0} in one update ({:?})", t.step.map(|s| s.played));
+            played.push(t.step.unwrap().played);
+        }
+        let order: Vec<_> = runs(&played).into_iter().map(|(n, _)| n).collect();
+        assert!(order.windows(2).any(|p| p == ["waterrunrun", "run"]), "{order:?}");
+    }
+
     #[test]
     fn running_head_on_in_water_crashes() {
         for from in ["waterrun", "runwaterrun"] {

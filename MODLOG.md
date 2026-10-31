@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 H-2: no jump forward when running out of deep water
+
+**Changed:** Core `connor.rs` (`end_transition`): a repeating loop a transition hands over to at phase 1 starts at phase 0. 1 new unit test (`running_out_of_deep_water_takes_no_whole_loop_at_once`). DESIGN (plan H-1 to H-3), provenance.
+**Why:** The user's check: running out of deep water, Connor jumps forward just as the change back to running ends. `CONNER2.anm`: `waterrun` → `run` at **1.000000** via `waterrunrun` (the only transition in the game that ends at 1). Our step code read phase 1 of a loop as frame 0 (the frame drawn) but counted every frame to the end of the loop, so the first update of `run` stepped a whole run loop. Probably since the loops' own frame steps (Q164).
+**Tested how:** `cargo test --workspace` (all pass, 556 in core; the new test fails without the fix: "2350 in one update"); clippy: the same 2 warnings as before. `kq8-viewer --world Daventry --sound off --no-ai --at 141312,198656,0 --hold 1,0,1,0,1500 --frames 1600` (running through the river and out); `connor.log`.
+**Result:** Update 110: "waterrunrun ended: run from phase 1"; update 111 steps **172** forward (before: **2,558**); 109–114: 214, 142, 172, 108, 132, 173.
+**Still broken / not tested:** Not looked at by eye.
+**Next:** H-1, the armour skins.
+
 ## 2026-10-30 Study (A): Q175 to Q183 (death hall, camera roll, Death, tower skeleton)
 
 **Changed:** Behaviour notes only (no code): `tile-puzzle.md` rules 7, 7a (new), 8, 11, 13, 16, 18, edge cases, open questions 1 and 4 closed, How to check; `camera.md` "Camera flights and cuts" rules 4a (roll) and 4b (number words), new; `talking.md` rule 18a; `fighting.md` rule 23 (corrected) and section 7a (the skeleton's states); `anim-scripts.md` rule 3 (Death's key); `objects.md` rule 3; `connor-physics.md` (tile-jump note). `QUESTIONS.md`: Q175–Q182 answered, Q183 added and answered. STATUS. Scratch notes in `re/` (not committed).

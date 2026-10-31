@@ -3843,3 +3843,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | G-2 turned the picture the opposite way to the original's; the camera now turns by minus the roll | **The user's check in the original** (`azrieltp.cs` Cue 2); Q182 | not checked by eye |
+
+## Fixes H-2 2026-10-30: running out of deep water — core `connor.rs` (`end_transition`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A transition ends into its `to` at its phase (`waterrun` → `run` at 1.000000) | `connor-movement.md` "Starting and stopping" rule 6; `CONNER2.anm` | `connor.log` "waterrunrun ended: run from phase 1" |
+| Phase 1 of a repeating loop is its phase 0 (the frame drawn there is frame 0) | **Ours** (keeps our phase in 0..1, as `objects.md` "Loops" rule 6's frame) | unit test; `connor.log` update 111: 172 forward |

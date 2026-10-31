@@ -1153,7 +1153,11 @@ impl Walker {
     fn end_transition<'a>(&mut self, t: Transition, loops: &dyn Fn(&str) -> Option<&'a MovementLoop>, notes: &mut Vec<String>) {
         self.playing = None;
         self.movement = t.to;
-        self.phase = t.to_phase;
+        // A repeating loop's phase 1 is its phase 0 (the frame shown
+        // there); kept as 1, the next update stepped a whole loop at once
+        // (`waterrun` → `run` at 1.000000: 2,558 forward, H-2).
+        let repeats = loops(t.to).is_some_and(|l| l.repeat);
+        self.phase = if repeats { t.to_phase.rem_euclid(1.0) } else { t.to_phase };
         notes.push(format!("{} ended: {} from phase {}", t.via, t.to, t.to_phase));
         match self.wanted {
             Some(w) if w != t.to => self.ask(w, loops, notes),
