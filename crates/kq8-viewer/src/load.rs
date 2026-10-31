@@ -435,6 +435,9 @@ pub struct PotionLooks {
     pub faces: kq8_data::characters::SkinList,
     pub body_skin: Option<String>,
     pub iron: Option<(String, Look)>,
+    /// H-1: the skin list's other pictures (the worn armour's, lower
+    /// case), those this world has.
+    pub armour: Vec<(String, Look)>,
     pub face_sets: Vec<(String, Vec<Option<Look>>)>,
     /// M5 5g-6: his textures' `I_` versions in this world (his texture's
     /// name, lower case; the `I_` picture with entry 0 see-through).
@@ -2822,6 +2825,19 @@ impl Placer<'_> {
                 let look = load_texture(self.world, self.game, &iron, &palette, self.log);
                 potion_looks.iron = Some((iron, look));
             }
+            // H-1: every other entry's picture, for the armour he wears.
+            let mut skins: Vec<String> = potion_looks.skins.entries.iter().map(|(n, _)| n.to_ascii_lowercase()).collect();
+            skins.sort();
+            skins.dedup();
+            let known = |n: &String| potion_looks.body_skin.as_ref().is_some_and(|b| b.eq_ignore_ascii_case(n)) || potion_looks.iron.as_ref().is_some_and(|(i, _)| i.eq_ignore_ascii_case(n));
+            for name in skins.into_iter().filter(|n| !known(n)) {
+                if self.world.load(&name).is_some() {
+                    let look = load_texture(self.world, self.game, &name, &palette, self.log);
+                    if matches!(look, Look::Texture { .. }) {
+                        potion_looks.armour.push((name, look));
+                    }
+                }
+            }
             let mut names: Vec<String> = potion_looks.faces.entries.iter().map(|(n, _)| n.to_ascii_lowercase()).collect();
             names.sort();
             names.dedup();
@@ -2835,10 +2851,11 @@ impl Placer<'_> {
             }
             self.log.quiet = false;
             self.log.summary(format!(
-                "connor: skin list {} entries, body skin {:?}, Strength skin {:?}; face list {} entries, face sets {:?} (pictures found: {:?}) (potions.md rules 25, 30)",
+                "connor: skin list {} entries, body skin {:?}, Strength skin {:?}, {} armour skins in this world (H-1); face list {} entries, face sets {:?} (pictures found: {:?}) (potions.md rules 25, 30)",
                 potion_looks.skins.entries.len(),
                 potion_looks.body_skin,
                 potion_looks.iron.as_ref().map(|(n, l)| (n.clone(), matches!(l, Look::Texture { .. }))),
+                potion_looks.armour.len(),
                 potion_looks.faces.entries.len(),
                 potion_looks.face_sets.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(),
                 potion_looks.face_sets.iter().map(|(_, s)| s.iter().filter(|l| l.is_some()).count()).collect::<Vec<_>>()

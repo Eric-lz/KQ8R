@@ -19,7 +19,16 @@
 //! Strength 8: an item of that type applied); a missing combination
 //! takes the entry with most of the wanted bits ("Do not reproduce" 3).
 //! Not built: the first-person arms (`armconfx.bmp`, no first person
-//! yet), the temple armour's skin (`con65.bmp`, armour skins not built).
+//! yet).
+//!
+//! H-1, the armour he wears: his body skin is the skin list's entry for
+//! the bits of the armour applied to him (`ConnerSkinList`: item N is
+//! bit 2^N, `con4.bmp` for gloves and boots, ...), as the face list's
+//! (`potions.md` rules 25, 29 "his skin ... changes (armour ...)", 30);
+//! a missing combination takes the entry with most of the bits ("Do not
+//! reproduce" 3, ours for the skin list, Q184). Strength's entry wins
+//! over any armour (rule 25), and also replaces an armour picture a
+//! model carries itself (the temple armour's `con65.bmp`).
 //!
 //! 5g-7, `KQObject::dither` (rule 31: the keep wall "becomes
 //! see-through"; the look: `objects.md` "Dithered objects", Q144): mode 1
@@ -45,6 +54,12 @@ pub struct ConnorLooks {
     materials: Vec<(Handle<ObjectMaterial>, String, Option<Handle<Image>>)>,
     body_skin: Option<String>,
     iron: Option<(String, Handle<Image>)>,
+    /// H-1: the skin list and its armour pictures (lower case).
+    skins: kq8_data::characters::SkinList,
+    armour: BTreeMap<String, Handle<Image>>,
+    /// The skin list entry drawn for his body skin now (`None`: the body
+    /// skin itself).
+    skin: Option<String>,
     faces: kq8_data::characters::SkinList,
     face_sets: BTreeMap<String, Vec<Option<Handle<Image>>>>,
     /// The `I_` pictures of this world by his texture's name (5g-6).
@@ -73,12 +88,16 @@ impl ConnorLooks {
             _ => None,
         };
         let iron = l.iron.and_then(|(n, look)| Some((n.to_ascii_lowercase(), image(look)?)));
+        let armour = l.armour.into_iter().filter_map(|(n, look)| Some((n, image(look)?))).collect();
         let face_sets = l.face_sets.into_iter().map(|(n, set)| (n, set.into_iter().map(|s| s.and_then(&mut image)).collect())).collect();
         let ghosts = l.ghosts.into_iter().filter_map(|(n, look)| Some((n, image(look)?))).collect();
         ConnorLooks {
             materials,
             body_skin: l.body_skin.map(|s| s.to_ascii_lowercase()),
             iron,
+            skins: l.skins,
+            armour,
+            skin: None,
             faces: l.faces,
             face_sets,
             ghosts,
@@ -223,7 +242,17 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
     let invisible = w.connor_invisible();
     let bits = kq8_core::potions::list_bits(w, &c.looks.faces.items);
     let wanted = c.looks.faces.best(bits).map(str::to_ascii_lowercase);
-    if strength == c.looks.iron_on && wanted == c.looks.face && invisible == c.looks.invisible && !c.looks.redo {
+    // H-1: the body skin for the armour applied (Strength's bit left out:
+    // its entry wins over any armour, rule 25).
+    let strength_bit = c.looks.skins.bit_of("INVITEM_Strength").unwrap_or(0);
+    let skin_bits = kq8_core::potions::list_bits(w, &c.looks.skins.items) & !strength_bit;
+    let skin = if strength {
+        c.looks.iron.as_ref().map(|(n, _)| n.clone())
+    } else {
+        c.looks.skins.best(skin_bits).map(str::to_ascii_lowercase)
+    }
+    .filter(|s| c.looks.body_skin.as_ref() != Some(s));
+    if strength == c.looks.iron_on && wanted == c.looks.face && invisible == c.looks.invisible && skin == c.looks.skin && !c.looks.redo {
         return;
     }
     c.looks.redo = false;
@@ -234,6 +263,14 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
             (Some(skin), Some(_)) => format!("strength over: his skin {skin} back (potions.md rule 25)"),
             _ => "strength: no body skin or Strength skin known; his skin unchanged".to_string(),
         });
+    }
+    if skin != c.looks.skin && !strength {
+        let found = skin.as_ref().is_none_or(|s| c.looks.armour.contains_key(s));
+        lines.push(format!(
+            "skin list bits {skin_bits}: body skin drawn as {}{} (H-1)",
+            skin.as_deref().or(c.looks.body_skin.as_deref()).unwrap_or("?"),
+            if found { "" } else { ", not in this world: his own skin kept" }
+        ));
     }
     if invisible != c.looks.invisible {
         let what = if invisible { "I_ pictures where this world has them, else mesh copies; the holes cut out" } else { "his own pictures back" };
@@ -246,8 +283,10 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
         if c.face.contains(h) {
             continue;
         }
-        let (name, base) = match (&c.looks.body_skin, &c.looks.iron) {
-            (Some(skin), Some((iron, img))) if strength && skin == texture => (iron.clone(), Some(img.clone())),
+        let body = c.looks.body_skin.as_ref() == Some(texture);
+        let (name, base) = match (&c.looks.iron, &skin) {
+            (Some((iron, img)), _) if strength && (body || c.looks.armour.contains_key(texture)) => (iron.clone(), Some(img.clone())),
+            (_, Some(s)) if body && c.looks.armour.contains_key(s) => (s.clone(), c.looks.armour.get(s).cloned()),
             _ => (texture.clone(), own.clone()),
         };
         let pic = if !invisible {
@@ -291,6 +330,7 @@ pub fn look_step(sim: Option<ResMut<DoorSim>>, connor: Option<ResMut<ConnorSim>>
         }
     }
     c.looks.iron_on = strength;
+    c.looks.skin = skin;
     c.looks.invisible = invisible;
     let line = format!("{}; mouth {mouth} shown", lines.join("; "));
     c.log.detail(format!("connor update {}: {line}", c.updates));

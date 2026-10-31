@@ -3850,3 +3850,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | A transition ends into its `to` at its phase (`waterrun` → `run` at 1.000000) | `connor-movement.md` "Starting and stopping" rule 6; `CONNER2.anm` | `connor.log` "waterrunrun ended: run from phase 1" |
 | Phase 1 of a repeating loop is its phase 0 (the frame drawn there is frame 0) | **Ours** (keeps our phase in 0..1, as `objects.md` "Loops" rule 6's frame) | unit test; `connor.log` update 111: 172 forward |
+
+## Fixes H-1 2026-10-30: the armour skins — viewer `load.rs` (`PotionLooks::armour`), `potion_view.rs` (`look_step`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| His body skin is the `ConnerSkinList` entry for the items applied to him (item N = bit 2^N) | `potions.md` rules 25, 29, 30; `Connor.kq` `ConnerSkinList`; asked in Q184 | `items.log` "skin list bits 7: body skin drawn as con7.bmp" |
+| Equipment is applied while carried | `inventory.md` rules 8, 14 | `items.log` "apply … put on" |
+| A missing combination takes the entry with most of the wanted bits | `potions.md` "Do not reproduce" 3 (for the face list); **ours** for the skin list (Q184) | not checked against the original |
+| Strength's entry wins over any armour, and over `con65.bmp` on a model | `potions.md` rule 25 | `items.log` update 200 |
+| An entry whose picture this world lacks: his own skin | **Ours** (Q184 c) | `items.log` update 151 |

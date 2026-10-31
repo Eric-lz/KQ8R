@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 H-1: Connor wears the armour he picked up
+
+**Changed:** Viewer `load.rs`: every `ConnerSkinList` picture this world has is loaded at the start (`PotionLooks::armour`; 36 in Daventry). `potion_view.rs` (`look_step`): his body skin (`con0.bmp`) is drawn as the skin list's entry for the bits of the armour applied to him; a missing combination takes the entry with most of the bits; Strength's `coniron.bmp` wins over any armour, also over an armour picture of the list a model carries itself. QUESTIONS Q184, provenance.
+**Why:** The user's check: picking up armour changes his stats, but his model keeps his starting clothes. `potions.md` rules 25, 29, 30 (the skin list, "his skin … changes (armour …)"); `Connor.kq` `ConnerSkinList` (item N = bit 2^N).
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. `kq8-viewer --world Daventry --sound off --no-ai --frames 4000 --command "give LeatherGloves 1",30 --command "give LeatherBoots 1",60 --command "give LeatherArmor 1",90 --command "give ChainMailSuit 1",120 --command "give Helmet 1",150 --command "give Strength 1",180 --key 6,200`; `items.log`, `viewer.log`.
+**Result:** "36 armour skins in this world". Update 31: bits 1 → `con1.bmp`; 61: 3 → `con4.bmp`; 91: 7 → `con7.bmp`; 121: 132 (the suit took the gloves and boots off) → `con30.bmp`; 151: 644 → `con63.bmp`, "not in this world: his own skin kept"; 200: Strength → `coniron.bmp`.
+**Still broken / not tested:** **Not looked at by eye.** The rule for missing combinations and pictures, and the helmet / temple / full armour models, the first-person arms: Q184. When an entry's picture is missing he falls back to his plain clothes.
+**Next:** H-3 (Q185).
+
 ## 2026-10-30 H-2: no jump forward when running out of deep water
 
 **Changed:** Core `connor.rs` (`end_transition`): a repeating loop a transition hands over to at phase 1 starts at phase 0. 1 new unit test (`running_out_of_deep_water_takes_no_whole_loop_at_once`). DESIGN (plan H-1 to H-3), provenance.
