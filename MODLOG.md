@@ -3,12 +3,21 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 G-4: an object a script loads while playing starts its movement afresh (Death's key)
+
+**Changed:** Viewer `anim_view.rs`: an unused object keeps its player as built at load (`at_load`); when a script's `loadKQ` brings it into the world, that fresh player is handed over instead of the one that has played (for the H key) since the world started. DESIGN (G-4), provenance. (Also corrects G-3's MODLOG count: 29 stones without a box, not 31.)
+**Why:** The user's check: Death's key spins and then stays in the air; in the original it shrinks into a yellow ball, flies to Connor and goes into his inventory. `keycycle.kq` plays `stop` once (1 s); its script (`keycycle.cs`) plays `gone` when `stop` ends, then gives `INVITEM_KeyToDeathMaze` and deletes itself. Our prepared key's `stop` had ended long before Death's `loadKQ keycycle.kq`, so no end came. `objects.md` "Where a world's objects come from" rule 6: an animated object loaded while playing "starts its movement as at the start".
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings as before. The D-4 solve run (`--frames 42000`); `doors.log`, `sound.log`. A short Daventry run (5,000 frames): no errors.
+**Result:** Update 2040: the key comes in; 2054: `stop` ends, `keycycle.cs` asks for `gone` (it waits: the waiting `Stop` from load plays once more, it can't be cut short); 2070: `gone` starts, 2072 `dkeygone.aud`; 2095: "INVITEM_KeyToDeathMaze 0 -> 1", experience +350, "deleteObject keycycle". Before: nothing after update 2040.
+**Still broken / not tested:** **Not looked at by eye** (the shrink and the flight are the `gone` model's own frames). Whether the spin should play twice before `gone` (it follows our waiting-movement rule, `anim-scripts.md` rule 3 / Q121) is not checked against the original.
+**Next:** STATUS, FEATURES; then D-8.
+
 ## 2026-10-30 G-3: copies loaded while playing move their collider (Connor rides the stones)
 
 **Changed:** Viewer `anim_view.rs`: a copy made by a script's `loadKQ` while playing looks up its collider by name like the others (it was switched off from M5 5d-4, when copies had none), so its whole-object steps move it; the collider is placed from core's place for the object (`player.base`, which a `move` or `KQMoveEvent` changes), as the drawing does. DESIGN (G-3), provenance.
 **Why:** The user's check: Connor doesn't bob up and down with the stones as in the original. The stones (copies made by `dhalltrp.cs`) bobbed in the drawing, but their boxes stood still. `objects.md` "Loops that move the whole object" rule 1: the steps move the object through its mover, "so its collision box goes with it".
 **Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings as before. The D-4 solve run cut after the first jump (`--frames 10000`, up to `--hold 1,0,0,400,405`): Connor stands on `tile73` from update 478; `connor.log` (z), `anim.log`.
-**Result:** `anim.log`: "[tile73] its collider moves with it". Connor's z on `tile73`: 6,751.5 (update 482) → 6,636.0 (498) → 6,750.0 (513) → 6,636.0 (529) …, 115.5 units every 31 updates (2 s), as the stone's `stop` (`tile-puzzle.md` rule 16). Before: flat. 31 stones say "has no collider": their shapes (`notile2.kqs`, `tilem.kqs`, `tilen.kqs`, …) have no `BOUNDS.KQ` entry, so they have no box in the original either (`connor-physics.md` "Where every object's box comes from"); the five letters and the stones he is put on have one.
+**Result:** `anim.log`: "[tile73] its collider moves with it". Connor's z on `tile73`: 6,751.5 (update 482) → 6,636.0 (498) → 6,750.0 (513) → 6,636.0 (529) …, 115.5 units every 31 updates (2 s), as the stone's `stop` (`tile-puzzle.md` rule 16). Before: flat. 29 of the 64 stones say "has no collider" (35 move theirs): their shapes (`notile2.kqs`, `tilem.kqs`, `tilen.kqs`, …) have no `BOUNDS.KQ` entry, so they have no box in the original either (`connor-physics.md` "Where every object's box comes from"); the five letters and the stones he is put on have one.
 **Still broken / not tested:** **Not looked at by eye.**
 **Next:** G-4, the key.
 

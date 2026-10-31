@@ -3830,3 +3830,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | An animated object's whole-object steps move it through its mover, its collision box with it; copies loaded while playing too | `objects.md` "Loops that move the whole object" rule 1 | `connor.log`: Connor's z on `tile73` 6,636–6,751, every 31 updates |
 | The box is placed from the object's current place (after a `move` or `KQMoveEvent`) | `objects.md` same rule 1 ("onto the object's current placement"), rule 3 (the stones' relative move) | as above |
 | A stone whose shape has no `BOUNDS.KQ` entry has no box | `connor-physics.md` "Where every object's box comes from" | `anim.log` "[tile70] has no collider" (`tilem.kqs` not in the table) |
+
+## Fixes G-4 2026-10-30: a loaded object starts afresh — viewer `anim_view.rs` (`at_load`, `bring_in`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| An animated object a script loads while playing starts its movement as at the world's start | `objects.md` "Where a world's objects come from" rule 6 | `doors.log` update 2040–2095: `keycycle` `stop`, `gone`, the key given, deleted |
+| Kept as a copy of the player built at load; the unused object's own player still plays for the H key | **Ours** (how we prepare objects) | as above |

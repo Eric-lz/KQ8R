@@ -107,6 +107,10 @@ struct Playing {
     texture_names: Vec<((usize, i32), String)>,
     bmp_shown: Option<(String, String)>,
     bmp_saved: Vec<(Handle<ObjectMaterial>, Option<Handle<Image>>)>,
+    /// An unused object's player as built at load: what a script's
+    /// `loadKQ` brings in, so its movement starts as at the start
+    /// (`objects.md` rule 6; G-4). Its own player keeps playing for H.
+    at_load: Option<Box<NamedAnimPlayer>>,
 }
 
 /// What a new copy of an unused object needs (M5 5d-4): each movement's
@@ -167,6 +171,7 @@ impl AnimSim {
         };
         let index = active.world.anims.len();
         let Source::Own(player) = std::mem::replace(&mut p.source, Source::Core(index)) else { unreachable!() };
+        let player = p.at_load.take().unwrap_or(player);
         active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.take(), translucency: None }]);
         true
     }
@@ -225,6 +230,7 @@ impl AnimSim {
             texture_names: r.textures.clone(),
             bmp_shown: None,
             bmp_saved: Vec::new(),
+            at_load: None,
         });
         line
     }
@@ -617,6 +623,7 @@ pub fn spawn_animated(
             ""
         });
         let tracked = TRACKED.iter().any(|t| t.eq_ignore_ascii_case(&p.name));
+        let at_load = unused.then(|| Box::new(player.clone()));
         let source = if *unused {
             if a.character.is_none() {
                 own_players.push(player.clone());
@@ -653,6 +660,7 @@ pub fn spawn_animated(
             texture_names,
             bmp_shown: None,
             bmp_saved: Vec::new(),
+            at_load,
         });
     }
     let new_way = playing.iter().filter(|p| p.new_draw.is_some()).count();
