@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-9: a movement a script starts on Connor is drawn from its own start
+
+**Changed:** Viewer `connor_view.rs` (`script_anim`): when a script's `KQAnimPlayEvent` switches his movement at once, the phase the drawing uses is set to the new movement's at once (was: the old movement's until his next update); its log line gives the drawn phase.
+**Why:** The user's check: at the end of Death's scene Connor looked normal for about a frame before coming up. `Death.cs` moves him and then starts `teleportup` (update 2864); the drawing showed `teleportup` at `stop`'s phase 0.77, nearly risen, for one update, then from its start. The same for `teleportdown` at 2819 and every script movement started at once.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. The D-4 solve run with `--frames 42000`; `connor.log`.
+**Result:** "KQAnimPlayEvent teleportdown … drawn from phase 0.0000" (2819), "KQAnimPlayEvent teleportup … drawn from phase 0.0000" (2864).
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** The user's check.
+
 ## 2026-10-31 I-8: no standing frame between the stones' jump, `teleportdown` and `teleportup`
 
 **Changed:** Viewer `connor_tile.rs`: `tile_follow_on`, run by `connor_view.rs` right after his update: a tile jump or `teleportdown` that ended in that update is followed at once (the landing and `teleportdown`; the put and `teleportup`), before he is drawn. Before, the state noticed only at the start of the next update, so one update of `stop` was drawn in between.

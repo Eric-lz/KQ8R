@@ -1878,8 +1878,17 @@ impl ConnorSim {
             return format!("KQAnimPlayEvent {name}: not in his movement list; nothing (stand-in)");
         };
         let loops = |n: &str| movements.iter().find(|m| m.name == n).map(|m| &m.movement_loop);
+        let before = (self.walker.movement, self.walker.phase);
         let notes = self.walker.script_request(wanted, &loops);
-        self.log.detail(format!("connor update {}: KQAnimPlayEvent {wanted} ({at}): {}", self.updates, notes.join("; ")));
+        // A movement switched at once is drawn from its own phase now, not
+        // the old movement's (the user's check, 2026-10-31: Death.cs's
+        // `teleportup` was drawn at `stop`'s 0.77 for one update).
+        if (self.walker.movement, self.walker.phase) != before {
+            self.current.2 = self.walker.phase;
+            self.previous.2 = self.walker.phase;
+            self.phase_step = self.phase_step_now();
+        }
+        self.log.detail(format!("connor update {}: KQAnimPlayEvent {wanted} ({at}): {}; drawn from phase {:.4}", self.updates, notes.join("; "), self.current.2));
         format!("KQAnimPlayEvent {wanted}: {}; now '{}' phase {:.4}", notes.join("; "), self.walker.movement, self.walker.phase)
     }
 

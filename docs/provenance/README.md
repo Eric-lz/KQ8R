@@ -3901,3 +3901,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | The landing starts `teleportdown`, its end the put and `teleportup`, with nothing between | `tile-puzzle.md` rules 12–14; **ours**: done in the same update, the user's check (no standing frame) | `connor.log` updates 432, 454 |
+
+## Fixes I-9 2026-10-31: script movements drawn from their start — viewer `connor_view.rs` (`script_anim`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A movement started at once starts at its phase 0 (its `loop=` start) | `anim-scripts.md` rules 4–5; **ours**: the drawing takes that phase in the same update | `connor.log` "drawn from phase 0.0000" at 2819, 2864 |
