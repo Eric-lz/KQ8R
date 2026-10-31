@@ -5,7 +5,19 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-30)
+## Where we are (2026-10-31)
+
+- **2026-10-31 (B): Q176–Q181 applied** (I-1 to I-7, logs only, not
+  looked at by eye): the north tile jump lands (steps 325); the teleport
+  camera flies at 5,000 a second and follows again when the flight ends,
+  with the hold switch; scripts' weapon requests on the stones say the
+  line, the Jump key jumps; Death's mouth codes; the camera commands read
+  numbers as C's `atof`. **Not done:** I-2 (the stones' bob drift of
+  +0.011 per cycle: needs the loops to add their steps up, a change for
+  every animated object; waits for the user's choice) and Q175 (the
+  tower skeleton, a new feature). Also H-1 (armour skins), H-2 (deep
+  water run-out) done; **open for A:** Q184 (armour skins), Q185
+  (`gobcon1` put back home over and over).
 
 - **2026-10-30 (A): Q175 to Q183 answered** (traced; nothing built yet).
   No question is open any more. What B should change:
