@@ -7,6 +7,21 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-31)
 
+- **2026-10-31 (B): batch 2 D-8 to D-11a built** (logs and unit tests,
+  **not played by hand**): `matchHeights` and `terAnimSwitch` (the blood
+  drains; run from the commands, the scales are not built), the traps'
+  `Lookup` call, the spirit zones (Cue 2 counts as "left": the user's
+  choice), `ConnorCollision` from Connor's own moves (waterfall, heart),
+  `KQAttackEvent` on Connor (the river traps kill). Dead City now misses
+  8 commands (30 uses), was 10 (40). **Open for A:** Q186 (rock throw onto
+  the plates), Q187 (low), Q188 (the spirit drain in whole numbers), Q189
+  (the scales' objects aren't loaded: blocks D-10b), Q190 (low).
+  **Left in batch 2 for B:** D-10b the scales (after Q189), `ThrowRock`
+  (after Q186), `RiverControl`, `KQWeepBolt`, `KQMonster::add`, the tower
+  skeleton (`fighting.md` 7a). Found: after walking into Daventry's
+  waterfall Connor stands in its pool (`submerged`) and the turn and back
+  keys no longer move him; not looked into.
+
 - **2026-10-31 (B): Q176–Q181 applied** (I-1 to I-7, logs only, not
   looked at by eye): the north tile jump lands (steps 325); the teleport
   camera flies at 5,000 a second and follows again when the flight ends,
@@ -661,6 +676,11 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
+- **New for A (2026-10-31): Q187–Q190**: `terAnimSwitch`'s "current
+  step" (low); the spirit drain's whole numbers and whether its 1-point
+  hit can kill (Q188); the scale and dishes have no `shapeName` file, so
+  they are not loaded: what the game does then, and which box they use
+  (Q189, blocks the scales); `KQAttackEvent` sent to a character (Q190).
 - **New for A (2026-10-31): Q186**: Connor's rock throw onto pressure
   plates (aim, the arc of `prrock.kq`, what presses the plate and keeps
   it down, when the rock leaves the inventory). Blocks D-11 `ThrowRock`.

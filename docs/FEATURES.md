@@ -849,6 +849,24 @@ also played by the user.
   weapon mode, `invClick`, `lightOnFire`, `setCamRelConner`, `walkSlope`
   (kept only), `changeBmp` (drawn on animated objects).
 
+## Script coverage batch 2, Dead City, second part (2026-10-31, steps D-8 to D-11a)
+
+Checked in the logs and unit tests only, **not played by hand**.
+
+- **The blood drains** (`matchHeights`, `terAnimSwitch`): the liquid's
+  surface sinks to its bed and the rivers switch to their drained
+  picture (run from the commands; the scales themselves are not built).
+- **Traps that look up the world** (`Lookup`): the Sylph's plates sort
+  out her place once the world exists.
+- **Spirit zones:** a passing spirit drains 20 % of Connor's maximum
+  health if he is in its zone; a zone is safe once the spirit has gone
+  (our fix of a likely original bug, the user's choice).
+- **Touching objects** (`ConnorCollision`): an object can react when
+  Connor walks or falls into it, once per touch (Daventry's waterfall
+  remark, Dead City's heart).
+- **Attacks from scripts** (`KQAttackEvent`): traps hurt Connor by the
+  game's hurt rule; the River of Death kills him.
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,
