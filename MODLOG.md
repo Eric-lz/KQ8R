@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-2b: play-once movements move characters (the skeleton's stagger pushes it back)
+
+**Changed:** Core `door.rs` (`once_travel`: the steps of the frames a play-once movement enters), `named_anim.rs` (a character's play-once movement reports them; its drawing no longer adds them), `character.rs` (`movement_step` passes them to its mover, also in the update it ends). DESIGN T-2b. Provenance.
+**Why:** The user's check of T-2: the skeleton's `reactback` stepped it back on screen, then it stood where it was before, so it could never be pushed off the tower (the point of the fight). We moved characters by their steps for repeating movements only and drew a play-once movement's steps on top of a place that never moved. `character-movement.md` rule 1 and `objects.md` rule 6a make no such exception.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --frames 5000 --command "move Connor 0 185481 126550 9814 0 0 0",20 --command "sendEvent 0 Skeltowr KQCueEvent 201 0",30 --command "sendEvent 0 Skeltowr KQAnimPlayEvent reactback",165` (and 215); `characters.log`. Daventry run with the AI (`--at 280000,210000,0`).
+**Result:** `reactback` (after its `Attack` ended, update 169) takes it from (185448, 125849) to (185434, 125476) by update 180 and it stays (125,445 at 195); after the stun it walks back and attacks again. The second stagger: 125,605 → 125,425.
+**Still broken / not tested:** **Not looked at by eye.** The fall itself (staggered with no ground behind) not run: in this test its back is toward the tower's middle. Every character's play-once movement with steps (attacks, deaths, Daventry's too) now moves it; the Daventry run had no fight, so that was not seen.
+**Next:** The user's check of the stagger; then T-3 (the fall).
+
 ## 2026-10-31 T-1b and T-2: `PreBirth`; the tower skeleton stands and moves by its own rules
 
 **Changed:** Core `character.rs` (`pre_birth`: Birth loops `prebirth` visibly; the tower's flinch end: gap `reactPause` when moving, `moveTime` = now + `stunPause`, probe due), `character_ai.rs` (`rise` also for `PreBirth`; `tower_rules` in place of the ordinary alarm rules; the probes 1,000 ahead and 400 behind), `fight.rs` (`flinch_gap`), `tower_skeleton.rs` (probe constants). Viewer `anim_view.rs`. DESIGN (T-1b). Provenance. One commit for both: they share files and this setup can't stage parts of a file.

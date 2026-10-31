@@ -472,6 +472,13 @@ impl NamedAnimPlayer {
             }
             None => m.step_with(self.phase, dt, speed),
         };
+        // T-2b (character-movement.md rule 1, objects.md rule 6a): a
+        // character's play-once movement moves it by the frames entered.
+        if self.loops_move_base {
+            if let Some(t) = m.once_travel(self.phase, step.to) {
+                out.travel = Some(t);
+            }
+        }
         self.phase = step.to;
         out.to = step.to;
         out.cues = step.cues;
@@ -527,8 +534,9 @@ impl NamedAnimPlayer {
     /// The turn the shown frame's steps give it (own space).
     pub fn turn(&self) -> Transform {
         let mut t = self.movement().map_or_else(identity, |m| m.turn_at_frame(self.frame()));
-        if self.loops_move_base && self.movement().is_some_and(|m| m.repeat) {
-            // Its steps moved the place instead; a turn in the frames stays.
+        if self.loops_move_base {
+            // Its steps moved the place instead (repeating or, T-2b, play-
+            // once); a turn in the frames stays.
             t.p = [0.0; 3];
         }
         t
@@ -542,7 +550,7 @@ impl NamedAnimPlayer {
         let Some(m) = self.movement() else { return identity() };
         let here = m.turn_at_frame(frame);
         let mut t = if toward > 0.0 && frame + 1 < m.frames() { crate::door::mix_transform(&here, &m.turn_at_frame(frame + 1), toward) } else { here };
-        if self.loops_move_base && m.repeat {
+        if self.loops_move_base {
             t.p = [0.0; 3];
         }
         t

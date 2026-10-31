@@ -3993,3 +3993,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `reactback` (its stagger): `moveTime` = now + `stunPause` each update; at its end the next flinch gap is `reactPause` if moving, else 2 s; the probe 400 behind: nothing → it falls | 7a, `fighting.md` rule 23 | **not run** (needs Connor to hit it) |
 | The probes: a line straight down from 100 above its feet to 1,000 below, against the drawn ground and the buildings | **ours** (the note gives the distances, not the test) | — |
 | Its fall is the ordinary death until T-3 | **ours, stand-in** | — |
+
+## T-2b 2026-10-31: play-once movements move characters — core `door.rs` (`once_travel`), `named_anim.rs`, `character.rs` (`movement_step`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A character moves only by the steps of the movement it plays, as Connor (no exception for play-once movements) | `character-movement.md` rule 1; `connor-collision.md` rule 14 (`reactback` moves Connor 903 back through his mover) | `characters.log`: `reactback` takes the skeleton from y 125,849 to 125,445 and it stays there |
+| Each update adds the steps of every frame it enters; backwards they are taken off | `objects.md` rule 6a | — |
+| Its drawing no longer adds those steps (they moved its place) | **ours** (drawing), as for its walk | the user's look: not yet |

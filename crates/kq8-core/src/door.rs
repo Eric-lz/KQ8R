@@ -207,6 +207,26 @@ impl DoorMovement {
         Some((Step { to, done: false, cues }, own))
     }
 
+    /// A play-once movement going from `from` to `to` (phases): the summed
+    /// steps of every frame it enters (`objects.md` rule 6a; T-2b),
+    /// backwards taken off. `None` for a repeating movement (that is
+    /// [`Self::step_frames`]) or one with fewer than two frames.
+    pub fn once_travel(&self, from: f32, to: f32) -> Option<[f32; 3]> {
+        if self.repeat || self.frame_steps.len() < 2 {
+            return None;
+        }
+        let (a, b) = (self.frame_at(from), self.frame_at(to));
+        let mut sum = [0.0f32; 3];
+        let (lo, hi, sign) = if b >= a { (a + 1, b, 1.0) } else { (b + 1, a, -1.0) };
+        for k in lo..=hi.min(self.frame_steps.len() - 1) {
+            let p = self.frame_steps[k].p;
+            for j in 0..3 {
+                sum[j] += sign * p[j];
+            }
+        }
+        Some(sum)
+    }
+
     /// The steps of frames 1…`frame` chained: each step is taken in the
     /// door's own axes as they are after the earlier steps. Frame 0 is the
     /// starting pose (no step).

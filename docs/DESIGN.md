@@ -3536,6 +3536,18 @@ per step:
   probes (1,000 ahead before moving or while moving; 400 behind during
   `reactback`), `moveTime`, no leash, no attack while Connor is on a
   rope, stop at reach, run after Connor when hit.
+- **T-2b: play-once movements move characters** (the user's check of
+  T-2, 2026-10-31: its `reactback` steps it back on screen, then it is
+  back where it stood, so it can never be pushed off the tower).
+  `character-movement.md` rule 1: a character moves only by the steps of
+  the movement it is playing, as Connor; `objects.md` rule 6a: each
+  update adds the steps of every frame it enters. Ours did that for
+  repeating movements only, and drew a play-once movement's steps on top
+  of a place that never moved. Now a character's play-once movement adds
+  the steps of the frames entered (backwards: taken off) to its mover,
+  and its drawing no longer adds them. Affects every character's
+  play-once movement with steps (attacks, deaths). Check: `characters.log`
+  the skeleton's place before and after `reactback` (`skcmrcbk.kqs`).
 - **T-3: the fall** (7a "Dying"): `teeter`, the camera from below,
   `die`, `die2`, `fallend`, the drop of its chain mail (`chainmal.cs`),
   Cue 50 twice, then the ordinary finish.
