@@ -37,6 +37,13 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   **Q193, Q194 for A:** the river controls and the weeper's bolt can't be
   built from the notes (direction to the river, camera, timings; how the
   weeper finds its projectile).
+- **K tried and undone** (`KQMonster::add`: every use is a respawn of a
+  creature the monster list already placed; needs characters made while
+  playing, DESIGN K). **T (the tower skeleton) under way:** T-1 (it is a
+  character, alarm 0, Cue 201), T-1b (`PreBirth`: it waits visibly and
+  rises), T-2 (its standing and moving rules, ground probes) built, logs
+  only. **Next:** T-3 (its fall off the tower), T-4 (what it hears and
+  says; Q195 for A: nothing in the data sends Cue 201).
 
 - **2026-10-31 (B): Q176–Q181 applied** (I-1 to I-7, logs only, not
   looked at by eye): the north tile jump lands (steps 325); the teleport
