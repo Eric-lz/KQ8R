@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 G-1: the death-hall stones put Connor's weapon away for good
+
+**Changed:** Core `weapons.rs`: `WorldState::put_weapon_away` (a state puts the weapon away itself: mode and ready item none at once). Viewer `door_view.rs`: entering the `Tile` state calls it before Connor's `away`; with a weapon out he says 0/0/37/23; in the state every weapon request is refused (bottom-bar slot clicks too, not only Delete / Alt), keys and slots with that line, a script's without. 1 new unit test (`the_tile_state_puts_the_weapon_away_itself`). DESIGN (plan G-1 to G-4), QUESTIONS Q181 and Q182, provenance.
+**Why:** The user's check: on the stones Connor played the put-away but his weapon stayed drawn, and he didn't say "A weapon will not help me here." The state only told Connor's movements; the game's own ready weapon (what the bottom bar shows) stayed the axe, and the next update readied it again "at once". Slot clicks went round the refusal. `tile-puzzle.md` rules 7, 18, 20; the line on entering is the user's check in the original (Q181).
+**Tested how:** `cargo test --workspace` (all pass, 555 in core); clippy: the same 2 warnings as before. The D-4 solve run with `--frames 42000 --command "KQConner::setDoMode 0",100 --key left:IDCTL_INVBAR_SHORT,350`; `fight.log`, `connor.log`, `talk.log`.
+**Result:** Update 106: the axe is drawn. Update 250: "put away by the state, hand (Some("INVITEM_SmallAx")) -> none"; Connor plays `conaxe.anm/away`, `out`; 263: "the set switches now (None, none)" (before: the axe came back at once). `talk.log` 250: "A weapon will not help me here." (1.5 s). Update 350, the slot clicked: "refused in the Tile state; Connor says 0/0/37/23", the line plays again.
+**Still broken / not tested:** **Not checked by eye.** Whether he says the line with nothing drawn, and which requests the original refuses: Q181.
+**Next:** G-2, the camera's roll.
+
 ## 2026-10-30 D-6: `KQObject::changeBmp`, and the Clarity potion shows the death-hall letters
 
 **Changed:** Core `active.rs`: `KQObject::changeBmp <obj> <old> <new>` / `<obj> normal` (was a stub): the object's one remembered pair (`bmp_swaps`); unknown object: a console line; `reveal_objects_here` (only reveal objects in the world now). `potions.rs`: Clarity's start and end call those. `script.rs`: off the stub list. Viewer `load.rs`: the pictures the world's `changeBmp` lines name are read at load (`swap_looks`); a reveal object prepared for a script's `loadKQ` joins the reveal list. `anim_view.rs`: each animated object keeps its materials' original texture names (copies from their recipe); when its pair changes its own pictures go back, then every material first named `old` shows `new`. `connor_tile.rs`: the lit stone's bright copy follows a changed picture. 1 new unit test, 1 changed (`clarity_tells_the_reveal_objects_at_start_and_end`: an object not loaded yet is not called). DESIGN, provenance.

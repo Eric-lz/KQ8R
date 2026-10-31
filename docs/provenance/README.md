@@ -3805,3 +3805,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `tileshow.kq` gets `Reveal True` / `False`; `tileshow.cs` swaps the five letters | `tile-puzzle.md` rule 17, `potions.md` rule 31 | `doors.log` "tileshow.cs line 3: KQObject::changeBmp tile21" |
 | A reveal object prepared for a script's `loadKQ` is called once it is in the world; not before it comes in | `potions.md` rules 31, 32 (every reveal object in the world at the start and the end) | unit test `clarity_tells_the_reveal_objects_at_start_and_end` |
 | The lit stone's bright copy shows the swapped picture | `tile-puzzle.md` rule 10 with rule 17 (both at once) | not checked by eye |
+
+## Fixes G-1 2026-10-30: the Tile state's weapon — core `weapons.rs` (`put_weapon_away`); viewer `door_view.rs` (`Request::ConnorTile`, the weapon requests)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Entering `Tile` with a weapon drawn: `away`, his weapon mode becomes empty hands (the game's ready weapon too, not a request) | `tile-puzzle.md` rule 7 | unit test `the_tile_state_puts_the_weapon_away_itself`; `fight.log` "put away by the state"; `connor.log` "the set switches now (None, none)" |
+| In the state the weapon swap is refused with his line 0/0/37/23 | `tile-puzzle.md` rule 18 | `talk.log` update 350 |
+| Bottom-bar slot clicks are refused too, with the line; a script's request without it | **Ours** (rule 18 names the swap key; rule 20 refuses other states); asked in Q181 (c) | `fight.log` "refused in the Tile state" |
+| With a weapon out he says 0/0/37/23 on entering | **The user's check in the original**; asked in Q181 | `talk.log` update 250 |

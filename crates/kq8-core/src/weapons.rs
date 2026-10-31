@@ -276,6 +276,22 @@ impl WorldState {
         Some(Change { from: ready, to, from_item, to_item, script })
     }
 
+    /// `tile-puzzle.md` rule 7 (G-1): a state that puts his weapon away
+    /// itself (empty hands), not a request: the mode and the ready item
+    /// become none at once, so the bottom bar and the movement set follow.
+    /// Returns the change, `None` with nothing ready.
+    pub fn put_weapon_away(&mut self, how: &str) -> Option<Change> {
+        let ready = self.weapon_mode;
+        if ready == WeaponMode::None {
+            return None;
+        }
+        let from_item = self.weapon_ready.take();
+        self.last_away_ranged = ready == WeaponMode::Ranged;
+        self.weapon_mode = WeaponMode::None;
+        self.fight_note("Connor", format!("{how}: put away by the state, {} ({from_item:?}) -> none", ready.name()));
+        Some(Change { from: ready, to: WeaponMode::None, from_item, to_item: None, script: true })
+    }
+
     /// `Connor.kq`'s fight settings (M5 5c-4); his projectile and shoot
     /// offset start as its `projectileFile` and `shootOffsetX/Y/Z`, then
     /// a ranged item he already carries replaces them (rule 21).

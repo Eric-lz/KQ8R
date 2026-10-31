@@ -1331,9 +1331,22 @@ pub fn trap_step(
                 format!("{at}: applied: setHaze {haze} queued for the haze")
             }
             Request::ConnorTile { at } => {
+                // tile-puzzle.md rule 7 (G-1): a drawn weapon is put away
+                // by the state itself, so the bottom bar's ready weapon
+                // becomes none too (it readied the axe again before).
+                let away = sim.active.world.put_weapon_away(&at);
                 let world = &sim.active.world;
                 let line = connor.enter_tile(&|name| world.place_of(name).map(|p| p.position), &at);
-                format!("{at}: applied: Connor {line}")
+                // The user's check in the original (Q181): as he puts it
+                // away he says his "A weapon will not help me here." line.
+                let said = match away {
+                    Some(_) => {
+                        let said = sim.active.test_command("KQMonster::speak Connor Connor 0 0 37 23 1 1", "Tile state");
+                        format!("; the weapon was out: says 0/0/37/23 ({said:?}) (the user's check, Q181)")
+                    }
+                    None => String::new(),
+                };
+                format!("{at}: applied: Connor {line}{said}")
             }
             Request::TileExit { can_exit, at } => {
                 let line = connor.tile_exit(can_exit, &at);
@@ -1940,18 +1953,27 @@ pub fn door_step(
         // ranged-weapons.md rules 1-9 (M5 5f-3): Delete, Alt, slot clicks
         // and setDoMode ask for a mode; taken only while he stands or
         // moves (rule 5), then the swap (rule 6).
-        // tile-puzzle.md rule 18 (D-4): in the Tile state the swap is
-        // refused with his common line.
-        if c.tile.is_some() {
-            for (_, how) in std::mem::take(&mut c.weapon_keys) {
-                let said = sim.active.test_command("KQMonster::speak Connor Connor 0 0 37 23 1 1", "Tile state");
-                sim.log.detail(format!("update {updates}: {how}: weapon swap refused in the Tile state; Connor says 0/0/37/23 ({said:?}) (tile-puzzle.md rule 18)"));
-            }
-        }
         let w = &mut sim.active.world;
         for (ask, how) in std::mem::take(&mut c.weapon_keys) {
             w.ask_weapon(ask, &format!("update {updates}: {how}"));
         }
+        // tile-puzzle.md rules 18, 20 (D-4; G-1): in the Tile state every
+        // swap is refused, keys and bottom-bar slots alike, with his common
+        // line; a script's (rule 20) without it.
+        if c.tile.is_some() {
+            for r in std::mem::take(&mut w.weapon_requests) {
+                let said = if matches!(r.ask, kq8_core::weapons::Ask::Script(_)) {
+                    "no line (a script's, rule 20)".to_string()
+                } else {
+                    let said = sim.active.test_command("KQMonster::speak Connor Connor 0 0 37 23 1 1", "Tile state");
+                    format!("Connor says 0/0/37/23 ({said:?}) (rule 18)")
+                };
+                let line = format!("weapon request ({}): refused in the Tile state; {said} (tile-puzzle.md rules 18, 20)", r.how);
+                sim.active.world.fight_note("Connor", line.clone());
+                sim.log.detail(format!("update {updates}: {line}"));
+            }
+        }
+        let w = &mut sim.active.world;
         let mut later = Vec::new();
         for r in std::mem::take(&mut w.weapon_requests) {
             // Q138 (ranged-weapons.md open question 1, traced): moving (a

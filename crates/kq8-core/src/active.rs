@@ -7423,6 +7423,21 @@ endif
     }
 
     #[test]
+    fn the_tile_state_puts_the_weapon_away_itself() {
+        // tile-puzzle.md rule 7 (G-1): no request; the mode and the item
+        // become none at once; nothing ready: nothing.
+        use crate::weapons::{Ask, Request, WeaponMode};
+        let mut a = with_object("x\n", "x");
+        assert!(a.world.put_weapon_away("t").is_none());
+        a.world.take_weapon_request(&Request { ask: Ask::Draw, how: "t".into() }, Ok(()), false).unwrap();
+        let ch = a.world.put_weapon_away("t").unwrap();
+        assert_eq!((ch.from, ch.to, ch.from_item.as_deref(), ch.to_item), (WeaponMode::Hand, WeaponMode::None, Some("INVITEM_Fists"), None));
+        assert_eq!((a.world.weapon_mode, a.world.weapon_ready.clone()), (WeaponMode::None, None));
+        assert!(a.world.weapon_requests.is_empty() && !a.world.last_away_ranged);
+        assert_eq!(a.test_command("KQConner::getDoMode", "t").as_deref(), Some("4"));
+    }
+
+    #[test]
     fn go_home_and_the_radius_commands() {
         // Rules 23, 27, 29.
         let mut a = wanderer(kq8_data::characters::Wander::None);

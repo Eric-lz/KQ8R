@@ -3470,3 +3470,40 @@ F-1 to F-3 **done** 2026-10-30. Found while checking F-2 (Death's room,
   Daventry); an animated one takes the player and recipe its live object
   was built with.
 - Then D-6 (`changeBmp`: the Reveal potion on the letters).
+
+**Fixes after the user's check of F-4 to D-6 (2026-10-30)**, one commit
+each:
+
+- **G-1: the Tile state puts the weapon away for good** (`tile-puzzle.md`
+  rules 7, 18, 20). The state played `away` on Connor only; the game's
+  own ready weapon (which the bottom bar shows) stayed the axe, so the
+  next update readied it again at once. The state now empties it
+  (`WorldState::put_weapon_away`). Every weapon request in the state is
+  refused, bottom-bar slot clicks too (only Delete and Alt were); keys
+  and slots get his line 0/0/37/23, a script's none. On entering with a
+  weapon out he says that line too: **the user's check in the
+  original**, not in the notes (Q181). Check: `fight.log` "put away by
+  the state", `connor.log` "the set switches now (None, none)",
+  `talk.log` 0 0 37 23 at the entry and at each refused request.
+- **G-2: the camera's roll is drawn** (`camera.md` rules 3–4). The roll
+  was worked out and logged but never drawn. Now the drawn camera turns
+  about its line of sight, blended between updates like its place.
+  Which way: the user's check (−0.6 turns the picture anticlockwise);
+  asked in Q182 with the size (the user saw about 45°, −0.6 is 34°).
+- **G-3: copies move their collider** (`objects.md` "Loops that move the
+  whole object" rule 1: the steps move the object "through its mover,
+  so its collision box goes with it"). A copy loaded while playing had
+  its collider switched off for this (from 5d-4, before copies had
+  colliders), so the stones bobbed but their boxes did not, and Connor
+  stood still. The box is placed from core's place for the object.
+  (Stones whose shape has no `BOUNDS.KQ` entry, `notile2.kqs`,
+  `tilem.kqs`, …, have no box, as in the original: `connor-physics.md`.)
+  Check: Connor's z on a stone goes up and down 115 every 2 s.
+- **G-4: an object loaded while playing starts its movement afresh**
+  (`objects.md` "Where a world's objects come from" rule 6). An unused
+  object's own player kept playing from the world's start, so the key's
+  play-once spin (`keycycle.kq` `stop`) had ended long before Death's
+  `loadKQ keycycle.kq`, and no end came to start `gone`. The player as
+  built at load is kept and handed over. Check: `doors.log` "keycycle:
+  movement 'gone' ended", "INVITEM_KeyToDeathMaze 0 -> 1", "deleteObject
+  keycycle".
