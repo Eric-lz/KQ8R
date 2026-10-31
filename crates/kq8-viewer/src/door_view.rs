@@ -768,6 +768,9 @@ pub fn spawn_doors(
         }
     }
     active.add_traps(traps);
+    // connor-collision.md rule 7 (D-10a).
+    active.world.con_collision = std::mem::take(&mut objects.con_collision).into_iter().collect();
+    main_log.summary(format!("ConnorCollision: {} objects with conCollisionAction: {:?}", active.world.con_collision.len(), active.world.con_collision));
     main_log.summary(format!("chests: {} chests", active_chests.len()));
     active.add_chests(active_chests);
     main_log.summary(format!("objects: {} scripted clickable objects", active_objects.len()));
@@ -1114,6 +1117,12 @@ pub fn trap_step(
         if !sim.active.push_call(name) && !connor.not_pushable.contains(name) {
             connor.not_pushable.push(name.clone());
         }
+    }
+    // connor-collision.md rules 7-10 (D-10a): the objects his move touched,
+    // right after it (the original: mid-move; our order, as Push).
+    for (name, normal) in std::mem::take(&mut connor.con_touches) {
+        let mask = colliders.as_ref().and_then(|c| c.0.iter().find(|b| b.name == name)).map_or(0, |b| b.kind.collision_mask);
+        sim.active.connor_touch(&name, normal, mask);
     }
     // M4 4e-3: Connor's side of a conversation (conversation.md rules
     // 6-15), after his move and this update's scripts; what it asks of him

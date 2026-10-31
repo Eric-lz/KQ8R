@@ -3945,3 +3945,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | **Cue 2 also = it has left** | **the user's choice 2026-10-31** (the note: Cue 2 is ignored, a possible original bug; the data never sends Cue 0) | unit test `a_spirit_trap_drains_connor_only_while_a_spirit_passes`; `traps.log` "Cue 2 counted as left" |
 | Connor entering first while a spirit passes, or Cue 1 while he is inside: health − damage × maximum, not below 1 % of maximum, then a 1-point hit that makes him flinch | `traps.md` "Spirit traps" | `fight.log`: 80 → 64, then the hit 64 → 63, `react` |
 | Shares rounded to whole health; the hit is the ordinary one (rule 16, so it costs at least 1 and can kill); nothing while dying, on the rope or in god mode | **ours, stand-in** (Q188) | unit test |
+
+## Batch 2 D-10a 2026-10-31: `ConnorCollision` from Connor's moves — core `connor_mover.rs` (`Scene::touched`), `active.rs` (`connor_touch`, `direction_number`); viewer `connor_view.rs`, `door_view.rs`, `load.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| An object with a script, `conCollisionAction` ≠ 0 and its own mask covering 4 is told about Connor touching it, from his walking, running or falling into it | `connor-collision.md` rules 2, 7 | unit test `connor_collision_runs_once_per_direction…`; Daventry `bricks` (mask commented out) never told |
+| Every object contact found as it is tested counts, in every pass | `connor-collision.md` rule 7, `connor-physics.md` step 7 (Q88: told at once as tested) | `doors.log` waterfall |
+| `$3` = direction number: 1 any upward part, 6 any downward part, 2–5 by x and y | `connor-collision.md` rule 9; **ours**: the x = 0 bump to 4 / 6 not copied ("Do not reproduce") | unit test `direction_numbers_follow_the_surface_direction` |
+| Per object six clocks starting at 0; a call only when more than 0.2 s since the last touch in that direction; every touch sets it | `connor-collision.md` rule 10 | unit test; waterfall: one call at update 35, none while pressing on to update 70 |
+| The script runs right after his move | **ours** (the note: mid-move; as the scripted `Push`) | — |
+| Not built: an object moving into Connor (Gnome's rocks, M6) | `connor-collision.md` rules 5, 9 | — |

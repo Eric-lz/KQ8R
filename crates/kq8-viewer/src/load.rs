@@ -1565,6 +1565,9 @@ pub struct Objects {
     /// The traps among them (lower-case names): built, switched off until
     /// their `loadKQ`.
     pub dormant_traps: Vec<String>,
+    /// Objects with `conCollisionAction` not 0 (`connor-collision.md`
+    /// rule 7, D-10a), lower-case names.
+    pub con_collision: Vec<String>,
     /// The files a script may load while playing as new copies (M5 5d-3):
     /// read and built at the start like an unused object, hidden.
     pub templates: Vec<TemplateAssets>,
@@ -1897,6 +1900,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         load_targets,
         dormant: Vec::new(),
         dormant_traps: Vec::new(),
+        con_collision: Vec::new(),
         template_files: Vec::new(),
         used_no_place: Vec::new(),
         game,
@@ -2248,6 +2252,7 @@ struct Placer<'a> {
     load_targets: std::collections::BTreeSet<String>,
     dormant: Vec<(String, String, Option<String>)>,
     dormant_traps: Vec<String>,
+    con_collision: Vec<String>,
     /// (file, index into `placed`) of each template (M5 5d-3).
     template_files: Vec<(String, usize)>,
     /// (file, index into `placed`): the first start-up placement of each
@@ -3174,6 +3179,11 @@ impl Placer<'_> {
             ));
         } else {
             self.sections += 1;
+        }
+        // connor-collision.md rule 7 (D-10a): the script gets ConnorCollision.
+        if s.get("conCollisionAction").and_then(|v| v.trim().parse::<f64>().ok()).is_some_and(|v| v != 0.0) {
+            self.log.detail(format!("[{}] conCollisionAction on (colliderMask {:?})", p.name, s.get("colliderMask").map(str::trim)));
+            self.con_collision.push(p.name.to_ascii_lowercase());
         }
         if let Some(h) = s.get("hidden").filter(|_| !unused) {
             let with = if p.shape.is_some() || s.get("animLoops").is_some() { "with a model" } else { "no model" };
@@ -4775,6 +4785,7 @@ impl Placer<'_> {
             audibles: self.audibles,
             dormant: self.dormant,
             dormant_traps: self.dormant_traps,
+            con_collision: self.con_collision,
             templates,
             music: self.music,
             footsounds,

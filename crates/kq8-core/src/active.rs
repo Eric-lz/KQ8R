@@ -423,6 +423,31 @@ pub struct KeptState {
 /// two numbers, and the third only if it is not zero. A word there (the
 /// movement name of a `getEndLoop` relay, `clicking.md` rule 21) counts as
 /// not zero.
+/// `connor-collision.md` rule 10: a touch in the same direction runs the
+/// script again only after more than this many seconds.
+pub const CON_TOUCH_REPEAT: f64 = 0.2;
+
+/// `connor-collision.md` rule 9: the direction number of a touch's
+/// surface direction: 1 any upward part, 6 any downward part; level: 2 or
+/// 3 for x ≥ 0, 4 or 5 for x < 0 (3 / 5 when |x| < |y|). The original
+/// bumps x = 0 from 3 / 5 to 4 / 6; that quirk is not copied ("Do not
+/// reproduce": only 1 is tested by any script).
+pub fn direction_number(n: [f32; 3]) -> usize {
+    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    let [x, y, z] = if len > 0.0 { n.map(|v| v / len) } else { n };
+    if z > 0.0 {
+        1
+    } else if z < 0.0 {
+        6
+    } else if x >= 0.0 {
+        if x.abs() < y.abs() { 3 } else { 2 }
+    } else if x.abs() < y.abs() {
+        5
+    } else {
+        4
+    }
+}
+
 fn cue_args(data: &[String]) -> Vec<String> {
     let n = |k: usize| data.get(k).cloned().unwrap_or_else(|| "0".into());
     let mut args = vec!["Cue".to_string(), n(0), n(1)];
@@ -712,6 +737,12 @@ pub struct WorldState {
     pub connor_jump: Option<&'static str>,
     /// Connor's stats and level (`Connor.kq`; 3i-6).
     pub connor_stats: Option<ConnorStats>,
+    /// Objects whose script gets `ConnorCollision` (`conCollisionAction`
+    /// not 0; lower case), and per object the game time of its last
+    /// Connor touch in each of the six directions (`connor-collision.md`
+    /// rules 7, 10; D-10a).
+    pub con_collision: std::collections::BTreeSet<String>,
+    pub con_touch_times: BTreeMap<String, [f64; 6]>,
     /// How many stats events Connor has had (M4 4c-2): the bottom bar
     /// sends its values after each (`interface.md` rule 24).
     pub connor_stats_events: u64,
@@ -3810,6 +3841,8 @@ impl Active {
                 deleted: BTreeSet::new(),
                 switched_off: BTreeSet::new(),
                 connor_stats: None,
+                con_collision: Default::default(),
+                con_touch_times: BTreeMap::new(),
                 connor_stats_events: 0,
                 gui_orders: Vec::new(),
                 potions: Vec::new(),
@@ -3954,6 +3987,35 @@ impl Active {
     /// when it is still a pushable afterwards (its script didn't take
     /// control, or it has none): the caller makes its later touches wall
     /// hits ("Do not reproduce").
+    /// `connor-collision.md` rules 7-10 (D-10a): Connor's move touched
+    /// object `name` (its own `colliderMask` is `mask`) with the surface
+    /// direction `normal` (from the object toward him). With a script,
+    /// `conCollisionAction` and a mask covering Connor's type 4, it runs
+    /// `ConnorCollision <n>`, unless the last touch in that direction was
+    /// 0.2 s ago or less; every touch sets that direction's time. `None`
+    /// when it is not such an object.
+    pub fn connor_touch(&mut self, name: &str, normal: [f32; 3], mask: u32) -> Option<String> {
+        let key = name.to_ascii_lowercase();
+        if !self.world.con_collision.contains(&key) {
+            return None;
+        }
+        let n = direction_number(normal);
+        let now = self.world.now();
+        let times = self.world.con_touch_times.entry(key).or_insert([0.0; 6]);
+        let last = std::mem::replace(&mut times[n - 1], now);
+        let line = if mask & CONNOR_TYPE == 0 {
+            format!("{name}: Connor touch, direction {n}: its mask {mask:#x} has no 4, not told (rule 7)")
+        } else if now - last <= CON_TOUCH_REPEAT {
+            format!("{name}: Connor touch, direction {n}: {:.3} s after the last in that direction, not more than {CON_TOUCH_REPEAT}: no call (rule 10)", now - last)
+        } else if self.call_named(name, &["ConnorCollision", &n.to_string()]) {
+            format!("{name}: Connor touch, direction {n} (surface ({:.2}, {:.2}, {:.2})): ConnorCollision {n} (rules 7-10)", normal[0], normal[1], normal[2])
+        } else {
+            format!("{name}: Connor touch, direction {n}: no script; nothing (rule 7)")
+        };
+        self.world.note(format!("game time {now:.3} s: {line}"));
+        Some(line)
+    }
+
     pub fn push_call(&mut self, name: &str) -> bool {
         // pushing.md rule 11a: a `KQPaddleObject` runs its own push.
         if self.world.clickables.iter().any(|c| !c.gone && c.class.eq_ignore_ascii_case(PADDLE_CLASS) && c.name.eq_ignore_ascii_case(name)) {
@@ -6198,6 +6260,51 @@ endif
         assert!(a.take_log().join("
 ").contains("its trap box is in place now"));
         assert_eq!(connor_at(&mut a, 0.0), vec!["Henchtp On Connor".to_string()]);
+    }
+
+    #[test]
+    fn direction_numbers_follow_the_surface_direction() {
+        // connor-collision.md rule 9.
+        assert_eq!(direction_number([0.0, 0.0, 1.0]), 1);
+        assert_eq!(direction_number([0.9, 0.0, 0.1]), 1, "any upward part");
+        assert_eq!(direction_number([0.0, 0.3, -0.2]), 6);
+        assert_eq!(direction_number([1.0, 0.0, 0.0]), 2);
+        assert_eq!(direction_number([0.3, -0.9, 0.0]), 3);
+        assert_eq!(direction_number([-1.0, 0.2, 0.0]), 4);
+        assert_eq!(direction_number([-0.1, 0.9, 0.0]), 5);
+        // x = 0: not bumped to 4 / 6 ("Do not reproduce").
+        assert_eq!(direction_number([0.0, -1.0, 0.0]), 3);
+    }
+
+    #[test]
+    fn connor_collision_runs_once_per_direction_until_0_2_s_without_touch() {
+        // connor-collision.md rules 7-10 (D-10a): heart.cs tests $3 == 1.
+        let mut a = with_trap("if test $2 == ConnorCollision\n set T::Dir $3\n set T::Calls $3\nendif\n");
+        a.world.con_collision.insert("cliftrap".into());
+        let up = [0.0, 0.0, 1.0];
+        let calls = |a: &mut Active, normal: [f32; 3], mask: u32| {
+            a.scripts.vars.set("T::Calls", "none".to_string());
+            a.connor_touch("clifTrap", normal, mask);
+            a.scripts.vars.get("T::Calls").unwrap_or("").to_string()
+        };
+        // The clocks start at 0: nothing in the first 0.2 s of game time.
+        assert_eq!(calls(&mut a, up, 4), "none");
+        for _ in 0..4 {
+            a.update();
+        }
+        assert_eq!(calls(&mut a, up, 4), "1", "landing on top, 0.267 s after the touch at 0 s");
+        a.update();
+        assert_eq!(calls(&mut a, up, 4), "none", "still standing on it: no repeat");
+        assert_eq!(calls(&mut a, [1.0, 0.0, 0.0], 4), "2", "another direction has its own clock");
+        for _ in 0..4 {
+            a.update();
+        }
+        assert_eq!(calls(&mut a, up, 4), "1", "again after more than 0.2 s without a touch");
+        for _ in 0..4 {
+            a.update();
+        }
+        assert_eq!(calls(&mut a, up, 0x1), "none", "its mask doesn't cover 4: not told");
+        assert!(a.connor_touch("other", up, 4).is_none(), "no conCollisionAction");
     }
 
     #[test]

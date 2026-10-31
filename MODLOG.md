@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 D-10a: `ConnorCollision` (Connor walking or falling into an object)
+
+**Changed:** Core `connor_mover.rs` (`Scene::touched`: every object contact as it is tested), `active.rs` (`connor_touch`, `direction_number`, the six 0.2 s clocks per object). Viewer: `load.rs` reads `conCollisionAction`, `connor_view.rs` keeps his move's touches, `door_view.rs` runs them after his move (where the scripted `Push` runs). 2 unit tests. DESIGN step 10 split into D-10a / D-10b. Provenance. New Q189.
+**Why:** Batch 2 D-10 (`connor-collision.md` rules 7–10): the heart, the scales' dishes and Daventry's waterfall react to Connor touching them.
+**Tested how:** `cargo test --workspace` (all pass, 568 in core); clippy: the same 2 warnings. `kq8-viewer --world Daventry --sound off --no-ai --frames 900 --at 158442,299000,3.1416 --hold 1,0,0,10,70`; `doors.log`, `talk.log`, `connor.log`.
+**Result:** "waterfall: Connor touch, direction 3 (surface (0.00, -1.00, 0.00)): ConnorCollision 3" at update 35; Connor says 19/24 (`A0RS0J0O.001`, 3.4 s); no second call while he presses on to update 70. Objects with `conCollisionAction` in Daventry: `bricks` (never told) and `waterfall`.
+**Still broken / not tested:** **Not played by hand.** Walking away and in again was not checked in a run (unit test only). Found, not looked into: after the head-on stop he stands in the waterfall's pool (`submerged true`, 670 below the surface) and the turn and back keys move him no more (turn key down, heading unchanged). An object moving into Connor: not built (Gnome, M6).
+**Next:** D-10b (the scales) waits for Q189; then D-11.
+
 ## 2026-10-31 D-9b: spirit traps (Dead City)
 
 **Changed:** Core `trap.rs` (`spirit_damage`, `spirit_here`), `active.rs` (Connor entering, the cues), `fight.rs` (`spirit_drain`); viewer `load.rs` loads `KQSpiriTrap` as a trap with its `damage`. 1 unit test. Provenance. New Q188 (whole numbers of the drain).

@@ -262,6 +262,10 @@ pub struct Scene<'a> {
     pub moved: RefCell<Vec<(String, [f32; 3])>>,
     /// Scripted pushables passed through this update (`pass_through`).
     pub passed: RefCell<Vec<String>>,
+    /// Every object contact found this update, as it was tested (name,
+    /// surface direction), for `ConnorCollision` (`connor-collision.md`
+    /// rules 7-10, D-10a).
+    pub touched: RefCell<Vec<(String, [f32; 3])>>,
     /// Scripted pushables whose script didn't take control: touches are
     /// wall hits ("Do not reproduce" of `pushing.md`), set by the caller.
     pub not_pushable: Vec<String>,
@@ -283,6 +287,7 @@ impl<'a> Scene<'a> {
             notes: RefCell::new(Vec::new()),
             moved: RefCell::new(Vec::new()),
             passed: RefCell::new(Vec::new()),
+            touched: RefCell::new(Vec::new()),
             not_pushable: Vec::new(),
             order: None,
             characters: &[],
@@ -378,6 +383,7 @@ impl MoverWorld for Scene<'_> {
             match o.sweep(balls, from, to) {
                 Some(ObjectHit::Contact(c)) => {
                     let h = Hit { position: c.position, touch: c.touch, normal: c.normal, what: o.name.clone(), monster: false, other_at: None };
+                    self.touched.borrow_mut().push((o.name.clone(), c.normal));
                     match told(&h) {
                         Told::Contact => keep(h),
                         Told::Pushed => {}

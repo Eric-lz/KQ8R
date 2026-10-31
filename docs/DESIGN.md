@@ -3451,7 +3451,22 @@ each step logs its numbers to `kq8-artifacts/logs/`.
    **Done** 2026-10-31, D-9a and D-9b (logs and unit tests; the drain's
    whole numbers are a stand-in until Q188).
 10. **D-10: `ConnorCollision`** (`connor-collision.md`), then **the
-    `Scales` state** (`tile-puzzle.md` rules 23–27).
+    `Scales` state** (`tile-puzzle.md` rules 23–27). Planned 2026-10-31:
+    - **D-10a: `ConnorCollision` from Connor's own moves** (rules 7–10).
+      `conCollisionAction` is read; Connor's scene notes every object
+      contact as it is tested, in every pass; after his move each such
+      object with a script, `conCollisionAction` ≠ 0 and its mask
+      covering 4 runs `ConnorCollision <n>`, n from the surface
+      direction (1 up … 6 down), at most once per direction until 0.2 s
+      without a touch in that direction. Ours: run right after his move
+      (the note: mid-move), as the scripted `Push`. Not built: an object
+      moving into Connor (Gnome's rolling rocks, M6). Check: Daventry
+      waterfall (one line, no repeat while pressing on), Dead City
+      `heart` (`$3 == 1`: landing on top).
+    - **D-10b: the scales.** Blocked: `scale`, `scalelt`, `scalert`
+      are not loaded (their `shapeName` files are not in the data;
+      Q189) and Connor's movement during `onscale2` is open
+      (`tile-puzzle.md` open question 3).
 11. **D-11 and later**: `ThrowRock` (`ranged-weapons.md` 8),
     `KQWeepBolt` (9), `RiverControl` (`objects.md`), `KQDeath`'s mouth
     movements (`talking.md` 18a), `KQAttackEvent` on objects

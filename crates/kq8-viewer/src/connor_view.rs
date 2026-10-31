@@ -163,6 +163,9 @@ pub struct ConnorSim {
     /// Scripted pushables he pushed this update, whose scripts get `Push`
     /// (`door_view::trap_step`, M3 3j-3).
     pub push_calls: Vec<String>,
+    /// Every object contact of his last move (name, surface direction), for
+    /// `ConnorCollision` (D-10a).
+    pub con_touches: Vec<(String, [f32; 3])>,
     /// Scripted pushables whose script didn't take control: walls for him
     /// from then on (`pushing.md` "Do not reproduce").
     pub not_pushable: Vec<String>,
@@ -821,6 +824,7 @@ pub fn spawn_connor(
         ended: Vec::new(),
         pushed: Vec::new(),
         push_calls: Vec::new(),
+        con_touches: Vec::new(),
         not_pushable: Vec::new(),
         hands_off: false,
         auto_ends: Vec::new(),
@@ -2325,6 +2329,8 @@ pub fn connor_step(
     sim.auto_ends.extend(auto_end);
     // M3 3j-2: physical pushables moved by his move.
     sim.pushed.extend(scene.moved.take());
+    // D-10a: every object contact, for ConnorCollision (door_view).
+    sim.con_touches.extend(scene.touched.take());
     // M3 3j-3: scripted pushables pushed: their scripts get Push.
     for t in report.pushes.iter().filter(|t| t.scripted && t.result == kq8_core::connor_mover::PushResult::Push) {
         if !sim.push_calls.contains(&t.object) {
