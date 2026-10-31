@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-5: the stones: a script's weapon request says the line; the Jump key jumps
+
+**Changed:** Viewer `door_view.rs`: in the Tile state a script's weapon request (`setDoMode`, `setRequiredWeaponMode`) is refused **with** the line 0/0/37/23 like the keys and slots (was silent); Alt with empty hands does nothing, silently. `connor_tile.rs`, `connor_view.rs`: the Jump key starts a forward jump while the state waits for keys (ignored during a jump, landing or teleport). Provenance.
+**Why:** Session A's answer to Q181 (`tile-puzzle.md` rules 8, 18). The line on entering stays as in G-1 (only with a weapon drawn, now confirmed by rule 7).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --no-ai --at 182290,74000,3.1416 --frames 4000 --command "move Connor 0 238340 122000 3065 0 0 1.5708",280 --jump 290 --command "KQConner::setDoMode 0",330`; `connor.log`, `fight.log`, `talk.log`.
+**Result:** Update 290: "the Jump key: a forward jump", lands on the next spot of the strip at 322. Update 330: "weapon request (setDoMode 0): refused in the Tile state; Connor says 0/0/37/23", `talk.log` plays the line.
+**Still broken / not tested:** Alt with empty hands **not tested** (no test option for Alt here). **Not played by hand.**
+**Next:** I-6 (Death's mouth).
+
 ## 2026-10-31 I-3, I-4: the teleport camera flight and the camera's hold switch
 
 **Changed:** Viewer `connor_tile.rs`: after a teleport the camera flies with `flyToCamLoc` and no time (5,000 units a second; the 0.5 s stand-in is gone); the Tile state switches the camera's hold switch on when he enters, off before each teleport flight and when he leaves, and asks the camera to follow him again when the flight ends (hold on again, except after H); the "follow Connor" at the end of `teleportup` is gone (it cut the flight short). Core `camera.rs`: `Camera::hold` (the follow update keeps the height, no height rule; the view's tilt is the player's only). Viewer `game_camera.rs`: `set_hold`, `follow_after_flight` (followed at the flight's last update). `door_view.rs`: the two new Tile calls. Done together: the flight could not run its length without the follow moved to its end. Provenance.

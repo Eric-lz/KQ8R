@@ -2282,7 +2282,7 @@ pub fn connor_step(
         }
     }
     // tile-puzzle.md rules 8-15 (D-4): the death-hall stones.
-    let tile_lines = sim.tile_step(&mut intent);
+    let tile_lines = sim.tile_step(&mut intent, jump);
     if sim.tile.is_some() && jump {
         jump = false;
     }

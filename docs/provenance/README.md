@@ -3874,3 +3874,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The flight after a teleport is a `flyToCamLoc` with no time (distance ÷ 5,000 a second), starting when `teleportdown` ends | `tile-puzzle.md` rule 13 "The camera flight" (Q178); `camera.md` "Camera flights and cuts" rule 4 | `camera.log` N = 54 for 17,883 |
 | When the flight ends the camera follows Connor again, the hold switch on again (not after H); the keys work from `teleportup`'s end | `tile-puzzle.md` rule 13 | `camera.log` "Connor is followed again" |
 | The hold switch: on entering, off for each flight, on at its end; while on the follow keeps its height and the tilt isn't aimed at Connor | `tile-puzzle.md` rule 7a (Q178) | `camera.log` updates 291–305: z 4,465, tilt −0.200 |
+
+## Fixes I-5 2026-10-31: the stones' weapon refusals and the Jump key — viewer `door_view.rs`, `connor_tile.rs` (`tile_step`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Every weapon change in the Tile state is refused with 0/0/37/23, scripts' too; Alt with empty hands does nothing | `tile-puzzle.md` rule 18 (Q181) | `fight.log` update 330 (script); Alt not tested |
+| The Jump key starts a forward jump; ignored while a jump, landing or teleport is under way | `tile-puzzle.md` rule 8 and its "Do not reproduce" (Q181) | `connor.log` update 290 |

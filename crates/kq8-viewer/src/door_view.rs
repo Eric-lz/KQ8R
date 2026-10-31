@@ -1967,13 +1967,15 @@ pub fn door_step(
         for (ask, how) in std::mem::take(&mut c.weapon_keys) {
             w.ask_weapon(ask, &format!("update {updates}: {how}"));
         }
-        // tile-puzzle.md rules 18, 20 (D-4; G-1): in the Tile state every
-        // swap is refused, keys and bottom-bar slots alike, with his common
-        // line; a script's (rule 20) without it.
+        // tile-puzzle.md rule 18 (D-4; G-1; Q181, I-5): in the Tile state
+        // every weapon change is refused with his common line: keys,
+        // bottom-bar slots and scripts' alike. Alt only acts with a weapon
+        // drawn, so with empty hands it does nothing, silently.
         if c.tile.is_some() {
+            let empty = w.weapon_mode == kq8_core::weapons::WeaponMode::None;
             for r in std::mem::take(&mut w.weapon_requests) {
-                let said = if matches!(r.ask, kq8_core::weapons::Ask::Script(_)) {
-                    "no line (a script's, rule 20)".to_string()
+                let said = if r.ask == kq8_core::weapons::Ask::Away && empty {
+                    "Alt with empty hands: nothing, no line".to_string()
                 } else {
                     let said = sim.active.test_command("KQMonster::speak Connor Connor 0 0 37 23 1 1", "Tile state");
                     format!("Connor says 0/0/37/23 ({said:?}) (rule 18)")

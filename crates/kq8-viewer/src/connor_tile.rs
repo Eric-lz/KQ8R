@@ -134,8 +134,10 @@ impl ConnorSim {
 
     /// Before his update (rules 8-15): the keys, the jump, the landing,
     /// the teleports. `intent` is changed for his update (no walking on
-    /// the stones). Returns lines for `connor.log`.
-    pub fn tile_step(&mut self, intent: &mut Intent) -> Vec<String> {
+    /// the stones); `jump`: the Jump key was pressed (rule 8, Q181: a
+    /// forward jump; ignored while a jump, landing or teleport is under
+    /// way, "Do not reproduce"). Returns lines for `connor.log`.
+    pub fn tile_step(&mut self, intent: &mut Intent, jump: bool) -> Vec<String> {
         let mut lines = Vec::new();
         let Some(stage) = self.tile.as_ref().map(|t| t.stage) else { return lines };
         let spot = self.tile_where();
@@ -150,7 +152,7 @@ impl ConnorSim {
                 }
                 let f = std::mem::replace(&mut intent.forward, 0);
                 let t = self.tile.as_mut().unwrap();
-                let pressed = f != 0 && f != t.remembered;
+                let pressed = (f != 0 && f != t.remembered) || jump;
                 t.remembered = f;
                 let Where::Spot(from) = spot else {
                     self.tile_light(None, &mut lines);
@@ -159,7 +161,10 @@ impl ConnorSim {
                 let ahead = tp::jump_target(from, self.walker.heading, false);
                 self.tile_light(ahead.filter(|c| self.tile.as_ref().unwrap().stones.found(*c)), &mut lines);
                 if pressed && self.walker.mode == Mode::Free && self.walker.auto.is_none() {
-                    let back = f < 0;
+                    let back = f < 0 && !jump;
+                    if jump {
+                        lines.push("Tile: the Jump key: a forward jump (rule 8)".to_string());
+                    }
                     if let Some(to) = tp::jump_target(from, self.walker.heading, back) {
                         if back {
                             self.tile_light(Some(to).filter(|c| self.tile.as_ref().unwrap().stones.found(*c)), &mut lines);
