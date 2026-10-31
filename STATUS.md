@@ -7,6 +7,16 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-10-30)
 
+- **2026-10-30 (B): G-1 to G-4, fixes after the user's check of F-4 to
+  D-6** (logs and unit tests, **not looked at by eye**): on the stones
+  the weapon is put away for good and every swap is refused with "A
+  weapon will not help me here." (also said on entering: the user's
+  check, Q181); the camera's roll is drawn (sign from the user's check,
+  Q182); copies loaded while playing move their collider, so Connor
+  rides the bobbing stones; an object a script loads starts its
+  movement afresh, so Death's key flies to Connor and is given.
+  **Open for A:** Q177 to Q182. **Next for B:** D-8 (batch 2 list below).
+
 - **2026-10-30 (B): F-4 to F-6 and D-6** (logs and unit tests, **not
   looked at by eye**): Death is a character (`KQDeath`): his whole scene
   runs, his lines with mouth movements, the key, Connor sent outside;
