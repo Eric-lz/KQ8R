@@ -3820,7 +3820,7 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Fact | Source | Checked by |
 | --- | --- | --- |
 | The roll (radians) turns the view about its line of sight; a flight steps it evenly to its end roll | `camera.md` "`move KQCamera`" (ry = roll), "Camera flights and cuts" rules 3–4 | `camera.log` "roll … -0.600" |
-| A negative roll turns the picture anticlockwise | **The user's check in the original** (`azrieltp.cs` Cue 2); asked in Q182 | not checked by eye |
+| A negative roll turns the picture anticlockwise | **The user's check in the original** (`azrieltp.cs` Cue 2); asked in Q182. G-5: the sign of G-2's turn was wrong (the user's check) and is reversed | not checked by eye |
 | Drawn blended between updates; a `move KQCamera` sets it at once | **Ours** (as the camera's place is drawn) | not checked by eye |
 
 ## Fixes G-3 2026-10-30: copies move their collider — viewer `anim_view.rs` (`spawn_copy`, `anim_step`)
@@ -3837,3 +3837,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | An animated object a script loads while playing starts its movement as at the world's start | `objects.md` "Where a world's objects come from" rule 6 | `doors.log` update 2040–2095: `keycycle` `stop`, `gone`, the key given, deleted |
 | Kept as a copy of the player built at load; the unused object's own player still plays for the H key | **Ours** (how we prepare objects) | as above |
+
+## Fixes G-5 2026-10-30: the camera's roll reversed — viewer `game_camera.rs` (`camera_draw`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| G-2 turned the picture the opposite way to the original's; the camera now turns by minus the roll | **The user's check in the original** (`azrieltp.cs` Cue 2); Q182 | not checked by eye |

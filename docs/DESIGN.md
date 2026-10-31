@@ -3507,3 +3507,6 @@ each:
   built at load is kept and handed over. Check: `doors.log` "keycycle:
   movement 'gone' ended", "INVITEM_KeyToDeathMaze 0 -> 1", "deleteObject
   keycycle".
+- **G-5: the roll turns the other way.** The user's check of G-2: the
+  picture turned the opposite way to the original's. The drawn camera
+  now turns by minus the roll. Still asked in Q182 (sign and size).

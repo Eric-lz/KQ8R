@@ -817,10 +817,10 @@ pub fn camera_draw(
     *t = Transform::from_translation(eye).looking_at(aim, Vec3::Y);
     // camera.md rules 3-4 (G-2): the roll, about the line of sight. Which
     // way: the user's check in the original (`azrieltp.cs` `flyToCamLoc …
-    // -.6`: the picture turns anticlockwise), so a negative roll turns the
-    // camera clockwise as seen from behind it (Bevy's +Z points back).
+    // -.6`), G-5: G-2's sign turned it the wrong way, so the roll is
+    // turned the other way round here.
     let roll = game.roll_before + (game.view.roll - game.roll_before) * a;
     if roll != 0.0 {
-        t.rotate_local_z(roll);
+        t.rotate_local_z(-roll);
     }
 }

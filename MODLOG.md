@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-30 G-5: the camera's roll turns the other way
+
+**Changed:** Viewer `game_camera.rs` (`camera_draw`): the drawn camera turns about its line of sight by minus the roll (G-2 used plus). DESIGN (G-5), QUESTIONS Q182 and Q177 (notes), provenance.
+**Why:** The user's check of G-2: in Death's camera flight (`azrieltp.cs` `flyToCamLoc … 2.5 -.6`) our picture turned the opposite way to the original's (anticlockwise). The notes don't give the sign (Q182), so it comes from the user's check.
+**Tested how:** `cargo build -p kq8-viewer`. Only the sign of one call changed; the numbers in `camera.log` are the same as in G-2.
+**Result:** Builds. **Not tested** in the game.
+**Still broken / not tested:** **Not looked at by eye.** The size (the user saw about 45°, −0.6 is 34°): Q182. The north tile jump still falls short (the user's check, 2026-10-30): waits for Q177.
+**Next:** D-8.
+
 ## 2026-10-30 G-4: an object a script loads while playing starts its movement afresh (Death's key)
 
 **Changed:** Viewer `anim_view.rs`: an unused object keeps its player as built at load (`at_load`); when a script's `loadKQ` brings it into the world, that fresh player is handed over instead of the one that has played (for the H key) since the world started. DESIGN (G-4), provenance. (Also corrects G-3's MODLOG count: 29 stones without a box, not 31.)
