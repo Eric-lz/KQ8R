@@ -181,6 +181,9 @@ pub struct Character {
     /// Its movement rules and what it knows (M5 5a-4), set by the loader;
     /// `None` = none (it only does what it is told).
     pub ai: Option<crate::character_ai::Ai>,
+    /// Its list has `PreBirth` (`characters.md` rule 16, T-1b): in Birth
+    /// it loops `prebirth` visibly instead of waiting underground.
+    pub pre_birth: bool,
     /// `KQTowerSkeleton` (`fighting.md` 7a, T-1): its own values.
     pub tower: Option<crate::tower_skeleton::TowerSkeleton>,
     /// Its part in the fight (M5 5c, `fighting.md`), set by the loader for
@@ -266,6 +269,7 @@ impl Character {
             geometry,
             mouth_moves: false,
             tower: None,
+            pre_birth: false,
             random_stop: flags & kq8_data::characters::RANDOM_STOP != 0,
             birth_delay,
             has_birth,
@@ -821,6 +825,13 @@ impl Character {
         );
         if self.state != State::None {
             line.push_str(&format!("; already in {:?} (set by a script before): kept, nothing queued", self.state));
+        } else if self.has_birth && self.pre_birth {
+            self.state = State::Birth;
+            let st = player.start("prebirth");
+            line.push_str(&format!(
+                "; its list has Birth and PreBirth: Birth state, drawn, 'prebirth' loops until it rises (rule 16){}",
+                if st.unknown { " (not found: movement 0)" } else { "" }
+            ));
         } else if self.has_birth {
             self.state = State::Birth;
             line.push_str("; its list has Birth: Birth state, not drawn until it rises (rule 16; rising is M5)");
@@ -1043,6 +1054,22 @@ impl Character {
             if let Some(ai) = self.ai.as_mut() {
                 ai.chase_until = now + crate::fight::ATTACK_CHASE;
             }
+            // Rule 23, the tower skeleton (T-2): the gap is reactPause after
+            // a reactback that ended while moving, else 2 s; stunned for
+            // stunPause; the probe behind it follows.
+            if let Some(t) = self.tower.as_mut() {
+                let moving = self.state == State::Move;
+                f.flinch_gap = if moving { f64::from(t.react_pause) } else { crate::fight::FLINCH_PAUSE };
+                t.move_time = now + f64::from(t.stun_pause);
+                t.probe_due = true;
+                return Some(format!(
+                    "fight: its flinch '{ended}' ended ({}): no flinch for {} s, stunned until {:.2} (stunPause), chase timer 5 s; the ground behind it is probed next (fighting.md rule 23, 7a)",
+                    if moving { "moving" } else { "standing" },
+                    f.flinch_gap,
+                    t.move_time
+                ));
+            }
+            f.flinch_gap = crate::fight::FLINCH_PAUSE;
             return Some(format!("fight: its flinch '{ended}' ended: no flinch for 2 s, chase timer 5 s (fighting.md rule 23)"));
         }
         if !crate::fight::is_attack(ended) {

@@ -3981,3 +3981,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | On entering the world its alarm radius is 0; Cue 201 sets it to `realAlarm` | `fighting.md` 7a | `fight.log` "alarm radius 0 -> 5000" |
 | It enters at game time 0 (it is in the start's monster list) | **ours** | — |
 | Who sends Cue 201: not in the data or the note | Q195 | — |
+
+## T-1b and T-2 2026-10-31: `PreBirth`; the tower skeleton standing and moving — core `character.rs` (`pre_birth`, the flinch end), `character_ai.rs` (`rise`, `tower_rules`, the probes), `fight.rs` (`flinch_gap`), `tower_skeleton.rs`; viewer `anim_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A list with `PreBirth`: in Birth it loops `prebirth` visibly, and rises when it notices Connor as the others | `characters.md` rule 16 | `characters.log` "'prebirth' loops until it rises", "rises (rule 30)" at update 46 |
+| No target: hit or on its way home → runs after Connor; not active → joins; within its alarm radius → alarmed at once, no sight test, no delay | `fighting.md` 7a "Standing" | — (not run: hit before alarmed) |
+| With a target: 45 updates unseen → gives up (no team exception); no leash; walks after him only after `moveTime`, chase radius > 0 and ground within 1,000 below the point 1,000 ahead | 7a "Standing" | `characters.log` "after Connor, walking" at update 46 |
+| Moving: no ground ahead → stops; within attack distance: attacks unless Connor is on a rope, stops either way | 7a "Moving" | update 139 "no ground … ahead: stops", then attacks (updates 140, 175, 210) |
+| `reactback` (its stagger): `moveTime` = now + `stunPause` each update; at its end the next flinch gap is `reactPause` if moving, else 2 s; the probe 400 behind: nothing → it falls | 7a, `fighting.md` rule 23 | **not run** (needs Connor to hit it) |
+| The probes: a line straight down from 100 above its feet to 1,000 below, against the drawn ground and the buildings | **ours** (the note gives the distances, not the test) | — |
+| Its fall is the ordinary death until T-3 | **ours, stand-in** | — |

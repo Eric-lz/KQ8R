@@ -188,6 +188,9 @@ impl WorldState {
         // Rule 20: what blocks the sight line (characters never do).
         let sight_objects: Vec<crate::collide::BoxCollider> = objects.iter().filter(|o| o.kind.collision_type & SIGHT_MASK != 0).cloned().collect();
         let scene = Scene::new(ground, buildings, &sight_objects);
+        // fighting.md 7a (T-2): the tower skeleton's ground probes look at
+        // the ground and the buildings only.
+        let floor_scene = Scene::new(ground, buildings, &[]);
         // potions.md rule 26: the place they are told (M5 5g-6).
         let connor = self.connor_reported();
         let check = update.is_multiple_of(SIGHT_EVERY);
@@ -258,7 +261,22 @@ impl WorldState {
                 self.wake(i, now);
             }
             self.rise(i, now);
-            self.alarm_rules(i, now);
+            if self.anims[i].character.as_deref().is_some_and(|c| c.tower.is_some()) {
+                let probe = |back: bool, a: &crate::active::AnimObject| {
+                    let p = a.player.base.position;
+                    let h = crate::character::heading_of(&a.player.base.rotation);
+                    let (dist, sign) = if back { (crate::tower_skeleton::PROBE_BEHIND, -1.0) } else { (crate::tower_skeleton::PROBE_AHEAD, 1.0) };
+                    let (x, y) = (p[0] + sign * dist * h.sin(), p[1] - sign * dist * h.cos());
+                    let from = [x, y, p[2] + crate::tower_skeleton::PROBE_START];
+                    let to = [x, y, p[2] - crate::tower_skeleton::PROBE_DEPTH];
+                    floor_scene.line_hit(from, to, 0x8, &a.player.name.to_ascii_lowercase()).is_some()
+                };
+                let a = &self.anims[i];
+                let (ahead, behind) = (probe(false, a), probe(true, a));
+                self.tower_rules(i, now, ahead, behind);
+            } else {
+                self.alarm_rules(i, now);
+            }
             self.idle(i, now);
             self.wander(i, now);
         }
@@ -971,7 +989,8 @@ impl WorldState {
         let Some(ai) = c.ai.as_ref() else { return };
         let Some(t) = ai.rise_at else { return };
         // **Stand-in** (Q134): not before a `hide` under way has ended.
-        if now + 1e-6 < t || c.state != crate::character::State::Birth || !c.unborn {
+        // T-1b: a PreBirth one rises from its visible loop (rule 16).
+        if now + 1e-6 < t || c.state != crate::character::State::Birth || !(c.unborn || c.pre_birth) {
             return;
         }
         let pos = a.player.base.position;
@@ -1101,5 +1120,169 @@ impl WorldState {
         let (vx, vy) = (connor[0] - p[0], connor[1] - p[1]);
         let (sn, cs) = HUNT_ANGLE.sin_cos();
         c.walk.steer = Some([p[0] + vx * cs - vy * sn, p[1] + vx * sn + vy * cs]);
+    }
+}
+
+impl WorldState {
+    /// `fighting.md` section 7a (T-2): the tower skeleton's standing and
+    /// moving rules, in place of rules 23-28. `ahead` / `behind`: ground
+    /// within 1,000 below the point 1,000 ahead of it / 400 behind it.
+    /// Its fall (no ground behind) is the ordinary death until T-3.
+    fn tower_rules(&mut self, i: usize, now: f64, ahead: bool, behind: bool) {
+        use crate::character::State;
+        if self.ai_off {
+            self.alarm_rules(i, now);
+            return;
+        }
+        let Some(connor) = self.connor_reported() else { return };
+        let roping = self.connor_roping;
+        let a = &mut self.anims[i];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let state = c.state;
+        if !matches!(state, State::Wait | State::Move) {
+            return;
+        }
+        let pos = a.player.base.position;
+        let d = distance(pos, connor);
+        let staggering = a.player.movement_name().eq_ignore_ascii_case(crate::tower_skeleton::STAGGER) && !a.player.has_ended();
+        let Some(t) = c.tower.as_mut() else { return };
+        // During reactback: stunned on; after it: the probe decides.
+        if staggering {
+            t.move_time = now + f64::from(t.stun_pause);
+        }
+        let probe_due = std::mem::take(&mut t.probe_due);
+        let move_time = t.move_time;
+        let mut lines = Vec::new();
+        if (staggering || probe_due) && !behind {
+            self.character_note(&name, format!("no ground within 1,000 below the point 400 behind it{}: it falls (fighting.md 7a; the ordinary death until T-3)", if staggering { " during reactback" } else { " after reactback" }));
+            self.character_dies(i, crate::fight::HitKind::Normal, false);
+            return;
+        }
+        if probe_due && state == State::Move {
+            let w = c.set_state(&mut a.player, "Wait", &[], now);
+            lines.push(format!("reactback ended while moving, ground behind it: back to standing ({w}) (fighting.md rule 23)"));
+        }
+        let state = c.state;
+        let Some(ai) = c.ai.as_mut() else { return };
+        let s = ai.settings.clone();
+        let home_d = distance(pos, ai.home);
+        let hit = ai.hunting || ai.hit_count > 0;
+        if ai.sees {
+            ai.last_seen = Some(connor);
+        }
+        let c2 = [connor[0], connor[1]];
+        if !ai.alarmed {
+            match state {
+                State::Wait => {
+                    if hit || ai.on_way_home {
+                        let line = c.enter_move(&mut a.player, now, true, "after Connor, running: hit, or on its way home (fighting.md 7a)");
+                        c.walk.steer = Some(c2);
+                        lines.push(line);
+                    } else if !ai.active {
+                        self.flush(&name, lines);
+                        self.join_active(i, now);
+                        return;
+                    } else if s.alarm_radius > 0.0 && d < s.alarm_radius {
+                        ai.react_at = now;
+                        self.flush(&name, lines);
+                        self.alarm(i, &format!("Connor {d:.0} away, within its alarm radius {}: at once, no sight test (fighting.md 7a)", s.alarm_radius), false, now);
+                        return;
+                    }
+                }
+                State::Move => {
+                    let within = s.alarm_radius > 0.0 && d < s.alarm_radius;
+                    if ai.on_way_home {
+                        if home_d <= s.home_radius && within {
+                            ai.react_at = now;
+                            self.flush(&name, lines);
+                            self.alarm(i, &format!("on its way home, within its home radius, Connor {d:.0} away (fighting.md 7a)"), false, now);
+                        } else {
+                            self.flush(&name, lines);
+                            self.way_home(i, now);
+                        }
+                        return;
+                    }
+                    if hit {
+                        if within {
+                            ai.react_at = now;
+                            let r = c.set_moving(&mut a.player, true);
+                            lines.push(format!("runs: {r}"));
+                            self.flush(&name, lines);
+                            self.alarm(i, &format!("hit, Connor {d:.0} away, within its alarm radius (fighting.md 7a)"), false, now);
+                        } else {
+                            // 7a "Do not reproduce": steer at Connor.
+                            c.walk.steer = Some(c2);
+                            self.flush(&name, lines);
+                        }
+                        return;
+                    }
+                    if within {
+                        ai.react_at = now;
+                        self.flush(&name, lines);
+                        self.alarm(i, &format!("Connor {d:.0} away, within its alarm radius (fighting.md 7a)"), false, now);
+                        return;
+                    }
+                }
+                _ => {}
+            }
+            self.flush(&name, lines);
+            return;
+        }
+        if now + 1e-6 < ai.react_at {
+            self.flush(&name, lines);
+            return;
+        }
+        // With a target: 45 updates unseen, no team exception; no leash.
+        if !ai.sees && ai.unseen >= LOSE_SIGHT_UPDATES {
+            self.flush(&name, lines);
+            self.give_up(i, &format!("has not seen Connor for {LOSE_SIGHT_UPDATES} updates (fighting.md 7a: no team exception)"), now);
+            return;
+        }
+        let sees = ai.sees;
+        let back_key = self.connor_back_key;
+        let mut fight_lines = Vec::new();
+        match state {
+            State::Wait => {
+                if c.turn_to.is_none() && !c.no_turn {
+                    c.ask_turn(c2);
+                }
+                if d > s.attack_dist {
+                    if now + 1e-6 >= move_time && s.chase_radius > 0.0 && ahead {
+                        let line = c.enter_move(&mut a.player, now, false, "after Connor, walking (fighting.md 7a: never the coin's run)");
+                        c.walk.steer = Some(c2);
+                        lines.push(line);
+                    }
+                } else if roping {
+                    // 7a: no attack while Connor climbs a rope; it waits.
+                } else {
+                    fight_lines.extend(attack_now(&mut a.player, c, sees, d, connor, back_key, now, false));
+                }
+            }
+            State::Move => {
+                c.walk.steer = Some(c2);
+                if !ahead {
+                    let w = c.set_state(&mut a.player, "Wait", &[], now);
+                    lines.push(format!("no ground within 1,000 below the point 1,000 ahead: stops ({w}) (fighting.md 7a)"));
+                } else if d <= s.attack_dist && !c.attack_playing(&a.player) {
+                    if !roping {
+                        fight_lines.extend(attack_now(&mut a.player, c, sees, d, connor, back_key, now, true));
+                    }
+                    let w = c.set_state(&mut a.player, "Wait", &[], now);
+                    lines.push(format!("Connor {d:.0} away, within its attack distance: stops ({w}) (fighting.md 7a){}", if roping { "; no attack, he is on a rope" } else { "" }));
+                }
+            }
+            _ => {}
+        }
+        self.flush(&name, lines);
+        for l in fight_lines {
+            self.fight_note(&name, l);
+        }
+    }
+
+    fn flush(&mut self, name: &str, lines: Vec<String>) {
+        for l in lines {
+            self.character_note(name, l);
+        }
     }
 }

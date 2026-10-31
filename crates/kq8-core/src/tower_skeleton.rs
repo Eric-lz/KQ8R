@@ -2,8 +2,9 @@
 //! from `docs/behaviour/fighting.md` section 7a (session A, traced).
 //!
 //! T-1: its own values, and Cue 201 (its alarm radius becomes
-//! `realAlarm`). Its standing, moving and falling rules come in T-2 and
-//! T-3.
+//! `realAlarm`). T-2: its standing and moving rules
+//! (`character_ai.rs`, `tower_rules`) and its flinch's end (rule 23).
+//! Its fall comes in T-3.
 
 /// Cue 201 (7a): the alarm radius becomes `realAlarm`.
 pub const CUE_REAL_ALARM: &str = "201";
@@ -12,6 +13,17 @@ pub const DEFAULT_STUN_PAUSE: f32 = 3.0;
 pub const DEFAULT_REACT_PAUSE: f32 = 2.0;
 /// `timeToRun` is set this long after it enters the world (kept only).
 pub const TIME_TO_RUN_AFTER: f64 = 5.0;
+/// 7a: the ground probes: ahead before and while moving after Connor,
+/// behind (the way `reactback` staggers it) during and after `reactback`;
+/// each looks for ground within `PROBE_DEPTH` below its feet.
+pub const PROBE_AHEAD: f32 = 1000.0;
+pub const PROBE_BEHIND: f32 = 400.0;
+pub const PROBE_DEPTH: f32 = 1000.0;
+/// Ours: the probe line starts this far above its feet, so a floor right
+/// at its feet counts (the note gives only the depth).
+pub const PROBE_START: f32 = 100.0;
+/// 7a: its stagger.
+pub const STAGGER: &str = "reactback";
 
 /// The tower skeleton's own values (7a "Keys").
 #[derive(Debug, Clone, PartialEq)]
@@ -25,6 +37,9 @@ pub struct TowerSkeleton {
     pub move_time: f64,
     /// `timeToRun`: a time, never used (kept for saved games).
     pub time_to_run: f64,
+    /// Rule 23 (T-2): its `reactback` ended; the probe behind it decides
+    /// (falls, or back to standing) in the next AI step.
+    pub probe_due: bool,
 }
 
 impl TowerSkeleton {
@@ -36,6 +51,7 @@ impl TowerSkeleton {
             react_pause: react_pause.unwrap_or(DEFAULT_REACT_PAUSE),
             move_time: 0.0,
             time_to_run: now + TIME_TO_RUN_AFTER,
+            probe_due: false,
         }
     }
 }

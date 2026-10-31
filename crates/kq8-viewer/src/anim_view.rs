@@ -427,6 +427,8 @@ pub fn spawn_animated(
             let k = &c.keys;
             ch.flying = k.flying;
             ch.mouth_moves = k.class == kq8_data::characters::Class::Death;
+            // characters.md rule 16 (T-1b): PreBirth loops visibly in Birth.
+            ch.pre_birth = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("PreBirth"));
             // fighting.md 7a (T-1): the tower skeleton's own values; it
             // enters the world at the start (game time 0).
             if k.class == kq8_data::characters::Class::TowerSkeleton {

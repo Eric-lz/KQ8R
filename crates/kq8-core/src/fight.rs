@@ -235,6 +235,9 @@ pub struct Fight {
     pub must_flee: bool,
     /// When its last flinch ended, and its last ouch sound (rules 23, 24).
     pub flinch_end: f64,
+    /// The gap after a flinch before the next (rule 23): 2 s, or the tower
+    /// skeleton's `reactPause` after a `reactback` that ended while moving.
+    pub flinch_gap: f64,
     pub last_ouch: f64,
     /// Its flinch movement playing now (`react` or its special one).
     pub flinching: Option<String>,
@@ -454,7 +457,7 @@ impl Fight {
     pub fn new(settings: FightSettings) -> Self {
         let stats = Stats(settings.stats);
         let must_flee = settings.must_flee;
-        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None, combat_scaled: false, shoot_offset: None, kept_drop: None }
+        Fight { settings, stats, attack_time: 0.0, last_kind: None, must_flee, flinch_end: f64::NEG_INFINITY, flinch_gap: FLINCH_PAUSE, last_ouch: f64::NEG_INFINITY, flinching: None, dying: None, combat_scaled: false, shoot_offset: None, kept_drop: None }
     }
 
     /// It holds a `LongWeapon` (rule 34).
@@ -799,13 +802,13 @@ impl crate::active::WorldState {
         let percent = f.settings.normal_react_percent.unwrap_or(REACT_PERCENT);
         let special = f.settings.special_react_anim.clone().filter(|_| f.settings.special_react_percent.is_some_and(|p| dmg.flinch_roll(p)));
         let can_cut = a.player.cut_short || a.player.has_ended();
-        let paused = now < f.flinch_end + FLINCH_PAUSE;
+        let paused = now < f.flinch_end + f.flinch_gap;
         let why_not = if special.is_none() && !dmg.flinch_roll(percent) {
             Some(format!("R {} is not above {percent} x D", dmg.roll))
         } else if !can_cut {
             Some(format!("'{}' can't be cut short", a.player.movement_name()))
         } else if paused {
-            Some(format!("its last flinch ended {:.2} s ago (2 s pause)", now - f.flinch_end))
+            Some(format!("its last flinch ended {:.2} s ago ({} s pause)", now - f.flinch_end, f.flinch_gap))
         } else {
             None
         };

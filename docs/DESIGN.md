@@ -3526,6 +3526,12 @@ per step:
   Cue 201 sets the alarm radius to `realAlarm`. Check: `characters.log`
   "[Skeltowr] … KQTowerSkeleton", alarm radius 0, then 5,000 after a
   `sendEvent 0 Skeltowr KQCueEvent 201 0`.
+- **T-1b: `PreBirth`** (`characters.md` rule 16, found running T-2):
+  the skeleton's list has `birth` and `prebirth`; with `PreBirth` a
+  creature in Birth loops `prebirth` visibly (not hidden underground)
+  and rises the same way. Ours had only the hidden case, so it stayed in
+  Birth for good. Check: `characters.log` "'prebirth' loops until it
+  rises", then "rises (rule 30)".
 - **T-2: standing and moving** (7a "Standing", "Moving"): the ground
   probes (1,000 ahead before moving or while moving; 400 behind during
   `reactback`), `moveTime`, no leash, no attack while Connor is on a

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-1b and T-2: `PreBirth`; the tower skeleton stands and moves by its own rules
+
+**Changed:** Core `character.rs` (`pre_birth`: Birth loops `prebirth` visibly; the tower's flinch end: gap `reactPause` when moving, `moveTime` = now + `stunPause`, probe due), `character_ai.rs` (`rise` also for `PreBirth`; `tower_rules` in place of the ordinary alarm rules; the probes 1,000 ahead and 400 behind), `fight.rs` (`flinch_gap`), `tower_skeleton.rs` (probe constants). Viewer `anim_view.rs`. DESIGN (T-1b). Provenance. One commit for both: they share files and this setup can't stage parts of a file.
+**Why:** T-2 (`fighting.md` 7a "Standing", "Moving"). Running it showed the skeleton never rose: its list has `prebirth`, a case of `characters.md` rule 16 we hadn't built (we only had the hidden zombie case), so it stayed in Birth for good.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --frames 4000 --command "move Connor 0 185481 126550 9814 0 0 0",20 --command "sendEvent 0 Skeltowr KQCueEvent 201 0",30` (AI on); `characters.log`, `fight.log`. Daventry loaded: no `PreBirth` creature there.
+**Result:** Update 21 "'prebirth' loops until it rises"; 46 "rises … 'birth' starts", "after Connor, walking"; lands on the tower floor (`Tower2`, fell 221); 106 `birth` ends, walks 880 units a second; 139 "no ground within 1,000 below the point 1,000 ahead: stops"; then attacks standing: hits Connor for 7 at 149, 184, 219 (attack delay 1.2 s). A first run with Connor 1,447 away never rose: rule 30 waits while he stands within its ball (1,448), as it should.
+**Still broken / not tested:** **Not looked at by eye.** Not run: its stagger (`reactback`) and the probe behind (needs Connor to hit it), hit-before-alarmed, the rope wait. Its fall is the ordinary death until T-3. Cue 201's sender: Q195.
+**Next:** T-3 (the fall).
+
 ## 2026-10-31 T-1: the tower skeleton is a character
 
 **Changed:** Data `characters.rs`: `Class::TowerSkeleton`, keys `realAlarm` and `stunPause`, alarm radius 0 on entering. New core `tower_skeleton.rs` (its values); `character.rs` (`tower`), `active.rs` (Cue 201 → `realAlarm`). Viewer `anim_view.rs` attaches the values. 1 unit test. DESIGN T plan (T-1 to T-4). Provenance. New Q195.
