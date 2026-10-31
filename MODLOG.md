@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 The user's check of D-8 to D-11a; J-1 tried and written up
+
+**Changed:** DESIGN ("Fixes after the user's check of D-8 to D-11a"), QUESTIONS (new Q191), STATUS. No code (J-1's two tries were undone).
+**Why:** The user's check: D-9b and D-10a work as described; D-11a kills Connor only at some spots of the River of Death; D-8 changed only a small part; D-9a showed nothing.
+**Tested how:** Logs and the game's files. D-8: the full `scale.cs` Cue 1 (all five `matchHeights`, all five `terAnimSwitch`) as `--command …,30`; `ground_drain.log`, `ground_anim.log`; every blood square's corners checked in `terrh.dib` against `terrh2.dib` with the five rectangles. Bevy 0.20's `calculate_bounds` read (it updates a mesh's box on `AssetChanged`). D-9a and J-1: `traps.log`, `viewer.log`. D-11a: `newworld.cs`, `water.md`.
+**Result:** D-8: **my test command was wrong**: it paired the upper river's rectangle with `Blood2`, the 4-square mold patch (x 184,320–186,368), and ran one rectangle of five. With all five, every one of the 120 blood squares ends on its bed (0 corners left above) and all five rivers switch to 161. D-11a: correct as built: the river kills only in its ten trap boxes; the rest is liquid damage (poison / lava squares), never studied (Q191). D-9a: the visible effect would be the Sylph leaving the well at the start (all four plates start down), but our `move Sylph 0 0 0 0` does nothing. **Failure (J-1):** tried (1) the viewer's still-object move and (2) the switched-off collider boxes; both find nothing, because she is a `KQMonster` with a still model, in neither the core's animated list nor the object colliders. Stopped after two tries, as AGENTS.md asks.
+**Still broken / not tested:** The Sylph stands at the well when she should not. D-8's look in the game with the full command: not yet done by the user.
+**Next:** J-1: find which list holds a still-model `KQMonster` and move her there. A study session for Q191 (and Q186, Q188, Q189).
+
 ## 2026-10-31 D-11a: `KQAttackEvent` (traps that hurt Connor)
 
 **Changed:** Core `active.rs`: `KQAttackEvent` is a known event; `attack_event` hurts Connor by the shared hurt rule (`hit_connor`), an ordinary object by its stats (`object_takes`, now shared); on a character only a log line (Q190). 1 unit test. Provenance. New Q190.

@@ -3467,6 +3467,23 @@ each step logs its numbers to `kq8-artifacts/logs/`.
       are not loaded (their `shapeName` files are not in the data;
       Q189) and Connor's movement during `onscale2` is open
       (`tile-puzzle.md` open question 3).
+**Fixes after the user's check of D-8 to D-11a (2026-10-31):**
+
+- **J-1 (not fixed, written up): `move` on the Sylph does nothing.**
+  `trptrp12.cs` Cue 1 (update 3) runs `move Sylph 0 0 0 0` (she should
+  leave the well while a plate is down; `worldvar.cs` starts all four
+  down). She is a `KQMonster` with a still model (`sylfstop.kqs`): not in
+  the core's animated list (`anim_index` finds nothing, so the core hands
+  the move to the viewer), and the viewer finds no object box for her
+  (her collider switch-off saved 0 boxes). Tried: (1) the viewer's
+  still-object path, (2) taking the place from the switched-off boxes:
+  both find nothing. Next: find which list draws a still-model
+  `KQMonster` and move her there (her drawing, click box and cylinder).
+- **Not a bug:** D-8's test command paired the wrong rectangle and
+  animator; the full scene's commands drain every blood square.
+- **Asked (Q191):** the River of Death's liquid damage (only the trap
+  boxes kill now).
+
 11. **D-11 and later**: `ThrowRock` (`ranged-weapons.md` 8),
     `KQWeepBolt` (9), `RiverControl` (`objects.md`), `KQDeath`'s mouth
     movements (`talking.md` 18a), `KQAttackEvent` on objects

@@ -21,6 +21,13 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   skeleton (`fighting.md` 7a). Found: after walking into Daventry's
   waterfall Connor stands in its pool (`submerged`) and the turn and back
   keys no longer move him; not looked into.
+- **2026-10-31, the user's check of D-8 to D-11a:** D-9b, D-10a, D-11a
+  right (D-11a kills only in the river's ten trap boxes: the rest is
+  liquid damage, **Q191 for A**). D-8's test command was wrong (one
+  rectangle, the wrong animator); the full one drains every blood square.
+  **Not fixed (J-1, written up in DESIGN):** `move Sylph 0 0 0 0` does
+  nothing, so the Sylph stands at the well at the start; she is a
+  still-model `KQMonster` that neither path of `move` finds.
 
 - **2026-10-31 (B): Q176–Q181 applied** (I-1 to I-7, logs only, not
   looked at by eye): the north tile jump lands (steps 325); the teleport
