@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-8: no standing frame between the stones' jump, `teleportdown` and `teleportup`
+
+**Changed:** Viewer `connor_tile.rs`: `tile_follow_on`, run by `connor_view.rs` right after his update: a tile jump or `teleportdown` that ended in that update is followed at once (the landing and `teleportdown`; the put and `teleportup`), before he is drawn. Before, the state noticed only at the start of the next update, so one update of `stop` was drawn in between.
+**Why:** The user's check: after landing, and between going down on the old stone and coming up on the new one, Connor stood normally for about a frame.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. The D-4 solve run; `connor.log` (the movement after each update).
+**Result:** After update 432 (the landing on D): `teleportdown` at phase 0 (before: `stop`); after 454: `teleportup` at phase 0, already on `tile73` (before: `stop` on the old stone). Frame 0 of `teleportdown` / `teleportup` now shows for two updates where it was `stop` then frame 0, so the whole stays as long as before (whether the original shows frame 0 that long: not traced).
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** I-9 (Death's teleport at the end of his scene).
+
 ## 2026-10-31 I-2: the stones' slow drift: not built (the user's choice)
 
 **Changed:** DESIGN (I-2 marked not built), the comment in core `active.rs` where a stone's own relative `KQMoveEvent` is skipped. No behaviour change.

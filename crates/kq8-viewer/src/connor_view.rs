@@ -2334,6 +2334,13 @@ pub fn connor_step(
             sim.throw_ended.push(e);
         }
     }
+    // tile-puzzle.md rules 12-14: a tile jump or `teleportdown` that ended
+    // in this update is followed now, before he is drawn.
+    for l in sim.tile_follow_on() {
+        let l = format!("connor update {}: {l} (in the same update)", sim.updates);
+        shared.log.lock().unwrap().detail(&l);
+        sim.log.detail(l);
+    }
     sim.phase_step = sim.phase_step_now();
     let wanted = step.as_ref().map_or([0.0; 3], |s| s.wanted);
     sim.updates += 1;

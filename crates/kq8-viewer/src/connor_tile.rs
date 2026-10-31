@@ -277,6 +277,20 @@ impl ConnorSim {
         lines
     }
 
+    /// Right after his update: a tile jump or `teleportdown` that ended
+    /// in it is followed at once (the landing and `teleportdown`, the
+    /// put and `teleportup`), so no update of `stop` is drawn between them
+    /// (the user's check, 2026-10-31). `teleportup`'s end is left for the
+    /// next update: `stop` is what follows it anyway.
+    pub fn tile_follow_on(&mut self) -> Vec<String> {
+        let ended = self.walker.mode == Mode::Free && self.tile.as_ref().is_some_and(|t| matches!(t.stage, Stage::Jumping { .. } | Stage::Down { .. }));
+        if !ended {
+            return Vec::new();
+        }
+        let mut idle = Intent { forward: 0, turn: 0, ..self.intent };
+        self.tile_step(&mut idle, false)
+    }
+
     /// Rule 12: what the landing means.
     fn tile_land(&mut self, from: Cell, to: Cell, spot: Where, lines: &mut Vec<String>) {
         let t = self.tile.as_mut().unwrap();

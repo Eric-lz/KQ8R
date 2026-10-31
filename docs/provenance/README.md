@@ -3895,3 +3895,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | Every number of `addCamLoc`, `cutToCamLoc`, `flyToCamLoc` is read as C's `atof`; no number = 0, no message | `camera.md` rule 4b (Q180) | unit test `camera_numbers_are_read_as_c_atof` |
 | `addCamLoc` exactly 3 or 4 numbers, the list word whole; cut's roll only with 4, fly's end roll only with 5; seconds below 0 = 0 | `camera.md` rule 4b | `camera.log`: Death's flight "roll 0.000 -> -0.600" |
+
+## Fixes I-8 2026-10-31: the stones' movements follow each other in one update — viewer `connor_tile.rs` (`tile_follow_on`), `connor_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The landing starts `teleportdown`, its end the put and `teleportup`, with nothing between | `tile-puzzle.md` rules 12–14; **ours**: done in the same update, the user's check (no standing frame) | `connor.log` updates 432, 454 |
