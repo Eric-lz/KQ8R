@@ -33,6 +33,10 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   delete them (`scale.cs` does). Wading footsteps stay: the squares'
   ground flags are fixed at load (blood = poison, drained 161 = rock):
   **Q192 for A**, best studied together with Q191 (liquid damage).
+- **J-1 done:** the Sylph is a character (leaves the well at the start).
+  **Q193, Q194 for A:** the river controls and the weeper's bolt can't be
+  built from the notes (direction to the river, camera, timings; how the
+  weeper finds its projectile).
 
 - **2026-10-31 (B): Q176–Q181 applied** (I-1 to I-7, logs only, not
   looked at by eye): the north tile jump lands (steps 325); the teleport

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 River controls and the weeper's bolt: questions before building (Q193, Q194)
+
+**Changed:** QUESTIONS (new Q193, Q194), STATUS. No code.
+**Why:** Next in the agreed order after J-1. Read against the data before building.
+**Tested how:** Data only: `rivercn2.kq`–`4`, `river.anm`, `newworld.cs`; `prweeper.kq`, `weeper.kq`, `monsters.kq`, `Conner.anm`.
+**Result:** River controls: the box covers the river itself, so "a point 1,300 toward the river" has no defined direction; the camera's look, the timings' start, `away` / `out` (not in `river.anm`) and the fourth box (three are loaded) are open: Q193. Weeper's bolt: nothing in the data links the weeper to `prweeper.kq` (no `projectileFile`, no column in the monster list), so how and when it fires is unknown: Q194.
+**Still broken / not tested:** Both not built.
+**Next:** `KQMonster::add` (characters made while playing; `characters.md` rules 3–4 are complete).
+
 ## 2026-10-31 J-1: the Sylph is a character again (`shapeName` not used for characters)
 
 **Changed:** Viewer `load.rs`: a character whose `animFile` list loads ignores the file's `shapeName` (`characters.md` rule 6: "There is no separate shape key for characters"), with a line in `characters.log`. DESIGN J-1, provenance.
