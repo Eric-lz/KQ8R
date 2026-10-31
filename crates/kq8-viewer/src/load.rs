@@ -3087,6 +3087,14 @@ impl Placer<'_> {
             return;
         }
         let mut p = Placement::from_load(&file[0], load);
+        // characters.md rule 6 (J-1): a character has no shape key; its
+        // model comes from its movement list (Dead City's Sylph, Barren's
+        // `witchdoc` name a `shapeName` too).
+        if character_list.is_some() {
+            if let Some(shape) = p.shape.take() {
+                self.character_lines.push(format!("{label}[{}]: shapeName={shape} not used: a character's model comes from its animFile (characters.md rule 6)", p.name));
+            }
+        }
         // A monster-list line (rule 4): renamed, its position and heading
         // replace the file's; z −1 = on the ground (the floor grid, as a
         // `loadKQ` −1); any other z as written, then `keepOnGround`.

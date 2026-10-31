@@ -3964,3 +3964,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Text `<attacker> <kind> <damage> <flag>`; on Connor the shared hurt rule; kind 0 normal, 1 projectile, 2 fire, 3 ice; the flag unused | `connor-collision.md` rules 16–17 (= `fighting.md` rules 16–18) | unit test `an_attack_event_hurts_connor_by_the_shared_rule`; `fight.log`: `rivrtrap.03` 5000 → health 80 → −1298, `die` |
 | On an ordinary object: its hit by its stats, the kind remembered for its `Die` | `sound.md` rule 41, `doors.md` rules 19–20 | **not tested** (no data sends one to an object); its ouch sound not built |
 | On a character: logged only; other kind numbers count as Normal | **ours**, Q190 | — |
+
+## Fix J-1 2026-10-31: a character's `shapeName` is not used — viewer `load.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A character's model comes from its `animFile` movement list; there is no shape key for characters | `characters.md` rule 6 (traced) | `viewer.log` "animated … [Sylph]"; `characters.log` Barren `Witchdr` shown with `Docstop.kqs` (its file names the Sylph's `sylfstop.kqs`) |
+| So `move` reaches the Sylph as any character | `objects.md` / the scripts' `move` (as built) | `traps.log`: update 2 `move Sylph 0` → (0, 0, 0); `--command "move Sylph 2 70662 105677 1584"` → back at the well |

@@ -3479,6 +3479,16 @@ each step logs its numbers to `kq8-artifacts/logs/`.
   still-object path, (2) taking the place from the switched-off boxes:
   both find nothing. Next: find which list draws a still-model
   `KQMonster` and move her there (her drawing, click box and cylinder).
+  **Cause found (2026-10-31):** the loader reads an object's movements
+  only when it has no `shapeName`; the Sylph's file names
+  `shapeName=sylfstop.kqs` beside `animFile=sylph.anm`, so she was
+  loaded as a still model and never became a character. `characters.md`
+  rule 6 (traced): "There is no separate shape key for characters".
+  **Fix:** a character whose `animFile` list loads ignores `shapeName`
+  (the Sylph; Barren's `witchdoc` is the only other one). Then `move`
+  reaches her as any character. Check: `traps.log` `move Sylph 0 …`
+  applied at update 2; `viewer.log` "animated … [Sylph]".
+  **Done** 2026-10-31 (logs; Barren's `Witchdr` fixed too).
 - **Not a bug:** D-8's test command paired the wrong rectangle and
   animator; the full scene's commands drain every blood square.
 - **Asked (Q191):** the River of Death's liquid damage (only the trap

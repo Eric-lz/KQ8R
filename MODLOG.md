@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 J-1: the Sylph is a character again (`shapeName` not used for characters)
+
+**Changed:** Viewer `load.rs`: a character whose `animFile` list loads ignores the file's `shapeName` (`characters.md` rule 6: "There is no separate shape key for characters"), with a line in `characters.log`. DESIGN J-1, provenance.
+**Why:** The user asked what D-9a should show: the Sylph should leave the well at the start (all four plates start down). Our `move Sylph` did nothing. Cause: the loader reads an object's movements only when it has no `shapeName`; `sylf22.kq` has `shapeName=sylfstop.kqs` beside `animFile=sylph.anm`, so she was a still model, in neither the characters nor the object colliders. (The two earlier tries, written up before, looked in those two places.)
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 300`; again with `--command "move Sylph 2 70662 105677 1584",45`; Barren and Daventry loaded; `viewer.log`, `characters.log`, `traps.log`, `doors.log`.
+**Result:** "animated … [Sylph]: … loop=sylfstop.kqs, 17 movements"; update 2: "move Sylph 0: (70662, 105677, 1584) -> (0, 0, 0)"; update 45: "move Sylph 2: (0, 0, 0) -> (70662, 105677, 1584)". Also Barren's witch doctor (`Witchdr`), whose file names the Sylph's model by mistake, now shows his own `Docstop.kqs` (he was drawn with the Sylph's model before). Daventry: no character affected.
+**Still broken / not tested:** **Not looked at by eye.** The full return (pushing all four blocks off) not run: our `--command` can't `set` a variable.
+**Next:** River controls (`RiverControl`).
+
 ## 2026-10-31 The user's second check of D-8: footsteps and clicks on the drained bed
 
 **Changed:** QUESTIONS (new Q192), STATUS. No code.
