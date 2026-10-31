@@ -908,21 +908,19 @@ impl Mover {
         self.step_down = 0.0;
     }
 
-    /// A tile jump starts (Dead City's stones, F-3): gravity off and step
-    /// up and down 0, as for a jump (connor-physics.md "Jumping" rules 3
-    /// and 5, which name the tile jumps), but not the Jump state: a tile
-    /// jump ends in `stop`, not a fall (tile-puzzle.md rule 12).
+    /// A tile jump starts (Dead City's stones; tile-puzzle.md rule 11,
+    /// Q177, I-1): gravity and keep-on-ground off; step up and down stay
+    /// 325, so he climbs a stone's edge (a stone 500 higher going north).
+    /// Not the Jump state: a tile jump ends in `stop`, not a fall (rule 12).
     pub fn start_tile_jump(&mut self) {
         self.use_gravity = false;
-        self.step_up = 0.0;
-        self.step_down = 0.0;
+        self.keep_on_ground = false;
     }
 
-    /// The tile jump's movement has ended: gravity on, steps back to 325.
+    /// The tile jump's movement has ended: gravity and keep-on-ground on.
     pub fn end_tile_jump(&mut self) {
         self.use_gravity = true;
-        self.step_up = STEP;
-        self.step_down = STEP;
+        self.keep_on_ground = true;
     }
 
     /// A steep hit ended the jump and he crashes or stands (rule 5): gravity

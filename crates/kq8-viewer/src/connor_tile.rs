@@ -190,7 +190,7 @@ impl ConnorSim {
                             self.walker.start_special(vec![SpecialStep::Play(m, name.to_string())]);
                             self.mover.start_tile_jump();
                             self.tile.as_mut().unwrap().stage = Stage::Jumping { from, to };
-                            lines.push(format!("Tile: turned (heading {:.3}); {name} plays, gravity off and steps 0 while it plays (rule 11; connor-physics.md Jumping rules 3, 5; F-3)", self.walker.heading));
+                            lines.push(format!("Tile: turned (heading {:.3}); {name} plays, gravity and keep-on-ground off while it plays, steps stay 325 (rule 11, Q177)", self.walker.heading));
                         }
                         None => {
                             self.tile.as_mut().unwrap().stage = Stage::Keys;

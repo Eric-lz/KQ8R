@@ -3538,3 +3538,42 @@ commit each:
   off again forever; the original doesn't. Not built: asked in Q185
   with the user's guess (it stops where it is and wakes when he comes
   back).
+
+**Applying session A's answers Q176–Q181 (2026-10-31)**, one commit
+each. Q182 and Q183 confirm what we do (no change); Q175 (the tower
+skeleton's own states) is a new feature, left for its own step.
+
+- **I-1 (Q177): tile jumps keep step up / down 325.** `tile-puzzle.md`
+  rule 11: when the jump movement starts, gravity and keep-on-ground go
+  off; step up / down stay 325; both come back on when it ends, before
+  the landing check. Ours set the steps to 0 (F-3), so a north jump
+  fell 25 short. Check: the north jump `tile46` → `tile56` ends on the
+  stone's top (z about 5,621).
+- **I-2 (Q176): the stones' bob counts the wrap step.** `objects.md`
+  rule 6a, `tile-puzzle.md` rule 16: a cycle's steps include the last
+  frame's step again when it wraps to frame 0, so a cycle leaves +2.368
+  (letters) / −2.368 (blank) and the end-of-cycle cue cancels it to
+  +0.011 / +0.006. Find where our loader's sum leaves it out. Check: a
+  stone's z at the same point of its bob, cycle after cycle.
+- **I-3 (Q178): the teleport camera flight.** Rule 13: a `flyToCamLoc`
+  with no time (distance ÷ 5,000 per second), started when
+  `teleportdown` ends (as now), replacing our 0.5 s stand-in. Check:
+  `camera.log` flight N = whole part of (distance ÷ 5,000 × 15) + 1.
+- **I-4 (Q178): the camera's hold switch.** Rule 7a: on from entering
+  until a `teleportdown` ends, off during the flight, on again when the
+  flight ends; while on, the following camera keeps its height and isn't
+  aimed up or down at Connor. Replaces our "follow again" after each
+  teleport.
+- **I-5 (Q181): every weapon request in the Tile state says the line.**
+  Rule 18: scripts' `setDoMode` and `setRequiredWeaponMode` too (ours:
+  silent); Alt with empty hands does nothing, silently; the line on
+  entering only with a weapon drawn (as G-1). Rule 8: the Jump key
+  (Insert) starts a forward jump as the forward key does, ignored while
+  a jump, landing or teleport is under way.
+- **I-6 (Q179): Death's mouth.** `talking.md` rule 18a: 0 and 16 start
+  `rest`, 1–7 their shapes, an equal code starts it again, nothing at
+  the end of a line, codes 8–15 and above 16 do nothing (logged).
+- **I-7 (Q180): how the camera commands read numbers.** `camera.md`
+  rule 4b: C `atof` (`-.6`, `5.`, a word with no number = 0); exact
+  word counts for the roll (cut 4, fly 5); `addCamLoc`'s list word as a
+  whole number.

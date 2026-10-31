@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 I-1: tile jumps keep step up / down 325 (the north jump lands)
+
+**Changed:** Core `connor_mover.rs`: `start_tile_jump` switches gravity and keep-on-ground off and leaves step up / down at 325 (was: steps 0); `end_tile_jump` switches both back on. Viewer `connor_tile.rs`: the log line. DESIGN (plan I-1 to I-7), provenance.
+**Why:** Session A's answer to Q177 (`tile-puzzle.md` rule 11): the Tile state never changes the steps; the step-up is what climbs the edge of a stone 500 higher. The user's check: north jumps still fell short.
+**Tested how:** `cargo test --workspace` (all pass); the D-4 solve run (`--frames 11500`, as in D-4); `connor.log`.
+**Result:** T (`tile46` → `tile56`, north): update 716 z 5,712 in the air, 717 on the stone (5,640), lands at (242,333, 134,297, 5,571), then rides its bob. Before: he hit its side and fell to the floor (2,784). All five letters right, SOLVED at 876.
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** I-2 (the stones' bob).
+
 ## 2026-10-30 H-3b: the monster loop reproduced (no code)
 
 **Changed:** QUESTIONS Q185 (what the loop is, from the logs).

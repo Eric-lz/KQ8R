@@ -3860,3 +3860,9 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | A missing combination takes the entry with most of the wanted bits | `potions.md` "Do not reproduce" 3 (for the face list); **ours** for the skin list (Q184) | not checked against the original |
 | Strength's entry wins over any armour, and over `con65.bmp` on a model | `potions.md` rule 25 | `items.log` update 200 |
 | An entry whose picture this world lacks: his own skin | **Ours** (Q184 c) | `items.log` update 151 |
+
+## Fixes I-1 2026-10-31: tile jumps — core `connor_mover.rs` (`start_tile_jump`, `end_tile_jump`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A tile jump switches gravity and keep-on-ground off, leaves step up / down at 325, and switches both back on when it ends | `tile-puzzle.md` rule 11 (Q177) | `connor.log`: the north jump onto `tile56` |
