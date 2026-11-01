@@ -3854,7 +3854,19 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     `girltree`, and `Foam`; Dead City's 11 tower flames, `skstatbs`,
     `skstattp`, `well2`, `sylphwtr`). If a movement lookup fails, the
     `shapeName` is drawn as before (ours).
-  - **U-8b:** the `Scales` state.
+  - **U-8b:** the `Scales` state. **Done** 2026-11-01 (logs and a unit
+    test), viewer `connor_scales.rs`, built like the Tile state: the
+    keys turn on the spot; a forward **press** on the floor picks the
+    nearest of −1.57 / 2.207 / 0.933 (away: put on the start spot,
+    the state left, a walk to (209,500, 49,065); a dish: put on the
+    start spot, gravity and keep-on-ground off, `onscale1`, both on,
+    `onscale2`, turned 180° and raised 200); on a dish a press turns him
+    to −0.933 / −2.207 by his y and plays `offscale1` / `offscale2` the
+    same way. Other states and weapon swaps are refused as in Tile.
+    `conscale.anm`'s four movements are loaded when a script names the
+    state. **Not built** (Q198): the camera's spots; ours: per press,
+    the state left before the walk, the turn off a dish at once, its
+    state number = Tile's, the tie at heading 1.57 → 2.207.
 - **U-9 (Q186): `ThrowRock`** (`ranged-weapons.md` 8, `traps.md` 8a).
 - **U-10 (Q193): river controls** (`objects.md` "River controls").
 - **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).

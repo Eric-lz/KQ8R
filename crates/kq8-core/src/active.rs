@@ -159,6 +159,8 @@ pub enum Request {
     TileExit { can_exit: bool, at: String },
     /// `KQMonster::setState Connor Tile` (`tile-puzzle.md` rule 7).
     ConnorTile { at: String },
+    /// `KQMonster::setState Connor Scales` (`tile-puzzle.md` rule 23, U-8b).
+    ConnorScales { at: String },
     /// `deadHallTeleport <from> <to>` (`tile-puzzle.md` rule 22): Connor
     /// and the camera moved by the two buildings' offset.
     HallTeleport { from: String, to: String, at: String },
@@ -2894,6 +2896,11 @@ impl WorldState {
                 // tile-puzzle.md rule 7 (batch 2, D-4).
                 self.note(format!("{at}: KQMonster::setState Connor Tile: handed to Connor (tile-puzzle.md rule 7)"));
                 self.requests.push(Request::ConnorTile { at: at.to_string() });
+            }
+            [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Scales") => {
+                // tile-puzzle.md rule 23 (U-8b).
+                self.note(format!("{at}: KQMonster::setState Connor Scales: handed to Connor (tile-puzzle.md rule 23)"));
+                self.requests.push(Request::ConnorScales { at: at.to_string() });
             }
             [_, who, state, rest @ ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Portal") => {
                 // world-change.md rules 1-2, magic-map.md rule 40 (M6 6e-6).

@@ -37,7 +37,10 @@ use crate::Shared;
 
 #[path = "connor_tile.rs"]
 mod tile;
+#[path = "connor_scales.rs"]
+mod scales;
 pub use tile::{unlit_step, TileCall};
+pub use scales::{LIST as SCALES_LIST, MOVEMENTS as SCALES_MOVEMENTS};
 
 /// One drawable movement: its loop for the walker and its number of frames.
 pub struct DrawnMovement {
@@ -190,6 +193,8 @@ pub struct ConnorSim {
     /// The death hall's `Tile` state (`tile-puzzle.md`; batch 2, D-4),
     /// while he is in it, and what it asks of the world this update.
     pub tile: Option<tile::TileRun>,
+    /// The `Scales` state (`tile-puzzle.md` rules 23-26a, U-8b).
+    pub scales: Option<scales::ScalesRun>,
     pub tile_calls: Vec<TileCall>,
     /// The lit stone changed (rule 10): the new one, for the drawing.
     pub tile_lit_changed: Option<Option<kq8_core::tile_puzzle::Cell>>,
@@ -832,6 +837,7 @@ pub fn spawn_connor(
         choice: None,
         choice_calls: Vec::new(),
         tile: None,
+        scales: None,
         tile_calls: Vec::new(),
         tile_lit_changed: None,
         walk_end: None,
@@ -1173,6 +1179,11 @@ impl ConnorSim {
             return CHOICE;
         }
         if self.tile.is_some() {
+            return TILE;
+        }
+        // U-8b: the Scales state's number is not in the notes (Q198 e);
+        // stand-in: Tile's.
+        if self.scales.is_some() {
             return TILE;
         }
         match self.walker.mode {
@@ -2301,7 +2312,12 @@ pub fn connor_step(
     if sim.tile.is_some() && jump {
         jump = false;
     }
-    for l in choice_lines.into_iter().chain(tile_lines) {
+    // tile-puzzle.md rules 24-26a (U-8b): the scales; no jumping (ours).
+    let scales_lines = sim.scales_step(&mut intent);
+    if sim.scales.is_some() {
+        jump = false;
+    }
+    for l in choice_lines.into_iter().chain(tile_lines).chain(scales_lines) {
         let l = format!("connor update {}: {l}", sim.updates);
         shared.log.lock().unwrap().detail(&l);
         sim.log.detail(l);

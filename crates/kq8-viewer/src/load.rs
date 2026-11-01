@@ -3714,6 +3714,17 @@ impl Placer<'_> {
                 wanted.insert((Some("padpush.anm".to_string()), m.to_string()));
             }
         }
+        // tile-puzzle.md rule 23 (U-8b): the Scales state plays these
+        // itself; a script line only names the state.
+        let scales = self.all_scripts.iter().any(|(_, text)| text.lines().any(|l| {
+            let w: Vec<&str> = l.split('#').next().unwrap_or("").split_whitespace().collect();
+            w.windows(3).any(|w| w[0] == "kqmonster::setstate" && w[1] == "connor" && w[2] == "scales")
+        }));
+        if scales {
+            for m in crate::connor_view::SCALES_MOVEMENTS {
+                wanted.insert((Some(crate::connor_view::SCALES_LIST.to_string()), m.to_string()));
+            }
+        }
         // fighting.md rules 39-40 (M5 5c-5): the swings of each hand
         // weapon's list (Connor.kq's ShortAnimList); **stand-in**: only
         // these come from the weapon's list, the rest stays Conner.anm.

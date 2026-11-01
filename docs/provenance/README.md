@@ -4104,3 +4104,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | A `KQAnimObject` never loads its `shapeName`; it is drawn from its current movement's model | `objects.md` "Animated objects at load" rule 3 (Q189 a) | Dead City `viewer.log`: `scale`, `scalelt`, `scalert` loaded (were skipped) |
 | Box: current movement's model in `BOUNDS.KQ`, then its own name | rule 4 (Q189 b) | `viewer.log` "doors: [scalelt] box item289=scalelt (−2750, −590, −2175)..(−1725, 570, −2005)" |
 | Only the class `KQAnimObject`; a failed movement lookup keeps `shapeName` | **ours** | — |
+
+## U-8b 2026-11-01: the `Scales` state — viewer `connor_scales.rs`, `connor_view.rs`, `connor_tile.rs` (`tile_holds`), `door_view.rs`, `load.rs`; core `active.rs` (`Request::ConnorScales`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Entering: a drawn weapon put away; `conscale.anm` (`onscale1`, `onscale2`, `offscale1`, `offscale2`) | `tile-puzzle.md` rule 23 | `connor.log` update 23 |
+| Keys: turn on the spot; forward takes one step | rule 24; **ours**: one per press (Q198 b) | — |
+| Floor (x < 219,000): nearest of −1.57 (away: start spot, walk to (209,500, 49,065)) / 2.207 / 0.933 (a dish: start spot, `onscale1`, `onscale2`, turned 180°, +200) | rules 25, 26a | updates 40–111, 330–444 |
+| Dish: y > 50,000 → −0.933, < → −2.207, = → nothing; `offscale1`, `offscale2` | rule 26 | updates 170–194 |
+| Gravity and keep-on-ground off for `onscale1` / `offscale1`, back on for the second | rule 26a (Q189) | `connor.log` z: 3,966 at the end of `onscale1`, then settles on the dish |
+| Other states and weapon swaps refused as in Tile | "The scales" intro | — |
+| Camera spots not built; the state left before the walk; the turn off a dish at once; state number Tile's; the tie at 1.57 → 2.207 | **ours** (Q198) | — |

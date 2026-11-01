@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-8b: the scales' `Scales` state (D-10b)
+
+**Changed:** Viewer new `connor_scales.rs` (the state: keys, onto and off the dishes, stepping away), `connor_view.rs` (hooked in like Tile; its state number), `connor_tile.rs` (`tile_holds` also refuses other states on the scales), `door_view.rs` (entering; weapon swaps refused), `load.rs` (`conscale.anm`'s movements loaded). Core `active.rs` (`setState Connor Scales` → `Request::ConnorScales`). 1 unit test. DESIGN U-8b, provenance, QUESTIONS Q198.
+**Why:** Batch 2 D-10b, blocked until Q189 (the scales weren't loaded; gravity during the steps).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --no-ai --frames 9000 --command "move Connor 0 217450 49140 2900 0 0 1.57",20 --command "KQMonster::setState Connor Scales",22 --hold 1,0,0,40,42 --hold 1,0,0,170,172 --hold 0,1,0,260,300 --hold 1,0,0,330,332`; `connor.log`, `doors.log`.
+**Result:** 23 enters; 40 a forward press → the 2.207 dish, `onscale1` (gravity off) ends at (219895, 50946, 3966), `onscale2` with gravity; 68 he touches the dish top: `scalelt.cs ConnorCollision 1` sets `DeadCity::Scales::Connor` = left, the scales play `leftonly`; 111 turned 180° and raised 200. 170 a press on the dish: −0.933, `offscale1` / `offscale2`, back on the floor at 194. 260–300 turning; 330 a press facing −1.57 (nearest) steps away: state left, walk to (209437, 49013) at 444, into the portal trap.
+**Still broken / not tested:** **Not played by hand.** The camera's spots of rules 25–26 are not built (Q198 a; the camera keeps following him). The feather and the full solve (`scalcmpl.cs`, the drain) not run. Ours until Q198: one step per press, the state left before the walk, the turn off a dish at once, state number = Tile's, the exact tie at the entry heading.
+**Next:** U-9 (throwing the rock).
+
 ## 2026-11-01 U-8a: animated objects are drawn from their movements, not `shapeName` (Q189)
 
 **Changed:** Viewer `load.rs`: a `KQAnimObject` with a movement list takes its current movement's model; its `shapeName` is not used (logged when it differs). DESIGN U-8a, provenance.

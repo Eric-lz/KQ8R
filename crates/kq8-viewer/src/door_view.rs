@@ -1384,6 +1384,13 @@ pub fn trap_step(
                 ground_asks.drains.push((words, at.clone()));
                 format!("{at}: applied: matchHeights {words:?} queued for the ground")
             }
+            Request::ConnorScales { at } => {
+                // tile-puzzle.md rule 23 (U-8b): a drawn weapon put away
+                // first, as for the Tile state.
+                let away = sim.active.world.put_weapon_away(&at);
+                let line = connor.enter_scales(&at);
+                format!("{at}: applied: Connor {line}{}", if away.is_some() { "; the bottom bar's weapon put away" } else { "" })
+            }
             Request::ConnorTile { at } => {
                 // tile-puzzle.md rule 7 (G-1): a drawn weapon is put away
                 // by the state itself, so the bottom bar's ready weapon
@@ -2029,7 +2036,7 @@ pub fn door_step(
         // every weapon change is refused with his common line: keys,
         // bottom-bar slots and scripts' alike. Alt only acts with a weapon
         // drawn, so with empty hands it does nothing, silently.
-        if c.tile.is_some() {
+        if c.tile.is_some() || c.scales.is_some() {
             let empty = w.weapon_mode == kq8_core::weapons::WeaponMode::None;
             for r in std::mem::take(&mut w.weapon_requests) {
                 let said = if r.ask == kq8_core::weapons::Ask::Away && empty {

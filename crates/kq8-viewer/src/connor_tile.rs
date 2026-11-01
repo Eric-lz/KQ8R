@@ -129,7 +129,9 @@ impl ConnorSim {
 
     /// Rule 20: while the exit switch is off every other state is refused.
     pub fn tile_holds(&self) -> bool {
-        self.tile.as_ref().is_some_and(|t| !t.can_exit)
+        // U-8b: the Scales state refuses the others the same way, until
+        // he steps away (tile-puzzle.md "The scales").
+        self.tile.as_ref().is_some_and(|t| !t.can_exit) || self.scales.is_some()
     }
 
     /// Before his update (rules 8-15): the keys, the jump, the landing,
