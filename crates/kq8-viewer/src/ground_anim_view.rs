@@ -197,7 +197,7 @@ impl std::fmt::Display for Gaps {
 
 /// Every drawn frame: every animator's change due by now (Q49). Game time
 /// = the fixed clock's time + the time run since its last update.
-pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, mut asks: ResMut<GroundAsks>, shared: Res<Shared>, fixed: Res<Time<Fixed>>) {
+pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, mut asks: ResMut<GroundAsks>, shared: Res<Shared>, fixed: Res<Time<Fixed>>, mut lookup: Option<ResMut<crate::terrain_view::GroundLookup>>) {
     let Some(mut sim) = sim else {
         for (name, _, at) in asks.switches.drain(..) {
             shared.log.lock().unwrap().summary(format!("{at}: terAnimSwitch {name}: no ground animators in this world; nothing"));
@@ -225,8 +225,18 @@ pub fn ground_anim_step(sim: Option<ResMut<GroundAnimSim>>, mut asks: ResMut<Gro
             sim.gaps[k].add(g);
         }
         sim.last_change[k] = Some(c.time);
+        // water.md (Q192, U-6): the squares' flags follow their material.
+        let mut flags_changed: BTreeMap<(u32, u32), usize> = BTreeMap::new();
+        if let Some(t) = lookup.as_mut() {
+            for &(i, j) in &a.squares {
+                if let Some((old, new)) = t.0.set_square_material(i, j, c.material).filter(|(o, n)| o != n) {
+                    *flags_changed.entry((old, new)).or_default() += 1;
+                }
+            }
+        }
+        let flags = flags_changed.iter().map(|((o, n), k)| format!("; ground flags {o:#x} -> {n:#x} on {k} squares (water.md, Q192)")).collect::<String>();
         sim.log.detail(format!(
-            "game time {:.4} s: [{}] entry {} material {} on {} squares{}",
+            "game time {:.4} s: [{}] entry {} material {} on {} squares{}{flags}",
             c.time,
             a.name,
             c.entry,

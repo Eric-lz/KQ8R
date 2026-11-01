@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-6: ground flags follow the square's current material (Q192)
+
+**Changed:** Data `terrain.rs`: the flags per material are kept (`material_flags`), `set_square_material`. Viewer `ground_anim_view.rs`: every animator change writes its squares' new flags into the live terrain, logged when they change. DESIGN U-6, provenance.
+**Why:** Study A's Q192; the user's check of D-8 (wading footsteps on the drained blood bed).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --no-ai --frames 4000 --at 187000,174000,0 --hold 1,0,0,10,20 --hold 1,0,0,60,75` plus the five `matchHeights` and five `terAnimSwitch` lines of `scale.cs` as `--command …,30`; `ground_anim.log`, `connor.log`.
+**Result:** At game time 2.23 s every blood square goes 0x40 (poison) → 0x4 (rock): 46 + 4 + 38 + 8 + 24. Connor's footsteps: `water` up to update 32, `rock` from update 35.
+**Still broken / not tested:** **Not heard by ear.** The water test itself is not logged separately (it reads the same flags).
+**Next:** U-7 (liquid damage).
+
 ## 2026-11-01 U-5: `KQAttackEvent` on a character is the ordinary hit (Q190)
 
 **Changed:** Core `active.rs` `attack_event`: on a character, `hit_character` (rules 16–29); damage 0 with a script runs `ProjImmune`; kinds other than 1–3 stay Normal. 1 unit test. DESIGN U-5, provenance.

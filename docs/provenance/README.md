@@ -4078,3 +4078,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The ordinary hit of rules 16–29 (roll, protection, flinch, alarm) | `fighting.md` rule 29a (Q190) | Dead City `fight.log` update 30: Skelking 800 → 799, flinches |
 | Damage 0 with a script: `ProjImmune` instead | rule 29a | — |
 | Kinds other than 1–3 count as Normal | rule 32a "Do not reproduce" | unit test `an_attack_event_on_a_character_is_the_ordinary_hit` |
+
+## U-6 2026-11-01: ground flags follow the current material — data `terrain.rs` (`material_flags`, `set_square_material`); viewer `ground_anim_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A square's flags are looked up from the material it has now; an animator's change changes them at once | `water.md` "The flags follow the square's current material" (Q192) | Dead City `ground_anim.log`: "ground flags 0x40 -> 0x4" on all 120 blood squares |
+| Footsteps follow too (inferred in the note) | `water.md` (Q192 b) | `connor.log`: water steps to update 32, rock steps from 35 |

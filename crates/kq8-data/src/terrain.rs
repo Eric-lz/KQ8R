@@ -204,6 +204,9 @@ pub struct Terrain {
     /// Ground flags per square (`envInfo.kq` by the square's material,
     /// water.md), row by row from the bottom; empty if not read.
     pub square_flags: Vec<u32>,
+    /// The flags per material number (`envInfo.kq`), kept so a square
+    /// whose material changes gets its new flags (water.md, Q192).
+    pub material_flags: Vec<u32>,
 }
 
 impl Terrain {
@@ -211,7 +214,7 @@ impl Terrain {
         if heights.width < 2 || heights.height < 2 {
             return Err(format!("height grid {}x{} is too small", heights.width, heights.height));
         }
-        Ok(Terrain { settings, heights, floor: None, square_flags: Vec::new() })
+        Ok(Terrain { settings, heights, floor: None, square_flags: Vec::new(), material_flags: Vec::new() })
     }
 
     /// Adds the floor grid; it must be the same size as the surface grid.
@@ -234,7 +237,22 @@ impl Terrain {
             return Err(format!("material image is {}x{}, ground has {nx}x{ny} squares", materials.width, materials.height));
         }
         self.square_flags = materials.values().iter().map(|&m| flags.get(m as usize).copied().unwrap_or(0)).collect();
+        self.material_flags = flags.to_vec();
         Ok(self)
+    }
+
+    /// Square (i, j) now shows `material` (a ground animator, water.md
+    /// "The flags follow the square's current material", Q192): its flags
+    /// become that material's. Returns (old, new) flags; `None` outside the
+    /// grid or without flags.
+    pub fn set_square_material(&mut self, i: usize, j: usize, material: u8) -> Option<(u32, u32)> {
+        let (nx, ny) = self.squares();
+        if i >= nx || j >= ny || self.square_flags.is_empty() {
+            return None;
+        }
+        let new = self.material_flags.get(material as usize).copied().unwrap_or(0);
+        let old = std::mem::replace(&mut self.square_flags[j * nx + i], new);
+        Some((old, new))
     }
 
     /// Ground flags of the square (x, y) is in; 0 outside the grid or

@@ -3825,6 +3825,10 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
 - **U-6 (Q192): ground flags follow the square's current material**
   (`water.md`): the water test, footsteps and (U-7) damage read the
   material the square has now, so a drained bed is dry rock.
+  **Done** 2026-11-01 (logs). As built: the terrain keeps the flags per
+  material; each ground-animator change writes the new flags of its
+  squares into the live terrain (`GroundLookup`), which the water test,
+  the footsteps and (U-7) the damage read.
 - **U-7 (Q191): liquid damage** (`water.md` "Liquid damage").
 - **U-8 (Q189): the scales.** Animated objects never load `shapeName`
   (`objects.md` 3–5: don't skip them; box from the current movement's
