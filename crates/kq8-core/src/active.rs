@@ -4223,28 +4223,31 @@ impl Active {
                 (ts::FallStage::Die, format!("'teeter' ended: camera from below at ({:.0}, {:.0}, {:.0}); Cue 50 in {} s; 'die'", cam[0], cam[1], cam[2], ts::CUE50_AFTER_TEETER))
             }
             Some(ts::FallStage::Die) => {
-                // Step 3: the shot from its side, moved 600 back and high up, `die2`.
+                // Step 3 (Q196): the shot from its side; moved 600 behind,
+                // 3,000 above the camera spot; `fallend` up there.
                 let mut g = at(ts::GROUND_BEHIND, behind);
                 g[2] = t.fall_ground;
                 let cam = [g[0] + ts::SHOT2_SIDE * side[0], g[1] + ts::SHOT2_SIDE * side[1], g[2] + ts::SHOT2_UP];
                 let (tilt, heading) = ts::look_angles(cam, g);
                 lines.push(format!("move KQCamera 0 {:.0} {:.0} {:.0} {tilt:.4} 0 {heading:.4}", cam[0], cam[1], cam[2]));
-                let mut to = at(ts::DIE2_BACK, behind);
-                to[2] = t.fall_ground + ts::DIE2_HIGH;
+                let mut to = at(ts::FALLEND_BACK, behind);
+                to[2] = cam[2] + ts::FALLEND_ABOVE_CAMERA;
                 moved = Some(to);
-                (ts::FallStage::Die2, format!("'die' ended: camera at ({:.0}, {:.0}, {:.0}) looking at the ground point ({:.0}, {:.0}, {:.0}); moved to ({:.0}, {:.0}, {:.0}) (5,000 up: not sure); 'die2'", cam[0], cam[1], cam[2], g[0], g[1], g[2], to[0], to[1], to[2]))
+                (ts::FallStage::Fallend, format!("'die' ended: camera at ({:.0}, {:.0}, {:.0}) looking at the ground point ({:.0}, {:.0}, {:.0}); moved to ({:.0}, {:.0}, {:.0}), {:.0} above that ground; 'fallend'", cam[0], cam[1], cam[2], g[0], g[1], g[2], to[0], to[1], to[2], to[2] - g[2]))
             }
-            Some(ts::FallStage::Die2) => {
-                // Step 4: on the ground 1,400 behind; it drops what it carries; `fallend`.
+            Some(ts::FallStage::Fallend) => {
+                // Step 4: on the ground 1,400 behind (and 5,000 down);
+                // it drops what it carries; `die2` there.
                 let mut to = at(ts::LAND_BACK, behind);
                 to[2] = t.fall_ground;
                 moved = Some(to);
-                (ts::FallStage::Fallend, format!("'die2' ended: on the ground at ({:.0}, {:.0}, {:.0}); drops what it carries; 'fallend'", to[0], to[1], to[2]))
+                (ts::FallStage::Die2, format!("'fallend' ended: on the ground at ({:.0}, {:.0}, {:.0}), {:.0} down; drops what it carries; 'die2'", to[0], to[1], to[2], p[2] - to[2]))
             }
-            Some(ts::FallStage::Fallend) => {
-                // Step 5: Cue 50 3 s later.
-                lines.push(format!("sendEvent {} {name} KQCueEvent {} 0", ts::CUE50_AFTER_FALLEND, ts::CUE_FALL));
-                (ts::FallStage::Waiting, format!("'fallend' ended: Cue 50 in {} s", ts::CUE50_AFTER_FALLEND))
+            Some(ts::FallStage::Die2) => {
+                // Step 5: hidden (not drawn, not solid); Cue 50 3 s later.
+                c.unborn = true;
+                lines.push(format!("sendEvent {} {name} KQCueEvent {} 0", ts::CUE50_AFTER_LAST, ts::CUE_FALL));
+                (ts::FallStage::Waiting, format!("'die2' ended: hidden (not drawn, not solid); Cue 50 in {} s", ts::CUE50_AFTER_LAST))
             }
             _ => return,
         };
@@ -4261,7 +4264,7 @@ impl Active {
         let started = next.movement().map(|mv| (mv, a.player.start(mv).unknown));
         let at_line = format!("{name} falls (fighting.md 7a)");
         self.world.fight_note(&name, format!("{note}{}", started.filter(|(_, u)| *u).map_or(String::new(), |(mv, _)| format!(" ('{mv}' not in its list: movement 0)"))));
-        if next == ts::FallStage::Fallend {
+        if next == ts::FallStage::Die2 {
             let before = self.world.items.objects.len();
             self.world.drop_items(i);
             if self.world.items.objects.len() > before {

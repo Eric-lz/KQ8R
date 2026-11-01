@@ -3764,3 +3764,51 @@ skeleton's own states) is a new feature, left for its own step.
   rule 4b: C `atof` (`-.6`, `5.`, a word with no number = 0); exact
   word counts for the roll (cut 4, fly 5); `addCamLoc`'s list word as a
   whole number.
+
+**U: building session A's answers Q184–Q196 (planned 2026-11-01).** The
+fixes first (things built wrong), then what the answers unblock. One
+commit per step; each logs its numbers to `kq8-artifacts/logs/`.
+
+- **U-1 (Q196): the tower skeleton's fall order.** `fighting.md` 7a
+  "Dying" steps 3–5 as corrected: `teeter`, `die`, **`fallend`, `die2`**.
+  After `die`: G = the ground point 2,000 behind it; camera G + (3,000
+  side, 0, 2,000 up), looking at G; moved 600 behind, at the camera
+  spot's height + 3,000; `fallend`. After `fallend`: moved 1,400 behind
+  and down to the ground there; drops its items; `die2`. After `die2`:
+  hidden (not drawn, not solid); Cue 50 3 s later.
+  **Done** 2026-11-01 (logs; the viewer now tracks every character's
+  shown / hidden, not only those loaded underground).
+- **U-2 (Q195): Cue 201 and the greeting's camera.** The end of any
+  camera flight sends Cue 201 to Connor, who passes it to his
+  state-change list (not in a `Tile` state). The greeting: third person,
+  controls off, `Stop`, camera place remembered, cut to the skeleton +
+  (0, −500, 1,200) in its axes looking at it; at the line's end a
+  `flyToCamLoc` back with no time, music 0.2 s later. Cue 201 after the
+  greeting: camera follows Connor, controls on, alarm radius
+  `realAlarm`, 2000/16/0/98 if Connor is invisible. The second Cue 50:
+  camera cut to Connor + (0, −5,000, 1,000) in his axes, then follow.
+- **U-3 (Q185): far characters and animated objects are frozen.**
+  `object-lighting.md` rule 37, `character-movement.md` rule 21: only
+  near ones are updated (animation, state, sight, mover); far ones are
+  drawn in their last pose and not solid; off = the reset home as now.
+  Files with `groupsActive3DFar` 1089 (0x441) keep ticking when far.
+- **U-4 (Q188): the spirit drain in whole numbers.** `traps.md`: loss =
+  whole part of (level × damage × 10); floor = whole part of (level ×
+  0.1 slightly short) = 0 for levels 1–10; then the ordinary hit (1,
+  must react); not "by a character"; the hit part ignored while dying.
+- **U-5 (Q190): `KQAttackEvent` on a character** is the ordinary hit
+  (`fighting.md` 29a); a kind above 3 dies as Normal (32a "Do not
+  reproduce").
+- **U-6 (Q192): ground flags follow the square's current material**
+  (`water.md`): the water test, footsteps and (U-7) damage read the
+  material the square has now, so a drained bed is dry rock.
+- **U-7 (Q191): liquid damage** (`water.md` "Liquid damage").
+- **U-8 (Q189): the scales.** Animated objects never load `shapeName`
+  (`objects.md` 3–5: don't skip them; box from the current movement's
+  model, then the object's name); then D-10b, the `Scales` state
+  (`tile-puzzle.md` 23–27, 26a).
+- **U-9 (Q186): `ThrowRock`** (`ranged-weapons.md` 8, `traps.md` 8a).
+- **U-10 (Q193): river controls** (`objects.md` "River controls").
+- **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).
+- Q184 and Q187 confirm what is built (no change), except where U-x
+  finds otherwise.

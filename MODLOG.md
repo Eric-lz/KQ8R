@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-1: the tower skeleton's fall in the corrected order (Q196)
+
+**Changed:** Core `tower_skeleton.rs` (stages `teeter`, `die`, `fallend`, `die2`; constants renamed), `active.rs` (`tower_fall_next`: after `die` up high and `fallend`; after `fallend` on the ground, drops, `die2`; after `die2` hidden, Cue 50 in 3 s). Viewer `anim_view.rs`: every character's shown / hidden is followed (was only those loaded underground). DESIGN U (plan), provenance.
+**Why:** Study A's Q196 answer: the note had the last two movements swapped, which made it shatter in mid-air (the user's look).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --frames 9000 --command "move Connor 0 185481 122300 9814 0 0 3.14",20 --command "sendEvent 0 Skeltowr KQCueEvent 201 0",30` and `--command "sendEvent 0 Skeltowr KQAnimPlayEvent reactback",N` every 30 updates from 200 to 560; `fight.log`, `characters.log`.
+**Result:** 444 falls; 473 `teeter` ends (camera from below); 526 `die` ends: moved to (185956, 127043, 7898), 5,000 above the ground, `fallend`; 533 on the ground (186077, 128438, 2898), chain mail thrown, `die2`; 558 hidden ("not drawn" at 559); 603 Cue 50: camera back, `chainmal.cs`, +4,000 experience.
+**Still broken / not tested:** **Not looked at by eye.** Whether the pictures now join up (the body at the end of `fallend` against the start of `die2`).
+**Next:** U-2 (Cue 201 and the greeting's camera).
+
 ## 2026-10-31 K: `KQMonster::add` makes creatures while playing (respawns)
 
 **Changed:** Viewer `load.rs`: every `KQMonster::add` line of the world's scripts becomes a hidden prototype `<name>@add` (its words read as one monster-list line, `place_monster_line` shared with the list); `anim_view.rs`: prototypes keep a recipe, `copy_prototype`, `spawn_character_copy` (draw test copied); `door_view.rs` (`SpawnCharacter`: the copy goes to core's `anims`, `--command` through `command_event`), `copies_view.rs` (draws it). Core `active.rs`: `monster_add` (name in use refused; known, click box, speaker, `Init`), `set_add_prototypes`, `ADD_PROTOTYPE`, `command_event`. DESIGN K (plan, the dead end before). Provenance. One commit: the three parts only work together.

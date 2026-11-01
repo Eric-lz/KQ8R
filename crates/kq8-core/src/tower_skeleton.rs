@@ -5,7 +5,8 @@
 //! `realAlarm`). T-2: its standing and moving rules
 //! (`character_ai.rs`, `tower_rules`) and its flinch's end (rule 23).
 //! T-3: its fall off the tower, a short cutscene (7a "Dying"; stages run
-//! by `active.rs`, `tower_fall_next`).
+//! by `active.rs`, `tower_fall_next`); U-1: the stages in the corrected
+//! order (Q196).
 
 /// Cue 201 (7a): the alarm radius becomes `realAlarm`.
 pub const CUE_REAL_ALARM: &str = "201";
@@ -34,18 +35,20 @@ pub const SHOT1_BEHIND: f32 = 2000.0;
 pub const SHOT1_BELOW: f32 = 5000.0;
 pub const SHOT1_LOOK_SHARE: f32 = 0.9;
 pub const CUE50_AFTER_TEETER: f64 = 2.18;
-/// Step 3: the ground point 2,000 behind it; the camera 3,000 to its side
-/// and 2,000 up from it, looking at it; it is moved 600 back, about 5,000
-/// above that ground (the note: "not sure").
+/// Step 3 (after `die`; corrected order, Q196): G = the ground point 2,000
+/// behind it; the camera at G + 3,000 to its side and 2,000 up, looking at
+/// G; it is moved 600 behind, at the camera spot's height + 3,000 (5,000
+/// above G), and plays `fallend` there.
 pub const GROUND_BEHIND: f32 = 2000.0;
 pub const SHOT2_SIDE: f32 = 3000.0;
 pub const SHOT2_UP: f32 = 2000.0;
-pub const DIE2_BACK: f32 = 600.0;
-pub const DIE2_HIGH: f32 = 5000.0;
-/// Step 4: put on the ground 1,400 behind where it was.
+pub const FALLEND_BACK: f32 = 600.0;
+pub const FALLEND_ABOVE_CAMERA: f32 = 3000.0;
+/// Step 4 (after `fallend`): put on the ground 1,400 behind where it was;
+/// it drops what it carries and plays `die2` there.
 pub const LAND_BACK: f32 = 1400.0;
-/// Step 5: Cue 50 3 s after `fallend`.
-pub const CUE50_AFTER_FALLEND: f64 = 3.0;
+/// Step 5 (after `die2`): hidden; Cue 50 3 s later.
+pub const CUE50_AFTER_LAST: f64 = 3.0;
 /// The script the dropped item gets at the end.
 pub const DROP_SCRIPT: &str = "chainmal.cs";
 /// T-4a (7a): Connor's state numbers it reacts to (`characters.md` rule
@@ -64,8 +67,8 @@ pub const MUSIC: &str = "mtower.aud";
 pub enum FallStage {
     Teeter,
     Die,
-    Die2,
     Fallend,
+    Die2,
     Waiting,
 }
 
@@ -74,8 +77,8 @@ impl FallStage {
         match self {
             FallStage::Teeter => Some("teeter"),
             FallStage::Die => Some("die"),
-            FallStage::Die2 => Some("die2"),
             FallStage::Fallend => Some("fallend"),
+            FallStage::Die2 => Some("die2"),
             FallStage::Waiting => None,
         }
     }

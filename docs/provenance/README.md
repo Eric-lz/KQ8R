@@ -4031,3 +4031,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | One prototype per line, made at the start under `<name>@add`, copied by every add | **ours** (how to make it; every use in the data is a respawn) | `doors.log` updates 22 and 50: two copies |
 | A copy is drawn from the prototype's recipe and counts for the draw distance; not copied: its mouth pictures and shadow | **ours** (drawing) | `viewer.log` "copy rat1 of rat1@add: drawn … its draw-distance test" |
 | `--command` ends as a script run (a name it deleted is free afterwards) | **ours** (test harness) | — |
+
+## U-1 2026-11-01: the tower skeleton's fall order — core `tower_skeleton.rs`, `active.rs` (`tower_fall_next`); viewer `anim_view.rs` (`birth_shown` for every character)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The order is `teeter`, `die`, `fallend`, `die2` | `fighting.md` 7a "Dying", correction Q196 | `fight.log` updates 473, 526, 533, 558 |
+| After `die`: camera G + (3,000 side, 0, 2,000 up) looking at G; moved 600 behind, at the camera's height + 3,000 | 7a step 3 | update 526: (185956, 127043, 7898), 5,000 above G |
+| After `fallend`: on the ground 1,400 behind; drops its items; `die2` there | 7a step 4 | update 533: on the ground (z 2898), chain mail thrown |
+| After `die2`: hidden (not drawn, not solid); Cue 50 3 s later | 7a step 5 | update 558; `characters.log` 559 "not drawn" |
+| The ground height measured once when the fall starts (the point 2,000 behind = 600 + 1,400) | **ours** | — |

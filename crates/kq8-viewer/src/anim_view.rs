@@ -97,8 +97,9 @@ struct Playing {
     /// made (M4 4d-7b-2).
     casts: bool,
     shadow: Option<crate::shadow_view::ShadowSlot>,
-    /// A character loaded underground: whether its body is shown now
-    /// (`character-movement.md` rules 28, 30; M5 5a-8).
+    /// A character: whether its body is shown now (underground,
+    /// `character-movement.md` rules 28, 30, M5 5a-8; or hidden at the end
+    /// of the tower skeleton's fall, U-1).
     birth_shown: Option<bool>,
     /// Its drawing (Animation memory step 4); `None` if its animations
     /// couldn't be packed.
@@ -708,7 +709,7 @@ pub fn spawn_animated(
             own: Default::default(),
             casts: a.character.as_ref().is_some_and(|c| c.casts_shadow),
             shadow: None,
-            birth_shown: unborn.then_some(false),
+            birth_shown: a.character.is_some().then_some(!unborn),
             new_draw,
             texture_names,
             bmp_shown: None,
@@ -1005,7 +1006,7 @@ pub fn anim_draw(
                 }
                 p.birth_shown = Some(up);
                 if let Some(log) = sim.characters.as_mut() {
-                    log.detail(format!("update {}: {}: {} (character-movement.md rules 28, 30)", sim.updates, p.name, if up { "risen: drawn" } else { "underground: not drawn" }));
+                    log.detail(format!("update {}: {}: {} (character-movement.md rules 28, 30)", sim.updates, p.name, if up { "risen: drawn" } else { "hidden (underground, or the end of a fall): not drawn" }));
                 }
             }
         }
