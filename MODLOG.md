@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 Hand-over after U-1 to U-9c (STATUS, FEATURES, README, script coverage)
+
+**Changed:** `STATUS.md` (where we are, next, open questions; the applied Q175–Q183 block removed), `docs/FEATURES.md` (new section), `README.md` (one sentence), `docs/SCRIPT-COVERAGE.md` regenerated (committed separately).
+**Why:** End of the B session (`docs/SESSIONS.md` "At the end of the session").
+**Tested how:** `cargo run --release -- script-coverage --out docs/SCRIPT-COVERAGE.md`.
+**Result:** `Scales`, `ThrowRock` and `KQMonster::dropItem` now count as built (Dead City: no Connor state missing; Gnome and Temple 1's `ThrowRock` too). Dead City still misses 7 commands (14 uses; loading hints, `inc`, `allowShadows`, the world-start screen ones, `clearstateChangeNotify`) and the classes `RiverControl`, `KQWeepBolt`.
+**Still broken / not tested:** U-10 (river controls) and U-11 (the weeper's bolt) not built. Q197, Q198 open for A.
+**Next:** The user's look at U-1 to U-9c (list in STATUS); then U-10, U-11.
+
 ## 2026-11-01 U-9c: the rock click and Connor's `ThrowRock` state (Q186 a, b)
 
 **Changed:** Viewer new `connor_rock.rs` (the state: turn to the aim, weapon away, `throw`, its `do` launches the rock, the old mode back); `connor_view.rs` (hooked in; state number 512; the `do` cue), `connor_tile.rs` (other states refused meanwhile), `door_view.rs` (the click with the rock in hand; the launches; the thrown rocks to the traps after the characters' step), `load.rs` (his own `throw` loaded). Core `active.rs` (`rock_click`, `box_distance`, `setState Connor ThrowRock` → `Request::ConnorThrowRock`, `rock_aim`). DESIGN U-9c, provenance.

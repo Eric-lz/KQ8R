@@ -867,6 +867,27 @@ Checked in the logs and unit tests only, **not played by hand**.
 - **Attacks from scripts** (`KQAttackEvent`): traps hurt Connor by the
   game's hurt rule; the River of Death kills him.
 
+## Session A's Q184–Q196 answers (2026-11-01, steps U-1 to U-9c)
+
+Checked in the logs and unit tests only, **not played by hand**.
+
+- **The tower skeleton's fall** in the right order, and its greeting's
+  camera; it wakes when the camera flight back ends (Cue 201).
+- **Far characters and animated objects freeze** in their last pose and
+  wake when Connor comes near again; only those out of range go home.
+- **Liquid damage:** deep poison, lava and swamp hurt Connor while he
+  moves through them (by his level and the world's timers).
+- **Drained rivers are dry ground** (footsteps and the water test follow
+  the ground's current material).
+- **The Scales of Justice:** the scales are in the world; Connor steps
+  onto and off the dishes (the puzzle's scripts run).
+- **Throwing rocks:** a click with the rock in hand throws it in an
+  arc; it presses Dead City's plates, which stay down, and lies where it
+  lands.
+- **Smaller:** scripted attacks on characters, the spirit drain in whole
+  numbers, `dropItem`; animated objects drawn from their movements
+  (trees and flames that stood still now move).
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses (traps, sound sources,

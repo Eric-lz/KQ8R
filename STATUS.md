@@ -7,22 +7,34 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 
 ## Where we are (2026-11-01)
 
-- **2026-11-01 (A): Q184–Q196 answered** (traced, nothing checked in
-  the original), plus Q110 (a). For B, the ones that change what is
-  built: **Q196** the tower skeleton's fall order is `teeter`, `die`,
-  `fallend`, `die2` (the note had the last two swapped; `fighting.md`
-  7a); **Q195** Cue 201 = the end of any camera flight, passed on from
-  Connor to his state-change list; **Q186** the rock throw
-  (`ranged-weapons.md` 8: the arc, and a thrown rock keeps a plate's
-  trap `On` for good, `traps.md` 8a); **Q189** animated objects never
-  load `shapeName` (build the scales; `objects.md` 3–5); **Q191 / Q192**
-  liquid damage and live ground flags (`water.md`); **Q190** a kill with
-  kind 4 never finishes in the original (treat as Normal); **Q185**
-  (corrected after the user's check): characters and animated objects
-  update **only while near**; far = drawn, frozen, not solid; off = put
-  home (`object-lighting.md` rule 37); a thrown rock flies through trap
-  boxes (user's check);
-  Q184 skins, Q187, Q188, Q193, Q194 (details in QUESTIONS.md).
+- **2026-11-01 (B): session A's Q184–Q196 built, U-1 to U-9c** (DESIGN
+  "U"; logs and unit tests, **not played by hand**):
+  - fixes: the tower skeleton falls in the right order (`fallend` up
+    high, `die2` on the ground, then hidden); Cue 201 is sent at the end
+    of every camera flight and passed on by Connor (the skeleton wakes
+    only after its greeting; the greeting's camera cut and flight back);
+    far characters and animated objects are **frozen** (not updated), so
+    `gobcon1` no longer resets home over and over; the spirit drain in
+    whole numbers; `KQAttackEvent` on a character is the ordinary hit;
+    ground flags follow a square's current material (the drained blood
+    bed is rock);
+  - new: liquid damage for Connor (deep poison, lava, swamp), the scales
+    (they load; the `Scales` state: onto and off the dishes, stepping
+    away), `KQMonster::dropItem`, throwing a rock (the click, the
+    `ThrowRock` state, the arc; Dead City's plates go down and stay
+    down).
+  - **Please look at:** Daventry's trees (`tree16`–`tree20`, `girltree`)
+    and Dead City's tower flames now play their movements (U-8a: they
+    were drawn still); a far goblin freezing in the haze; the scales
+    (camera spots not built, Q198); a rock thrown at a plate.
+  - **Asked (for A):** Q197 (the second Cue 50's camera: in front of
+    Connor or behind), Q198 (the scales' camera views and small points).
+  - **Left in batch 2 for B:** U-10 river controls (the boxes are only
+    markers now: they need to become invisible clickable boxes first),
+    U-11 the weeper's bolt.
+
+- **2026-11-01 (A): Q184–Q196 answered** (traced): all built by B the
+  same day (above), except Q193 (river controls) and Q194 (the weeper).
 
 - **2026-10-31 (B): batch 2 D-8 to D-11a built** (logs and unit tests,
   **not played by hand**): `matchHeights` and `terAnimSwitch` (the blood
@@ -85,35 +97,6 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   tower skeleton, a new feature). Also H-1 (armour skins), H-2 (deep
   water run-out) done; **open for A:** Q184 (armour skins), Q185
   (`gobcon1` put back home over and over).
-
-- **2026-10-30 (A): Q175 to Q183 answered** (traced; nothing built yet).
-  No question is open any more. What B should change:
-  - **North tile jump (Q177):** keep step up / down at **325** during a
-    tile jump (only gravity and keep-on-ground go off, back on when the
-    jump movement ends); the step-up climbs the stone's edge.
-    `tile-puzzle.md` rule 11. The 29 box-less stones are right.
-  - **Stones' bob (Q176):** count the wrap step (`objects.md` rule 6a);
-    then the cues cancel the leftover and B's stand-in can go.
-    `tile-puzzle.md` rule 16.
-  - **Teleport camera (Q178):** a `flyToCamLoc` with no time (distance
-    ÷ 5,000 per second), starting when `teleportdown` ends; the hold
-    switch keeps the camera's height and tilt. `tile-puzzle.md` rules 7a,
-    13.
-  - **Weapon line (Q181):** said on entering only with a weapon out (as
-    built); also for scripts' `setDoMode` / `setRequiredWeaponMode`
-    (B's are silent). The Jump key jumps too. `tile-puzzle.md` rules 7,
-    8, 18.
-  - **Camera roll (Q182, Q180):** G-5's sign is right (negative =
-    picture clockwise); no scaling; numbers read with `atof`.
-    `camera.md` rules 4a, 4b.
-  - **Death's mouth (Q179):** code 16 starts `rest` (not `stop`); the
-    poses hold; end of line does nothing. `talking.md` rule 18a.
-  - **Death's key (Q183):** the spin twice is right. `anim-scripts.md`
-    rule 3.
-  - **Tower skeleton (Q175):** its standing, moving and falling states
-    are in `fighting.md` section 7a (the stagger's ground probe is
-    behind it: rule 23 corrected). The fall's camera and move offsets
-    are as read, not checked in play.
 
 - **2026-10-30 (B): G-1 to G-4, fixes after the user's check of F-4 to
   D-6** (logs and unit tests, **not looked at by eye**): on the stones
@@ -507,6 +490,15 @@ M6 has started with the Rope and Hook (6a).
 
 ## What doesn't work yet / next
 
+- **After U-1 to U-9c (2026-11-01):** not built: river controls (U-10)
+  and the weeper's bolt (U-11); the scales' camera spots (Q198); liquid
+  damage for characters, immunities, burning objects and the `ontop`
+  sinking (Barren); the Swamp's `Tile2` rock throw; the music's second
+  notice at the tower skeleton's second Cue 50. Ours until A answers:
+  the second Cue 50's camera side (Q197). Found: Dead City's plates have
+  `colliderType=0`, so a click never picks them (the throw goes to the
+  ground point under the pointer and still lands on the plate).
+
 - **Kept worlds after K-1 to K-3 (2026-10-26):** still fresh on a
   return: doors and chests opened without a variable (and what was taken
   from chests), characters' place and health, hidden switches, items on
@@ -728,8 +720,12 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- **Answered by A (2026-11-01): Q184–Q196, Q110 (a)** (see "Where we
-  are"). **Still open for A (older, low priority, not done):** Q24
+- **New for A (2026-11-01, B): Q197** (the tower skeleton's second Cue
+  50 camera: the numbers put it in front of Connor), **Q198** (the
+  scales: camera views, one step per press, stepping away, the turn off
+  a dish, the state number, the tie at the entry heading).
+- **Answered by A (2026-11-01): Q184–Q196, Q110 (a)**; built by B the
+  same day except Q193 and Q194 (U-10, U-11 not built yet). **Still open for A (older, low priority, not done):** Q24
   (frame-by-frame steps), Q28 (b)(c), Q30 (b), Q41 (rest), Q106, Q108
   (a)(c), Q109 (a gold/rocks, b, c, e, f), Q110 (c)(d)(e), Q111, Q113
   (a)–(c).
