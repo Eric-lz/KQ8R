@@ -44,6 +44,18 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   rises), T-2 (its standing and moving rules, ground probes) built, logs
   only. **Next:** T-3 (its fall off the tower), T-4 (what it hears and
   says; Q195 for A: nothing in the data sends Cue 201).
+- **2026-10-31 (B), later:** T-2b to T-2d (a creature's one-off
+  movements move it; its drawing no longer adds them twice: the stagger
+  ends where it should, the user's check), T-3 (the fall cutscene; the
+  last shot shatters it in mid-air: Q196, left for later by the user),
+  T-4a (its greeting on the rope, its crossbow line), K
+  (`KQMonster::add`: respawns copied from prototypes), J-1 (the Sylph).
+  **Found, not looked into:** Dead City's `rat1` walks off the world's
+  south edge in its first second; after walking into Daventry's
+  waterfall Connor can't turn in its pool.
+  **Open for A:** Q186–Q196 (rock throw, liquid damage, the scales, the
+  river controls, the weeper, Cue 201 and the greeting camera, the
+  fall's moves). **Left for B in batch 2:** only what those block.
 
 - **2026-10-31 (B): Q176–Q181 applied** (I-1 to I-7, logs only, not
   looked at by eye): the north tile jump lands (steps 325); the teleport
