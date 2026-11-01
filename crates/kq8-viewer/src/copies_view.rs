@@ -79,6 +79,18 @@ pub fn spawn_copies(
     (gpu, mut materials): (Option<Res<crate::anim_gpu::AnimGpu>>, ResMut<Assets<crate::object_light::ObjectMaterial>>),
 ) {
     let Some(mut sim) = sim else { return };
+    // K-3: characters KQMonster::add made, from their prototype's recipe.
+    for (prototype, name, index) in std::mem::take(&mut sim.char_spawns) {
+        let Some(base) = sim.active.world.anims.get(index).map(|a| a.player.base) else { continue };
+        let line = match anim.as_mut() {
+            Some(a) => a.spawn_character_copy(&mut commands, &prototype, &name, base, index, (gpu.as_deref(), &mut materials)),
+            None => format!("KQMonster::add {name}: no animated objects drawn here; not drawn"),
+        };
+        let p = base.position;
+        let line = format!("{line}; at ({:.0}, {:.0}, {:.0})", p[0], p[1], p[2]);
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+    }
     let spawns = std::mem::take(&mut sim.spawns);
     for (file, name, placement) in spawns {
         let p = placement.position;

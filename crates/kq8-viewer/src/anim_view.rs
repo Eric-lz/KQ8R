@@ -178,6 +178,46 @@ impl AnimSim {
         true
     }
 
+    /// K-2: a copy of the `KQMonster::add` prototype `prototype` (its
+    /// player as loaded and its character), named `name`, for core's
+    /// `anims`. `None` if no prototype by that name is kept here.
+    pub fn copy_prototype(&self, prototype: &str, name: &str) -> Option<AnimObject> {
+        let p = self.playing.iter().find(|p| p.name.eq_ignore_ascii_case(prototype))?;
+        let Source::Own(player) = &p.source else { return None };
+        let mut player = p.at_load.clone().unwrap_or_else(|| player.clone());
+        player.name = name.to_string();
+        Some(AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.clone(), translucency: None })
+    }
+
+    /// K-3: a new character copied from a `KQMonster::add` prototype (core
+    /// made it at `index`): drawn as [`Self::spawn_copy`], and its body gets
+    /// the prototype's draw-distance test under its own name, so it counts
+    /// as near or far and its rules run. Not copied: its mouth pictures and
+    /// shadow (none of these creatures speak; ours).
+    pub fn spawn_character_copy(
+        &mut self,
+        commands: &mut Commands,
+        prototype: &str,
+        name: &str,
+        placement: Placement,
+        index: usize,
+        gpu: (Option<&crate::anim_gpu::AnimGpu>, &mut Assets<ObjectMaterial>),
+    ) -> String {
+        let line = self.spawn_copy(commands, prototype, name, placement, index, gpu);
+        let test = self.playing.iter().find(|p| p.name.eq_ignore_ascii_case(prototype)).and_then(|p| p.test.clone());
+        let Some(last) = self.playing.last_mut().filter(|p| p.name == name) else { return line };
+        match test {
+            Some(mut t) => {
+                t.name = name.to_string();
+                t.hidden = false;
+                commands.entity(last.body).insert(t.clone());
+                last.test = Some(t);
+                format!("{line}; its draw-distance test from {prototype} (K-3)")
+            }
+            None => format!("{line}; {prototype} has no draw-distance test: never near (K-3)"),
+        }
+    }
+
     /// A new copy of an unused object (M5 5d-4, a script's `loadKQ` while
     /// playing): its body and frames from the template's recipe, at its
     /// place, played by core's `anims[index]`. Returns the log line.
@@ -582,7 +622,9 @@ pub fn spawn_animated(
         // its drawing's materials are.
         let texture_names: Vec<((usize, i32), String)> =
             a.movements.iter().flat_map(|(_, _, i)| built[*i].textures.iter().filter_map(move |(m, t)| t.as_ref().map(|t| ((*i, *m), t.clone())))).collect();
-        if (*unused || template) && a.character.is_none() {
+        // K-3: a KQMonster::add prototype (a character) is copied too.
+        let prototype = p.name.ends_with(kq8_core::active::ADD_PROTOTYPE);
+        if (*unused || template) && (a.character.is_none() || prototype) {
             recipes.insert(p.name.to_ascii_lowercase(), Recipe { movements: recipe, script: a.script.clone(), slots: (slot_movements, own), textures: texture_names.clone() });
         }
         // Whole-object steps of the movement shown at load: how far the

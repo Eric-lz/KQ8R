@@ -3513,6 +3513,25 @@ kill.
   draws it and gives it its cylinder and click box. Our copies loaded
   while playing (M5 5d-3) only cover still and plain animated objects,
   so this is a new kind of copy: characters made while playing.
+- **Plan (2026-10-31, the user's go-ahead after T-4a):** one prototype
+  per `KQMonster::add` line, copied on every add:
+  - **K-1 (loader):** each line of the world's scripts (its words joined
+    with tabs, rule 3) is built hidden like a list line, but under its
+    own **prototype name** `<name>@add` (never a live name, so the list's
+    `rat1` stays as it is), with the line's values.
+  - **K-2 (core):** `KQMonster::add <name> …`: a live `<name>` refuses it
+    (the original's fatal error: logged); otherwise the prototype's
+    character is **copied** under `<name>` (live, its click box, a
+    speaker, `Init`), every time the line runs. The viewer is asked to
+    draw it.
+  - **K-3 (viewer):** the copy is drawn from the prototype's recipe (as
+    5d-4's animated copies) and counts for the draw distance, so its AI
+    runs; its cylinder comes from core's character list as for any
+    character.
+  - Check: kill `rat1` (console `kill rat1`), run `ratkarma.cs`'s line:
+    a new `rat1` at (1000, 1000) on the ground, drawn, walking.
+  **Done** 2026-10-31 (logs; as built the prototype lives in the viewer:
+  the core asks for a copy, the viewer hands it over and draws it).
 
 **T: the tower skeleton (`KQTowerSkeleton`, `fighting.md` section 7a;
 planned 2026-10-31, the user's choice before K).** Dead City's

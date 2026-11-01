@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 K: `KQMonster::add` makes creatures while playing (respawns)
+
+**Changed:** Viewer `load.rs`: every `KQMonster::add` line of the world's scripts becomes a hidden prototype `<name>@add` (its words read as one monster-list line, `place_monster_line` shared with the list); `anim_view.rs`: prototypes keep a recipe, `copy_prototype`, `spawn_character_copy` (draw test copied); `door_view.rs` (`SpawnCharacter`: the copy goes to core's `anims`, `--command` through `command_event`), `copies_view.rs` (draws it). Core `active.rs`: `monster_add` (name in use refused; known, click box, speaker, `Init`), `set_add_prototypes`, `ADD_PROTOTYPE`, `command_event`. DESIGN K (plan, the dead end before). Provenance. One commit: the three parts only work together.
+**Why:** Batch 2: Dead City's 16 uses (rats, snakes, skeletons, the spirit) are respawns of creatures the world's list already placed ("if `rat1` no longer exists, add it"), and may run again after every kill. The first try (one hidden copy per live name) was undone; this copies a prototype every time.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --frames 1500 --at 4000,4000,0 --command "deleteObject rat1",10` then the `ratkarma.cs` line as `--command` at 22, 30, and after `deleteObject rat1` at 40, again at 50; `doors.log`, `viewer.log`, `characters.log`.
+**Result:** 15 prototypes prepared; the list's own `rat1` untouched. Update 22: "a new copy of rat1@add comes into the world at (1000, 1000, 912)"; it starts up, fights values, mover on the floor, solid (cylinder 135), counted in range; "copy rat1 of rat1@add: drawn, 10 movement(s)". Update 30: refused (alive). Update 50, after the delete: a second copy.
+**Found, not looked into:** (1) The list's `rat1` walks south off the world's edge in its first second (y −420, z −8,628), so a kill there never finishes (it is out of range). (2) `--command`'s `deleteObject` used to keep the name "deleted in this same event" for good (the test hook never ended the event): fixed in the hook only.
+**Still broken / not tested:** **Not looked at by eye.** A respawn through the real scripts (`ratkarma.cs` from `boxsmrt.cs`) not run. Copies don't move their mouths and cast no shadow.
+**Next:** The user's look; the study session's answers (Q186–Q196).
+
 ## 2026-10-31 T-4a: the tower skeleton's greeting and its crossbow line
 
 **Changed:** Core `tower_skeleton.rs` (its lines, Connor's state numbers, the music; `greeted`, `greeting`), `active.rs` (`tower_hears`: a `StateChange` to the skeleton is handled by the program; `tower_greeting_step`: the greeting's end). 1 unit test. DESIGN T-4a. Provenance.

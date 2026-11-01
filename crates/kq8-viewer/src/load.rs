@@ -1568,6 +1568,9 @@ pub struct Objects {
     /// Objects with `conCollisionAction` not 0 (`connor-collision.md`
     /// rule 7, D-10a), lower-case names.
     pub con_collision: Vec<String>,
+    /// K-1: prototypes for the scripts' `KQMonster::add`: prototype name
+    /// (`<name>@add`), file (lower case), script.
+    pub added: Vec<(String, String, Option<String>)>,
     /// The files a script may load while playing as new copies (M5 5d-3):
     /// read and built at the start like an unused object, hidden.
     pub templates: Vec<TemplateAssets>,
@@ -1967,6 +1970,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         item_lines: Vec::new(),
         monster_types: None,
         pending_line: None,
+        adding: false,
+        added: Vec::new(),
         list_files: Default::default(),
         character_lines: Vec::new(),
         shadow_world_mask: None,
@@ -2008,6 +2013,9 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         placer.place(&load, None, false, &script.vars);
         script.loads.push(load);
     }
+    // K-1 (characters.md rule 3): prototypes of the creatures the scripts'
+    // KQMonster::add lines make while playing.
+    placer.prepare_script_adds(&script.vars);
     phase("start-up scripts run (objects placed and loaded)", &mut since);
     let log = &mut *placer.log;
     log.summary(format!(
@@ -2309,6 +2317,10 @@ struct Placer<'a> {
     monster_types: Option<kq8_data::characters::MonsterTypes>,
     /// The monster-list line whose type file `place` is placing now.
     pending_line: Option<PendingLine>,
+    /// K-1: placing a prototype for a script's `KQMonster::add` (hidden),
+    /// and those prepared: prototype name, file (lower case), script.
+    adding: bool,
+    added: Vec<(String, String, Option<String>)>,
     /// Type files placed through the monster list (lower case): not
     /// shown again as unused objects.
     list_files: std::collections::BTreeSet<String>,
@@ -3241,8 +3253,12 @@ impl Placer<'_> {
         // (objects.md Q19 rules 2-3: Dead City's `paddle2`, lifted to 912,
         // is still a template).
         let no_place = p.position == [0.0; 3];
-        let dormant = unused && !no_place && self.load_targets.contains(&base.to_ascii_lowercase());
-        if dormant {
+        let dormant = (unused && !no_place && self.load_targets.contains(&base.to_ascii_lowercase())) || self.adding;
+        if self.adding {
+            let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+            self.added.push((p.name.clone(), base.to_ascii_lowercase(), script));
+            self.log.summary(format!("dormant {label}[{}]: prototype for a script's KQMonster::add (K-1)", p.name));
+        } else if dormant {
             let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
             self.dormant.push((base.to_ascii_lowercase(), p.name.clone(), script));
             self.log.summary(format!("dormant {label}[{}]: prepared for a script's loadKQ (M3 3k-4)", p.name));
@@ -3313,7 +3329,7 @@ impl Placer<'_> {
         }
         // A character prepared for a script's loadKQ (not placed now): it
         // joins the speakers when loaded (2026-10-22, the Castle's Lucreto).
-        if unused && self.load_targets.contains(&base.to_ascii_lowercase()) && p.class.as_deref().and_then(kq8_data::characters::Class::of).is_some() {
+        if unused && (self.adding || self.load_targets.contains(&base.to_ascii_lowercase())) && p.class.as_deref().and_then(kq8_data::characters::Class::of).is_some() {
             let script = s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
             let keys = kq8_data::characters::CharacterKeys::from_section(s);
             let (goodbye, welcome_back) = keys.map_or((None, None), |k| (k.goodbye, k.welcome_back));
@@ -4305,12 +4321,9 @@ impl Placer<'_> {
     /// (`GAME/Kq/Monstats.mtl`) names a file of the world, read as if
     /// loaded by `loadKQ`, then renamed and placed by the line. An unknown
     /// type makes nothing.
-    fn place_monster_list(&mut self, label: &str, file: &[kq8_data::kq_text::Section], load: &kq8_data::world_script::LoadKq, vars: &kq8_data::world_script::Vars) {
-        use kq8_data::characters::{MonsterList, MonsterTypes};
-        let (list, problems) = MonsterList::from_section(&file[0]);
-        for p in &problems {
-            self.log.summary(format!("characters: {label}: {p}"));
-        }
+    /// `GAME/Kq/Monstats.mtl`, read once (characters.md rule 4).
+    fn read_monster_types(&mut self) {
+        use kq8_data::characters::MonsterTypes;
         if self.monster_types.is_none() {
             let types = match self.game.find("GAME/Kq/Monstats.mtl").map(std::fs::read) {
                 Some(Ok(bytes)) => {
@@ -4327,43 +4340,112 @@ impl Placer<'_> {
             };
             self.monster_types = Some(types);
         }
-        let mut made = 0;
-        for line in list.lines {
-            let found = self.monster_types.as_ref().and_then(|t| t.find(&line.type_name)).map(|(t, folded)| (t.clone(), folded));
-            let Some((kind, folded)) = found else {
-                self.character_lines.push(format!("{label} {} {}: KQMonster::add - Monster type undefined ('{}'): nothing made", line.key, line.name, line.type_name));
-                continue;
-            };
-            let bytes = match self.world.load(&kind.file) {
-                Some(Ok(x)) => x,
-                _ => {
-                    self.character_lines.push(format!("{label} {} {}: type {} file {} not in the world: nothing made", line.key, line.name, kind.name, kind.file));
+    }
+
+    /// One monster-list line (characters.md rule 4), from the world's
+    /// list or (`unused`, K) a script's `KQMonster::add`. `false` when
+    /// nothing was made.
+    fn place_monster_line(&mut self, label: &str, line: kq8_data::characters::MonsterLine, load: &kq8_data::world_script::LoadKq, vars: &kq8_data::world_script::Vars, unused: bool) -> bool {
+        let found = self.monster_types.as_ref().and_then(|t| t.find(&line.type_name)).map(|(t, folded)| (t.clone(), folded));
+        let Some((kind, folded)) = found else {
+            self.character_lines.push(format!("{label} {} {}: KQMonster::add - Monster type undefined ('{}'): nothing made", line.key, line.name, line.type_name));
+            return false;
+        };
+        let bytes = match self.world.load(&kind.file) {
+            Some(Ok(x)) => x,
+            _ => {
+                self.character_lines.push(format!("{label} {} {}: type {} file {} not in the world: nothing made", line.key, line.name, kind.name, kind.file));
+                return false;
+            }
+        };
+        self.list_files.insert(kind.file.to_ascii_lowercase());
+        let from = format!("{label} {} (type {}{}, file {})", line.key, kind.name, if folded { ", matched ignoring capitals" } else { "" }, kind.file);
+        let sub = kq8_data::world_script::LoadKq {
+            file: kind.file.clone(),
+            name: kq8_data::world_script::LoadName::Keep,
+            position: None,
+            angles: None,
+            ignored_numbers: 0,
+            from: from.clone(),
+            line: load.line,
+            inside_if: load.inside_if,
+        };
+        self.pending_line = Some(PendingLine {
+            wander: line.movement.or(kind.movement.clone()),
+            birth_delay: line.birth_delay.or(kind.birth_delay),
+            type_name: kind.name.clone(),
+            kind: kind.clone(),
+            line,
+            from,
+        });
+        self.adding = unused;
+        self.place(&sub, Some(bytes), unused, vars);
+        self.adding = false;
+        self.pending_line = None;
+        true
+    }
+
+    /// K (characters.md rule 3): every `KQMonster::add` line of the
+    /// world's scripts, its words joined with tabs and read as one
+    /// monster-list line, prepared hidden as a prototype named
+    /// `<name>@add` (K-1), copied by each add. A name prepared
+    /// twice (Dead City's `spiritW` in `weeper.cs` and `weeperup.cs`) is
+    /// made once.
+    fn prepare_script_adds(&mut self, vars: &kq8_data::world_script::Vars) {
+        self.read_monster_types();
+        let mut lines = Vec::new();
+        for (script, text) in &self.all_scripts {
+            for (n, raw) in text.lines().enumerate() {
+                let words: Vec<&str> = raw.split_whitespace().collect();
+                if words.first().is_some_and(|w| w.eq_ignore_ascii_case("KQMonster::add")) && words.len() > 2 {
+                    lines.push((script.clone(), n + 1, words[1..].join("\t")));
+                }
+            }
+        }
+        let mut done: Vec<String> = Vec::new();
+        for (script, n, joined) in lines {
+            let key = format!("{script} line {n}");
+            let mut line = match kq8_data::characters::MonsterLine::parse(&key, &joined) {
+                Ok(l) => l,
+                Err(e) => {
+                    self.character_lines.push(format!("KQMonster::add in {key}: {e}; not prepared"));
                     continue;
                 }
             };
-            self.list_files.insert(kind.file.to_ascii_lowercase());
-            let from = format!("{label} {} (type {}{}, file {})", line.key, kind.name, if folded { ", matched ignoring capitals" } else { "" }, kind.file);
-            let sub = kq8_data::world_script::LoadKq {
-                file: kind.file.clone(),
+            if done.iter().any(|d| d.eq_ignore_ascii_case(&line.name)) {
+                self.character_lines.push(format!("KQMonster::add in {key}: {} already prepared", line.name));
+                continue;
+            }
+            done.push(line.name.clone());
+            // K-1: the prototype's own name, never a live one.
+            let name = line.name.clone();
+            line.name = format!("{name}{}", kq8_core::active::ADD_PROTOTYPE);
+            let load = kq8_data::world_script::LoadKq {
+                file: String::new(),
                 name: kq8_data::world_script::LoadName::Keep,
                 position: None,
                 angles: None,
                 ignored_numbers: 0,
-                from: from.clone(),
-                line: load.line,
-                inside_if: load.inside_if,
+                from: key.clone(),
+                line: n,
+                inside_if: true,
             };
-            self.pending_line = Some(PendingLine {
-                wander: line.movement.or(kind.movement.clone()),
-                birth_delay: line.birth_delay.or(kind.birth_delay),
-                type_name: kind.name.clone(),
-                kind: kind.clone(),
-                line,
-                from,
-            });
-            self.place(&sub, Some(bytes), false, vars);
-            self.pending_line = None;
-            made += 1;
+            if self.place_monster_line(&key, line, &load, vars, true) {
+                self.character_lines.push(format!("KQMonster::add in {key}: {name}'s prototype prepared, hidden; each add copies it (K-1)"));
+            }
+        }
+    }
+
+    fn place_monster_list(&mut self, label: &str, file: &[kq8_data::kq_text::Section], load: &kq8_data::world_script::LoadKq, vars: &kq8_data::world_script::Vars) {
+        use kq8_data::characters::MonsterList;
+        let (list, problems) = MonsterList::from_section(&file[0]);
+        for p in &problems {
+            self.log.summary(format!("characters: {label}: {p}"));
+        }
+        self.read_monster_types();
+        let mut made = 0;
+        for line in list.lines {
+            made += usize::from(self.place_monster_line(label, line, load, vars, false));
         }
         self.log.summary(format!("characters: {label}: {made} of {:?} monster-list lines placed (characters.md rule 4)", list.declared));
     }
@@ -4794,6 +4876,7 @@ impl Placer<'_> {
             dormant: self.dormant,
             dormant_traps: self.dormant_traps,
             con_collision: self.con_collision,
+            added: self.added,
             templates,
             music: self.music,
             footsounds,

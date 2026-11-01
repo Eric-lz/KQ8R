@@ -4021,3 +4021,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Connor readies a ranged weapon: line 2000/16/0/102 | `fighting.md` 7a; **ours**: "readies" = a swap (32) ending with the ranged mode | `fight.log` update 57 "Connor readies a ranged weapon: its line"; `talk.log` 16 0 102 |
 | The music started with `KQMusic::push` | **ours** (the trap's `Off` pops it) | unit test |
 | Not built: the greeting's camera on it | Q195 c | — |
+
+## K 2026-10-31: `KQMonster::add` while playing — viewer `load.rs` (`prepare_script_adds`, `place_monster_line`), `anim_view.rs` (`copy_prototype`, `spawn_character_copy`, prototype recipes), `door_view.rs`, `copies_view.rs`; core `active.rs` (`monster_add`, `set_add_prototypes`, `ADD_PROTOTYPE`, `command_event`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The command takes the 20 fields (words joined with tabs, read as one monster-list line) or `name type`; the line's values on top of its type's file, as a list line | `characters.md` rules 3–4 | `characters.log` "rat1's prototype prepared" ×15 |
+| A name in use: the original stops with a fatal error | `objects.md` (as `loadKQ`) | `doors.log` update 30 "refused" |
+| One prototype per line, made at the start under `<name>@add`, copied by every add | **ours** (how to make it; every use in the data is a respawn) | `doors.log` updates 22 and 50: two copies |
+| A copy is drawn from the prototype's recipe and counts for the draw distance; not copied: its mouth pictures and shadow | **ours** (drawing) | `viewer.log` "copy rat1 of rat1@add: drawn … its draw-distance test" |
+| `--command` ends as a script run (a name it deleted is free afterwards) | **ours** (test harness) | — |

@@ -72,6 +72,8 @@ pub struct DoorSim {
     /// Copies a script loaded while playing, to draw (M5 5d-3): file,
     /// name, place.
     pub spawns: Vec<(String, String, kq8_core::collide::Placement)>,
+    /// K-3: characters `KQMonster::add` made: prototype, name, core index.
+    pub char_spawns: Vec<(String, String, usize)>,
     drawn: Vec<DrawnDoor>,
     /// Each door's entry in `ObjectColliders`, if it collides with Connor.
     collider: Vec<Option<usize>>,
@@ -785,6 +787,8 @@ pub fn spawn_doors(
     active.add_anims(anims);
     // Copies prepared for a script's loadKQ (3k-4).
     active.set_dormant(std::mem::take(&mut objects.dormant));
+    // K-2: the KQMonster::add prototypes.
+    active.set_add_prototypes(std::mem::take(&mut objects.added));
     // M5 5d-3, 5d-4: the templates for new copies: still ones, and
     // animated ones with their player as built (at the start).
     let templates: Vec<(String, kq8_core::active::Template)> = objects
@@ -983,7 +987,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok(), rope_clicks: Vec::new(), rope_asked: None };
+    let mut sim = DoorSim { active, spawns: Vec::new(), char_spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok(), rope_clicks: Vec::new(), rope_asked: None };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1488,6 +1492,18 @@ pub fn trap_step(
                 None => format!("{at}: camera around a point: no game camera; not applied"),
             },
             // M5 5d-2, 5d-3: a new copy, drawn by copies_view.
+            Request::SpawnCharacter { prototype, name, at } => {
+                // K-2: the copy goes to core now; it is drawn next (K-3).
+                match anim.as_ref().and_then(|a| a.copy_prototype(&prototype, &name)) {
+                    Some(copy) => {
+                        let index = sim.active.world.anims.len();
+                        sim.active.add_anims([copy]);
+                        sim.char_spawns.push((prototype.clone(), name.clone(), index));
+                        format!("{at}: KQMonster::add {name}: a copy of {prototype} is anims[{index}]: to be drawn")
+                    }
+                    None => format!("{at}: KQMonster::add {name}: no prototype {prototype} kept here; not made"),
+                }
+            }
             Request::Spawn { file, name, placement, at } => {
                 let p = placement.position;
                 sim.spawns.push((file.clone(), name.clone(), placement));
@@ -1914,7 +1930,7 @@ pub fn door_step(
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut command_at.0).into_iter().partition(|(_, n)| updates >= *n);
     command_at.0 = later;
     for (line, _) in due {
-        let result = sim.active.test_command(&line, "test --command");
+        let result = sim.active.command_event(&line, "test --command");
         shared.log.lock().unwrap().summary(format!("update {updates}: test --command {line}: {result:?}"));
     }
     // characters.md rule 11: which characters update now.

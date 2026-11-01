@@ -90,6 +90,9 @@ pub const CUE_HEARD_END: &str = "300";
 /// The notice a trap posts itself when it enters the world (traps.md rule
 /// 15a, D-9a): our own event kind, never sent by a script.
 pub const TRAP_LOOKUP: &str = "TrapLookup";
+/// K-1: a `KQMonster::add` prototype's name is the line's name plus this
+/// (never a live name; each add copies the prototype).
+pub const ADD_PROTOTYPE: &str = "@add";
 
 /// Event types we know (doors.md "Commands door scripts use"). Any other
 /// is an error and is not sent.
@@ -204,6 +207,10 @@ pub enum Request {
     /// `loadKQ` while playing made a new copy of a template (M5 5d-2):
     /// the viewer draws it there.
     Spawn { file: String, name: String, placement: Placement, at: String },
+    /// K-2: `KQMonster::add`: the viewer copies prototype `prototype` (its
+    /// player and character, kept there) as `name`, hands it to `anims`
+    /// and draws it from the prototype's recipe.
+    SpawnCharacter { prototype: String, name: String, at: String },
     /// `KQConner::walkTo` / `runTo` / `pointAndCue` (`anim-scripts.md`
     /// rules 24–25, M3 3l-2): a scripted walk or turn; a walk also
     /// switches `handsOff` on.
@@ -704,6 +711,9 @@ pub struct WorldState {
     /// Objects prepared for a script's `loadKQ` (3k-4): lower-case file
     /// name → the object's name and script.
     dormant: BTreeMap<String, (String, Option<String>)>,
+    /// K-2: the `KQMonster::add` prototypes, by the lower-case live name:
+    /// the prototype's name.
+    add_prototypes: BTreeMap<String, String>,
     /// The prepared files a script's `loadKQ` brought in, in order: file
     /// and object name (`world-change.md` rule 12: kept with the world).
     came_in: Vec<(String, String)>,
@@ -2139,6 +2149,55 @@ impl WorldState {
             self.note(format!("{at}: loadKQ {file}: {name} can be clicked now (its box from the start)"));
         }
         self.requests.push(Request::Load { file: key, name: name.clone(), at: at.to_string() });
+        if let Some(script) = script {
+            self.calls_out.push((script, vec![name, "Init".into()]));
+        }
+        "0".into()
+    }
+
+    /// `KQMonster::add <name> <type> …` while playing (K-2,
+    /// `characters.md` rule 3): a new character copied from the prototype
+    /// the loader made from this line, every time it runs. A live `<name>`
+    /// is the original's fatal error: refused.
+    fn monster_add(&mut self, words: &[String], at: &str) -> String {
+        let Some(name) = words.get(1).cloned() else {
+            self.note(format!("{at}: usage: KQMonster::add <name> <type> [18 more fields]; nothing"));
+            return "1".into();
+        };
+        let lower = name.to_ascii_lowercase();
+        let Some(proto) = self.add_prototypes.get(&lower).cloned() else {
+            self.note(format!("{at}: KQMonster::add {name}: no prototype from the start (its line was not found in the scripts); not made"));
+            return "0".into();
+        };
+        let live = self.known.contains(&lower) && !self.deleted.contains(&lower) && self.anims.iter().any(|a| !a.gone && a.player.name.eq_ignore_ascii_case(&name));
+        if live || self.deleted_this_event.contains(&lower) {
+            let why = if live { "a live object already has that name" } else { "its name was deleted in this same event and is not free yet" };
+            self.note(format!("{at}: ERROR KQMonster::add {name}: {why}: the original stops with a fatal error; refused"));
+            return "1".into();
+        }
+        let script = self.dormant_monsters.iter().find(|m| m.name.eq_ignore_ascii_case(&proto)).and_then(|m| m.script.clone());
+        let p = self.dormant_monsters.iter().find(|m| m.name.eq_ignore_ascii_case(&proto)).map_or([0.0; 3], |m| m.position);
+        self.known.insert(lower.clone());
+        self.deleted.remove(&lower);
+        let mut extra = Vec::new();
+        if let Some(c) = self.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(&proto)).cloned() {
+            self.clickables.push(Clickable { name: name.clone(), gone: false, ..c });
+            extra.push("clickable");
+        }
+        if let Some(m) = self.dormant_monsters.iter().find(|m| m.name.eq_ignore_ascii_case(&proto)).cloned() {
+            self.monsters.retain(|o| !o.name.eq_ignore_ascii_case(&name));
+            self.monsters.push(Monster { name: name.clone(), ..m });
+            extra.push("can speak");
+        }
+        self.note(format!(
+            "{at}: KQMonster::add {name}: a new copy of {proto} comes into the world at ({:.0}, {:.0}, {:.0}){}{} (characters.md rule 3)",
+            p[0],
+            p[1],
+            p[2],
+            if extra.is_empty() { String::new() } else { format!("; {}", extra.join(", ")) },
+            if script.is_some() { "; its script gets Init" } else { "" }
+        ));
+        self.requests.push(Request::SpawnCharacter { prototype: proto, name: name.clone(), at: at.to_string() });
         if let Some(script) = script {
             self.calls_out.push((script, vec![name, "Init".into()]));
         }
@@ -3633,6 +3692,16 @@ impl Active {
         self.world.note(format!("{at}: {line}"));
         ScriptHost::world_command(&mut self.world, &words, at)
     }
+
+    /// The viewer's `--command`: one command as a script run of its own,
+    /// so its end is an event's end (a name it deleted is free afterwards,
+    /// as after any script; K-3's check). Unit tests use
+    /// [`Self::test_command`], which keeps the event open.
+    pub fn command_event(&mut self, line: &str, at: &str) -> Option<String> {
+        let result = self.test_command(line, at);
+        ScriptHost::event_done(&mut self.world);
+        result
+    }
 }
 
 impl ScriptHost for WorldState {
@@ -3691,6 +3760,7 @@ impl ScriptHost for WorldState {
                 }
                 Some("0".into())
             }
+            "KQMonster::add" => Some(self.monster_add(words, at)),
             "terAnimSwitch" => {
                 match words {
                     [_, name] | [_, name, _] => {
@@ -3883,6 +3953,7 @@ impl Active {
                 stats: BTreeMap::new(),
                 plain_hidden: BTreeMap::new(),
                 dormant: BTreeMap::new(),
+                add_prototypes: BTreeMap::new(),
                 came_in: Vec::new(),
                 start_states: BTreeMap::new(),
                 deleted_this_event: BTreeSet::new(),
@@ -4370,6 +4441,20 @@ impl Active {
     /// The objects prepared for a script's `loadKQ` (3k-4): file name,
     /// object name and its script. Their names are not known to the
     /// scripts until loaded.
+    /// K-2: the prototypes the loader prepared for the scripts'
+    /// `KQMonster::add` (prototype name, file, script): never live, never
+    /// known; each add copies one.
+    pub fn set_add_prototypes(&mut self, list: impl IntoIterator<Item = (String, String, Option<String>)>) {
+        for (proto, _, _) in list {
+            let Some(live) = proto.strip_suffix(ADD_PROTOTYPE) else { continue };
+            self.world.known.remove(&proto.to_ascii_lowercase());
+            for a in self.world.anims.iter_mut().filter(|a| a.player.name.eq_ignore_ascii_case(&proto)) {
+                a.gone = true;
+            }
+            self.world.add_prototypes.insert(live.to_ascii_lowercase(), proto);
+        }
+    }
+
     pub fn set_dormant(&mut self, files: impl IntoIterator<Item = (String, String, Option<String>)>) {
         for (file, name, script) in files {
             self.world.known.remove(&name.to_ascii_lowercase());
