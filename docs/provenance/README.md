@@ -4061,3 +4061,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Bit 0x1 is the per-update tick; animated objects and characters get it added to their near set, not their far set; `groupsActive3DFar` 1089 keeps it when far | `object-lighting.md` rule 37 (corrected Q185) | — |
 | Far = drawn, frozen in its last pose, not solid, no updates; off = off the list and the reset home | `character-movement.md` rule 21 (Q185), the user's check in the original | Daventry `gobcon1`: frozen at update 54, moving again at 152, home at 302 (`viewer.log`, `characters.log`) |
 | Objects without a distance test are never frozen; doors and chests unchanged | **ours** | — |
+
+## U-4 2026-11-01: the spirit drain in whole numbers — core `fight.rs` (`spirit_numbers`, `spirit_drain`, `hit_connor_with`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Loss = whole part of (level × damage × 10); below 1 % of the maximum: whole part of (level × 0.1), slightly short (0 for levels 1–10, 1 for 11–20) | `traps.md` "Spirit traps" (Q188 a) | unit test `the_spirit_drain_in_whole_numbers` |
+| Then the trap's ordinary hit: Normal, 1, must react | Q188 b | unit test `a_spirit_trap_drains_connor_only_while_a_spirit_passes` |
+| The health change in any state; the hit part ignored while dying, nothing on the rope | Q188 c | — |
+| The first-hit tip only for a character's hit or a projectile | Q188 c (`fighting.md` rule 29) | the same unit test |

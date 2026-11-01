@@ -6831,9 +6831,21 @@ endif
         cue(&mut a, "1");
         a.set_connor_stats(ConnorStats { stats: Stats([3, 10, 0, 100, 0]), level: 5 });
         connor_at(&mut a, 0.0);
-        assert_eq!(health(&a), 1, "entering while a spirit passes; not below 1 % of 50 (rounded: stand-in, Q188)");
+        assert_eq!(health(&a), 0, "entering while a spirit passes: below 1 %: whole part of (5 x 0.1) = 0 (Q188)");
         let log = a.world.fight_log.join("\n");
-        assert!(log.contains("spirit trap spirtp1 (Connor came in while a spirit is passing): drains 0.2 x maximum 50 = 10, not below 1 % = 1: health 3 -> 1"), "{log}");
+        assert!(log.contains("spirit trap spirtp1 (Connor came in while a spirit is passing): loss = whole part of (level 5 x 0.2 x 10) = 10; below 1 % of maximum 50: set to whole part of (level x 0.1) = 0: health 3 -> 0"), "{log}");
+        assert!(!log.contains("first hit by a character"), "not by a character (Q188 c): {log}");
+    }
+
+    #[test]
+    fn the_spirit_drain_in_whole_numbers() {
+        // traps.md "Spirit traps" (Q188): loss 2 x level; floor 0 up to level 10, 1 from 11 to 20.
+        use crate::fight::spirit_numbers;
+        assert_eq!(spirit_numbers(1, 0.2), (2, 0));
+        assert_eq!(spirit_numbers(3, 0.2), (6, 0));
+        assert_eq!(spirit_numbers(10, 0.2), (20, 0));
+        assert_eq!(spirit_numbers(11, 0.2), (22, 1));
+        assert_eq!(spirit_numbers(20, 0.2), (40, 1));
     }
 
     #[test]

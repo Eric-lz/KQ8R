@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-4: the spirit drain in whole numbers (Q188)
+
+**Changed:** Core `fight.rs`: `spirit_numbers` (loss = whole part of level × damage × 10; floor = whole part of level × 0.1, slightly short), `spirit_drain` (the change in any state; then the trap's hit with "must react"), `hit_connor_with` (must react; the first-hit tip only for a character or a projectile). Unit tests: 1 new, 1 changed. DESIGN U-4, provenance.
+**Why:** Study A's Q188 answer replaces B's stand-in (rounded 20 % and 1 %).
+**Tested how:** `cargo test --workspace` (all pass).
+**Result:** Level 5, health 3 in a spirit: 3 → 0 (the floor is 0 up to level 10; was 1), then the 1-point hit (protection 100 in the test: nothing). Levels 1/3/10/11/20 → loss 2/6/20/22/40, floor 0/0/0/1/1.
+**Still broken / not tested:** **Not run in the viewer** (needs a spirit passing through a trap). At level 10 or below a drain at low health now kills (floor 0, then the hit), as in the original.
+**Next:** U-5 (`KQAttackEvent` on characters).
+
 ## 2026-11-01 U-3: far characters and animated objects are frozen (Q185)
 
 **Changed:** Viewer `draw_distance.rs`: `DistanceTest::animated`, the update tick bit 0x1 (added to the near set), `FrozenNow` (who has no tick this frame), a log line when one freezes or wakes; `anim_view.rs` (its own players don't advance while frozen), `door_view.rs` (scripted animated objects marked, the set handed to the core). Core `active.rs` (`frozen`: no animation, state or mover step), `character_ai.rs` (no AI step). DESIGN U-3, provenance.

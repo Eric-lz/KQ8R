@@ -522,40 +522,41 @@ impl crate::active::WorldState {
     /// **our stand-in** (Q188): both shares rounded, the hit the ordinary
     /// one of rule 16; nothing while dying, on the rope or in god mode.
     pub(crate) fn spirit_drain(&mut self, trap: &str, damage: f32, why: &str) {
-        let skip = if self.god_mode {
-            Some("god mode is on (test switch, ours)")
-        } else if self.connor_dying {
-            Some("he is dying (ours, Q188 c)")
-        } else if self.connor_roping {
-            Some("he is on the rope (ours, Q188 c)")
-        } else {
-            None
-        };
-        if let Some(skip) = skip {
-            self.fight_note("Connor", format!("spirit trap {trap} ({why}): nothing, {skip}"));
+        if self.god_mode {
+            self.fight_note("Connor", format!("spirit trap {trap} ({why}): nothing, god mode is on (test switch, ours)"));
             return;
         }
         let Some(mut c) = self.connor_stats else {
             self.fight_note("Connor", format!("spirit trap {trap} ({why}): his stats are unknown (no Connor.kq); nothing"));
             return;
         };
-        let max = c.max_health();
-        let loss = (damage as f64 * max as f64).round() as i64;
-        let floor = (0.01 * max as f64).round() as i64;
-        let before = c.stats.0[0];
-        c.stats.0[0] = (before - loss).max(floor);
+        // traps.md "Spirit traps" (Q188, U-4): in any state; the hit part
+        // below is ignored while dying and does nothing on the rope.
+        let (max, before) = (c.max_health(), c.stats.0[0]);
+        let (loss, floor) = spirit_numbers(c.level, damage);
+        let below = ((before - loss) as f64) / (max.max(1) as f64) < 0.01;
+        c.stats.0[0] = if below { floor } else { before - loss };
         let after = c.stats.0[0];
         self.connor_stats = Some(c);
         self.connor_stats_events += 1;
         self.fight_note(
             "Connor",
-            format!("spirit trap {trap} ({why}): drains {damage} x maximum {max} = {loss}, not below 1 % = {floor}: health {before} -> {after}; then a 1-point hit (traps.md \"Spirit traps\"; whole numbers: stand-in, Q188)"),
+            format!(
+                "spirit trap {trap} ({why}): loss = whole part of (level {} x {damage} x 10) = {loss}{}: health {before} -> {after}; then the trap's ordinary hit (Normal, 1, must react) (traps.md \"Spirit traps\", Q188)",
+                c.level,
+                if below { format!("; below 1 % of maximum {max}: set to whole part of (level x 0.1) = {floor}") } else { String::new() }
+            ),
         );
-        self.hit_connor(trap, 1, HitKind::Normal);
+        self.hit_connor_with(trap, 1, HitKind::Normal, true);
     }
 
     /// Rules 16–18, 29: a hit of damage `d` on Connor from `from`.
     pub(crate) fn hit_connor(&mut self, from: &str, d: i64, kind: HitKind) {
+        self.hit_connor_with(from, d, kind, false);
+    }
+
+    /// The same, with "must react" (rule 16: he flinches whatever the roll).
+    pub(crate) fn hit_connor_with(&mut self, from: &str, d: i64, kind: HitKind, must_react: bool) {
         if self.god_mode {
             self.fight_note("Connor", format!("hit by {from}, {}, damage {d}: nothing, god mode is on (test switch, ours)", kind.name()));
             return;
@@ -594,8 +595,10 @@ impl crate::active::WorldState {
         // interface.md rule 24: the bars follow his stats.
         self.connor_stats_events += 1;
         self.fight_note("Connor", format!("hit by {from}, {}: {} (roll 25-100 %, rule 16); health {before} -> {after}{temple}", kind.name(), dmg.describe()));
-        // Rule 29: two one-off tips (logged only; their texts are another study).
-        if !self.connor_tips[0] {
+        // Rule 29: two one-off tips (logged only; their texts are another
+        // study). The first needs a character or a projectile (Q188 c).
+        let by_character = kind == HitKind::Projectile || self.character_index(from).is_some();
+        if !self.connor_tips[0] && by_character {
             self.connor_tips[0] = true;
             self.fight_note("Connor", "first hit by a character: a one-off tip would come here (rule 29; not traced further)");
         }
@@ -613,9 +616,19 @@ impl crate::active::WorldState {
             // react a script set (Dead City's tower) tried first.
             let percent = self.connor_react.0.unwrap_or(CONNOR_REACT_PERCENT);
             let special = self.connor_react.1.clone().filter(|(_, p)| dmg.flinch_roll(*p)).map(|(m, _)| m);
-            self.requests.push(crate::active::Request::ConnorHurt { roll_over: dmg.flinch_roll(percent), special, at });
+            self.requests.push(crate::active::Request::ConnorHurt { roll_over: must_react || dmg.flinch_roll(percent), special, at });
         }
     }
+}
+
+/// `traps.md` "Spirit traps" (Q188): the loss, whole part of (level ×
+/// `damage` × 10), and the floor when it would leave less than 1 % of the
+/// maximum, whole part of (level × 0.1) with the program's slightly short
+/// 0.1: 0 for levels 1–10, 1 for 11–20.
+pub fn spirit_numbers(level: i64, damage: f32) -> (i64, i64) {
+    let loss = (level as f64 * damage as f64 * 10.0 + 1e-9).floor() as i64;
+    let floor = (level as f64 * 0.1 - 1e-9).floor().max(0.0) as i64;
+    (loss, floor)
 }
 
 /// Connor's swings in a hand weapon's list (rule 40): `Attack` or

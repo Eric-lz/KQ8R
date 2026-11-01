@@ -3814,6 +3814,9 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
   whole part of (level × damage × 10); floor = whole part of (level ×
   0.1 slightly short) = 0 for levels 1–10; then the ordinary hit (1,
   must react); not "by a character"; the hit part ignored while dying.
+  **Done** 2026-11-01 (unit tests). The health change now happens in
+  any state (was: nothing while dying or on the rope); the first-hit tip
+  needs a character or a projectile for every hit.
 - **U-5 (Q190): `KQAttackEvent` on a character** is the ordinary hit
   (`fighting.md` 29a); a kind above 3 dies as Normal (32a "Do not
   reproduce").
