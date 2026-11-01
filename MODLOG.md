@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-3: the tower skeleton's fall (cutscene)
+
+**Changed:** Core `tower_skeleton.rs` (the fall's stages and offsets, `own_axes`, `look_angles`, 1 unit test), `fight.rs` (`tower_fall_start`), `active.rs` (`tower_fall_next` on each stage's end, `tower_cue50`, `run_tower_lines`, the world's `tower_lines`), `character_ai.rs` (the ground height 2,000 behind it, measured when it falls). DESIGN (T-3 as built, our readings). Provenance.
+**Why:** `fighting.md` 7a "Dying": pushing it off the tower is how the fight is won; the user: it is a cutscene in the original. It replaces T-2's stand-in (the ordinary death in place).
+**Tested how:** `cargo test --workspace` (all pass, 571 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --frames 9000 --command "move Connor 0 185481 122300 9814 0 0 3.14",20 --command "sendEvent 0 Skeltowr KQCueEvent 201 0",30` and `--command "sendEvent 0 Skeltowr KQAnimPlayEvent reactback",N` every 30 updates from 200 (it faces Connor in the south, the staggers carry it north to the edge); `fight.log`, `doors.log`, `items.log`.
+**Result:** Update 444: "falls off the tower … the ground 2,000 behind it at z 2898"; Connor third person, Wait, `handsOff 1`, the scream. 473 `teeter` ends: `move KQCamera 0 186077 128438 4593 1.1903 0 3.0550`, Cue 50 in 2.18 s. 506 first Cue 50: the scream's second part. 526 `die` ends: side shot, moved to (185956, 127043, 7898). 551 `die2` ends: on the ground (186077, 128438, 2898), the chain mail thrown (rests at (187249, 129472, 2174)). 558 `fallend` ends. 603 second Cue 50: `follow Connor`, `handsOff 0`, the mail gets `chainmal.cs`, Connor +4,000 experience (level 9), removed.
+**Still broken / not tested:** **Not looked at by eye.** Our readings: "behind" its +Y, "side" its +X, the first shot's look point, `follow Connor` at the end. Whether the follow camera pulls the view back during the shots (no `follow none` is sent; the note doesn't name one): not checked. The 5,000 height of step 3 is "not sure" in the note.
+**Next:** The user's look at the fall; then T-4 (what it hears and says; Q195) or K.
+
 ## 2026-10-31 T-2d: the drawing no longer adds a play-once movement's steps (they were counted twice)
 
 **Changed:** Viewer `anim_view.rs`: a character's drawn pose leaves out the steps of every movement (was: repeating ones only), as core `named_anim.rs` does since T-2b; a log line per drawn frame of a character's play-once movement with steps (its place, the frame, the steps, where the model is drawn), in `characters.log`.

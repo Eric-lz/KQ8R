@@ -273,7 +273,13 @@ impl WorldState {
                 };
                 let a = &self.anims[i];
                 let (ahead, behind) = (probe(false, a), probe(true, a));
-                self.tower_rules(i, now, ahead, behind);
+                // T-3: the ground height 2,000 behind it (for its fall).
+                let p = a.player.base.position;
+                let h = crate::character::heading_of(&a.player.base.rotation);
+                let d = crate::tower_skeleton::GROUND_BEHIND;
+                let (x, y) = (p[0] - d * h.sin(), p[1] + d * h.cos());
+                let ground_behind = floor_scene.line_hit([x, y, p[2]], [x, y, p[2] - 100_000.0], 0x8, &a.player.name.to_ascii_lowercase()).map_or(p[2], |(hit, _)| hit[2]);
+                self.tower_rules(i, now, ahead, behind, ground_behind);
             } else {
                 self.alarm_rules(i, now);
             }
@@ -1127,8 +1133,8 @@ impl WorldState {
     /// `fighting.md` section 7a (T-2): the tower skeleton's standing and
     /// moving rules, in place of rules 23-28. `ahead` / `behind`: ground
     /// within 1,000 below the point 1,000 ahead of it / 400 behind it.
-    /// Its fall (no ground behind) is the ordinary death until T-3.
-    fn tower_rules(&mut self, i: usize, now: f64, ahead: bool, behind: bool) {
+    /// Its fall (no ground behind): T-3, `tower_fall_start`.
+    fn tower_rules(&mut self, i: usize, now: f64, ahead: bool, behind: bool, ground_behind: f32) {
         use crate::character::State;
         if self.ai_off {
             self.alarm_rules(i, now);
@@ -1155,8 +1161,8 @@ impl WorldState {
         let move_time = t.move_time;
         let mut lines = Vec::new();
         if (staggering || probe_due) && !behind {
-            self.character_note(&name, format!("no ground within 1,000 below the point 400 behind it{}: it falls (fighting.md 7a; the ordinary death until T-3)", if staggering { " during reactback" } else { " after reactback" }));
-            self.character_dies(i, crate::fight::HitKind::Normal, false);
+            self.character_note(&name, format!("no ground within 1,000 below the point 400 behind it{}: it falls (fighting.md 7a)", if staggering { " during reactback" } else { " after reactback" }));
+            self.tower_fall_start(i, ground_behind);
             return;
         }
         if probe_due && state == State::Move {

@@ -3551,6 +3551,14 @@ per step:
 - **T-3: the fall** (7a "Dying"): `teeter`, the camera from below,
   `die`, `die2`, `fallend`, the drop of its chain mail (`chainmal.cs`),
   Cue 50 twice, then the ordinary finish.
+  T-3 as built (2026-10-31): the fall starts where T-2's probe finds no
+  ground behind it (instead of the stand-in death); the ground height
+  2,000 behind it is measured then (the AI step has the terrain). Each
+  stage's end starts the next (`teeter` → `die` → `die2` → `fallend`);
+  its camera, Connor and line commands run as script commands. **Our
+  readings** (logged): "behind" = its own +Y, "its side" = its own +X;
+  the first shot looks at the point 0.9 of the way from the camera to
+  it; the second Cue 50 brings the camera back with `follow Connor`.
 - **T-4: what it hears and says**: the greeting the first time Connor
   climbs a rope (controls off, camera on it, line 16/0/18, then the
   music `mtower.aud`), the line when he readies a ranged weapon

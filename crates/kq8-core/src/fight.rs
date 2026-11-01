@@ -982,6 +982,53 @@ impl crate::active::WorldState {
         }
     }
 
+    /// T-3 (`fighting.md` 7a "Dying" step 1): the tower skeleton falls
+    /// off. As a death (rule 30: health 0, Die state, off the active list,
+    /// not solid) but its gravity off and nothing dropped yet; it plays
+    /// `teeter`; Connor is forced into third person, stops in Wait with the
+    /// controls off; it says the scream's first part. `ground`: the ground
+    /// height 2,000 behind it, for the stages after.
+    pub(crate) fn tower_fall_start(&mut self, j: usize, ground: f32) {
+        let a = &mut self.anims[j];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(f) = c.fight.as_mut() else { return };
+        if f.dying.is_some() {
+            return;
+        }
+        f.stats.0[0] = 0;
+        f.dying = Some(Some("teeter".to_string()));
+        f.flinching = None;
+        c.state = crate::character::State::Die;
+        c.gravity = false;
+        c.collision_type = 0;
+        c.collision_mask = 0;
+        c.turn_to = None;
+        if let Some(ai) = c.ai.as_mut() {
+            ai.active = false;
+            ai.alarmed = false;
+            ai.hunting = false;
+            ai.on_way_home = false;
+        }
+        if let Some(t) = c.tower.as_mut() {
+            t.fall = Some(crate::tower_skeleton::FallStage::Teeter);
+            t.fall_ground = ground;
+        }
+        let st = a.player.start("teeter");
+        self.active_list.retain(|n| !n.eq_ignore_ascii_case(&name));
+        let at = format!("{name} falls (fighting.md 7a)");
+        for line in ["setThirdPerson".to_string(), "KQMonster::setState Connor Wait".to_string(), "handsOff 1".to_string(), format!("KQMonster::speak {name} {name} 2000 16 12 22 1 1")] {
+            self.tower_lines.push((line, at.clone()));
+        }
+        self.fight_note(
+            &name,
+            format!(
+                "falls off the tower (fighting.md 7a step 1): health 0, gravity off, not solid, off the active list; 'teeter' starts{}; Connor: third person, Wait, controls off; the scream; the ground 2,000 behind it at z {ground:.0}",
+                if st.unknown { " (not in its list: movement 0)" } else { "" }
+            ),
+        );
+    }
+
     /// The viewer console's `kill` (ours, not in the original): the
     /// character dies as from a normal hit (rule 30), without the hit's
     /// alarm to the others. `Err` with the reason when it can't.

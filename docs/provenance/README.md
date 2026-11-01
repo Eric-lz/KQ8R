@@ -4001,3 +4001,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | A character moves only by the steps of the movement it plays, as Connor (no exception for play-once movements) | `character-movement.md` rule 1; `connor-collision.md` rule 14 (`reactback` moves Connor 903 back through his mover) | `characters.log`: `reactback` takes the skeleton from y 125,849 to 125,445 and it stays there |
 | Each update adds the steps of every frame it enters; backwards they are taken off | `objects.md` rule 6a | — |
 | Its drawing no longer adds those steps (they moved its place) | **ours** (drawing), as for its walk | the user's look: not yet |
+
+## T-3 2026-10-31: the tower skeleton's fall — core `tower_skeleton.rs` (stages, offsets, `own_axes`, `look_angles`), `fight.rs` (`tower_fall_start`), `active.rs` (`tower_fall_next`, `tower_cue50`, `run_tower_lines`), `character_ai.rs` (the ground behind it)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| No ground behind it during / after `reactback`: it falls: gravity off, Connor third person, Wait, controls off; the scream (2000/16/12/22 seq 1); `teeter` | `fighting.md` 7a "Dying" step 1, rule 23 | `fight.log` update 444 |
+| `teeter` ends: camera 2,000 behind and 5,000 below, looking at the point 0.9 of the way; Cue 50 2.18 s later; `die` | 7a step 2; **ours**: "0.9 of the way" read as from the camera to it, "behind" its +Y | `fight.log` update 473; `doors.log` `move KQCamera 0 186077 128438 4593 1.1903 0 3.0550` |
+| `die` ends: camera 3,000 to its side and 2,000 up from the ground point 2,000 behind, looking at it; moved 600 back, 5,000 above that ground; `die2` | 7a step 3 (5,000: "not sure"); **ours**: "side" = its +X | update 526 |
+| `die2` ends: on the ground 1,400 behind; drops what it carries; `fallend` | 7a step 4 | update 551: `INVITEM_ChainMailShirt` thrown |
+| `fallend` ends: Cue 50 3 s later; first Cue 50: the scream's second part; second: camera back to Connor, controls on, the dropped item gets `chainmal.cs`, the ordinary finish (rule 32) | 7a steps 2, 5; **ours**: "back behind Connor" = `KQCamera::follow Connor` | update 603: experience 4000, `chainmal.cs` |
+| The ground heights: a line straight down against the drawn ground and the buildings | **ours** | — |

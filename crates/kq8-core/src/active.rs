@@ -957,6 +957,9 @@ pub struct WorldState {
     /// The item a death made last (`fighting.md` rules 31, 31a: the
     /// script variable `NewInvItem`), set before the next `Die` calls.
     pub new_inv_item: Option<String>,
+    /// T-3: script lines a tower skeleton's fall asks for (run by
+    /// `Active` at its next update), with where they came from.
+    pub tower_lines: Vec<(String, String)>,
     /// Projectile files by lower-case name (`fighting.md` rule 36; M5
     /// 5c-9), set by the caller.
     pub projectiles: std::collections::BTreeMap<String, kq8_data::characters::ProjectileKeys>,
@@ -3841,6 +3844,7 @@ impl Active {
                 deleted: BTreeSet::new(),
                 switched_off: BTreeSet::new(),
                 connor_stats: None,
+                tower_lines: Vec::new(),
                 con_collision: Default::default(),
                 con_touch_times: BTreeMap::new(),
                 connor_stats_events: 0,
@@ -4042,6 +4046,140 @@ impl Active {
         } else {
             let line = self.world.object_takes(&e.target, damage, kind);
             self.world.note(format!("{at}: kind {} damage {damage}: {line} (sound.md rule 41; its ouch sound: not built)", kind.name()));
+        }
+    }
+
+    /// T-3: the lines the world queued for a tower skeleton's fall, as
+    /// script commands.
+    fn run_tower_lines(&mut self) {
+        for (line, at) in std::mem::take(&mut self.world.tower_lines) {
+            let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+            self.world.note(format!("{at}: {line}"));
+            if ScriptHost::world_command(&mut self.world, &words, &at).is_none() {
+                self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
+            }
+        }
+    }
+
+    /// T-3 (`fighting.md` 7a "Dying", steps 2-5): a stage of the tower
+    /// skeleton's fall ended; the next starts. Camera spots are in its own
+    /// axes ("behind" its +Y, "side" its +X: our reading).
+    fn tower_fall_next(&mut self, i: usize, now: f64) {
+        use crate::tower_skeleton as ts;
+        let a = &mut self.world.anims[i];
+        let name = a.player.name.clone();
+        let (p, r) = (a.player.base.position, a.player.base.rotation);
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(t) = c.tower.as_mut() else { return };
+        let (behind, side) = ts::own_axes(&r);
+        let at = |k: f32, v: [f32; 3]| -> [f32; 3] { [p[0] + k * v[0], p[1] + k * v[1], p[2] + k * v[2]] };
+        let mut lines: Vec<String> = Vec::new();
+        let mut moved = None;
+        let (next, note) = match t.fall {
+            Some(ts::FallStage::Teeter) => {
+                // Step 2: the shot from below, Cue 50 2.18 s later, `die`.
+                let mut cam = at(ts::SHOT1_BEHIND, behind);
+                cam[2] -= ts::SHOT1_BELOW;
+                let look = [cam[0] + ts::SHOT1_LOOK_SHARE * (p[0] - cam[0]), cam[1] + ts::SHOT1_LOOK_SHARE * (p[1] - cam[1]), cam[2] + ts::SHOT1_LOOK_SHARE * (p[2] - cam[2])];
+                let (tilt, heading) = ts::look_angles(cam, look);
+                lines.push(format!("move KQCamera 0 {:.0} {:.0} {:.0} {tilt:.4} 0 {heading:.4}", cam[0], cam[1], cam[2]));
+                lines.push(format!("sendEvent {} {name} KQCueEvent {} 0", ts::CUE50_AFTER_TEETER, ts::CUE_FALL));
+                (ts::FallStage::Die, format!("'teeter' ended: camera from below at ({:.0}, {:.0}, {:.0}); Cue 50 in {} s; 'die'", cam[0], cam[1], cam[2], ts::CUE50_AFTER_TEETER))
+            }
+            Some(ts::FallStage::Die) => {
+                // Step 3: the shot from its side, moved 600 back and high up, `die2`.
+                let mut g = at(ts::GROUND_BEHIND, behind);
+                g[2] = t.fall_ground;
+                let cam = [g[0] + ts::SHOT2_SIDE * side[0], g[1] + ts::SHOT2_SIDE * side[1], g[2] + ts::SHOT2_UP];
+                let (tilt, heading) = ts::look_angles(cam, g);
+                lines.push(format!("move KQCamera 0 {:.0} {:.0} {:.0} {tilt:.4} 0 {heading:.4}", cam[0], cam[1], cam[2]));
+                let mut to = at(ts::DIE2_BACK, behind);
+                to[2] = t.fall_ground + ts::DIE2_HIGH;
+                moved = Some(to);
+                (ts::FallStage::Die2, format!("'die' ended: camera at ({:.0}, {:.0}, {:.0}) looking at the ground point ({:.0}, {:.0}, {:.0}); moved to ({:.0}, {:.0}, {:.0}) (5,000 up: not sure); 'die2'", cam[0], cam[1], cam[2], g[0], g[1], g[2], to[0], to[1], to[2]))
+            }
+            Some(ts::FallStage::Die2) => {
+                // Step 4: on the ground 1,400 behind; it drops what it carries; `fallend`.
+                let mut to = at(ts::LAND_BACK, behind);
+                to[2] = t.fall_ground;
+                moved = Some(to);
+                (ts::FallStage::Fallend, format!("'die2' ended: on the ground at ({:.0}, {:.0}, {:.0}); drops what it carries; 'fallend'", to[0], to[1], to[2]))
+            }
+            Some(ts::FallStage::Fallend) => {
+                // Step 5: Cue 50 3 s later.
+                lines.push(format!("sendEvent {} {name} KQCueEvent {} 0", ts::CUE50_AFTER_FALLEND, ts::CUE_FALL));
+                (ts::FallStage::Waiting, format!("'fallend' ended: Cue 50 in {} s", ts::CUE50_AFTER_FALLEND))
+            }
+            _ => return,
+        };
+        t.fall = Some(next);
+        if let Some(to) = moved {
+            a.player.base.position = to;
+            if let Some(m) = c.mover.as_mut() {
+                m.position = to;
+            }
+        }
+        if let Some(f) = c.fight.as_mut() {
+            f.dying = Some(next.movement().map(str::to_string));
+        }
+        let started = next.movement().map(|mv| (mv, a.player.start(mv).unknown));
+        let at_line = format!("{name} falls (fighting.md 7a)");
+        self.world.fight_note(&name, format!("{note}{}", started.filter(|(_, u)| *u).map_or(String::new(), |(mv, _)| format!(" ('{mv}' not in its list: movement 0)"))));
+        if next == ts::FallStage::Fallend {
+            let before = self.world.items.objects.len();
+            self.world.drop_items(i);
+            if self.world.items.objects.len() > before {
+                if let Some(t) = self.world.anims[i].character.as_deref_mut().and_then(|c| c.tower.as_mut()) {
+                    t.dropped = self.world.items.objects.last().map(|o| o.name.clone());
+                }
+            }
+        }
+        for line in lines {
+            let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+            self.world.note(format!("{at_line}: {line}"));
+            if ScriptHost::world_command(&mut self.world, &words, &at_line).is_none() {
+                self.world.note(format!("{at_line}: {line}: not a command this world knows; skipped"));
+            }
+        }
+        let _ = now;
+    }
+
+    /// T-3: Cue 50 during the fall: the first says the scream's second
+    /// part; the second brings the camera back to Connor with the controls
+    /// on, gives the dropped item `chainmal.cs` and finishes the death
+    /// (rule 32).
+    fn tower_cue50(&mut self, j: usize, from: &str) {
+        let now = self.world.now();
+        let a = &mut self.world.anims[j];
+        let name = a.player.name.clone();
+        let Some(t) = a.character.as_deref_mut().and_then(|c| c.tower.as_mut()) else { return };
+        t.cue50s += 1;
+        let (first, dropped) = (t.cue50s == 1, t.dropped.clone());
+        let at = format!("KQCueEvent 50 to {name}{from}");
+        let lines: Vec<String> = if first {
+            vec![format!("KQMonster::speak {name} {name} 2000 16 12 22 2 2")]
+        } else {
+            vec!["KQCamera::follow Connor".to_string(), "handsOff 0".to_string()]
+        };
+        self.world.fight_note(&name, format!("{at}: {}", if first { "the scream's second part (fighting.md 7a step 2)" } else { "the camera back to Connor, controls on; its death finishes (7a step 5, rule 32)" }));
+        for line in lines {
+            let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+            self.world.note(format!("{at}: {line}"));
+            if ScriptHost::world_command(&mut self.world, &words, &at).is_none() {
+                self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
+            }
+        }
+        if !first {
+            if let Some(d) = dropped {
+                if let Some(o) = self.world.items.objects.iter_mut().find(|o| o.name.eq_ignore_ascii_case(&d)) {
+                    o.script = Some(crate::tower_skeleton::DROP_SCRIPT.to_string());
+                    self.world.fight_note(&name, format!("its dropped {d} gets the script {} (7a)", crate::tower_skeleton::DROP_SCRIPT));
+                }
+            }
+            if let Some(t) = self.world.anims[j].character.as_deref_mut().and_then(|c| c.tower.as_mut()) {
+                t.fall = None;
+            }
+            self.world.death_ended(j, now);
         }
     }
 
@@ -5170,6 +5308,7 @@ impl Active {
     /// drawn (`anim-scripts.md` rule 8, Q119; M4 4e-10).
     pub fn update(&mut self) {
         let now = self.world.now();
+        self.run_tower_lines();
         self.handle_due(now);
         self.world.characters_due(now);
         self.talk_step(now);
@@ -5369,6 +5508,13 @@ impl Active {
                 let w = &self.world;
                 let has_script = w.anims[i].script.is_some() || w.clickables.iter().any(|c| c.script.is_some() && c.name.eq_ignore_ascii_case(&name));
                 self.world.movement_ended(&name, &m, has_script);
+                // T-3 (fighting.md 7a "Dying"): a stage of the tower
+                // skeleton's fall ended: the next one.
+                let stage = self.world.anims[i].character.as_deref().and_then(|c| c.tower.as_ref()).and_then(|t| t.fall);
+                if stage.and_then(|f| f.movement()).is_some_and(|f| f.eq_ignore_ascii_case(&m)) {
+                    self.tower_fall_next(i, now);
+                    continue;
+                }
                 // fighting.md rule 32 (M5 5c-7): its die movement ended.
                 let dying = self.world.anims[i].character.as_deref().and_then(|c| c.fight.as_ref()).and_then(|f| f.dying.clone());
                 if dying.flatten().is_some_and(|d| d.eq_ignore_ascii_case(&m)) {
@@ -5677,6 +5823,13 @@ impl Active {
         if e.kind == "KQAttackEvent" {
             self.attack_event(&e, &from);
             return;
+        }
+        // T-3 (fighting.md 7a "Dying"): Cue 50 during its fall.
+        if e.kind == "KQCueEvent" && e.data.first().map(String::as_str) == Some(crate::tower_skeleton::CUE_FALL) {
+            if let Some(j) = self.world.anims.iter().position(|a| a.player.name.eq_ignore_ascii_case(&e.target) && a.character.as_deref().and_then(|c| c.tower.as_ref()).is_some_and(|t| t.fall.is_some())) {
+                self.tower_cue50(j, &from);
+                return;
+            }
         }
         // fighting.md 7a (T-1): Cue 201 gives the tower skeleton its
         // real alarm radius.
