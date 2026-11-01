@@ -4049,6 +4049,71 @@ impl Active {
         }
     }
 
+    /// T-4a (`fighting.md` 7a): a `StateChange` to a tower skeleton: the
+    /// greeting the first time Connor goes on a rope (4096), the ranged
+    /// line when a weapon swap (32) ends with a ranged weapon ready.
+    /// `false`: not a tower skeleton's.
+    fn tower_hears(&mut self, e: &Pending, from: &str) -> bool {
+        use crate::tower_skeleton as ts;
+        let Some(j) = self.world.character_index(&e.target) else { return false };
+        let name = self.world.anims[j].player.name.clone();
+        let ranged = self.world.weapon_mode == crate::weapons::WeaponMode::Ranged;
+        let Some(t) = self.world.anims[j].character.as_deref_mut().and_then(|c| c.tower.as_mut()) else { return false };
+        let word = |k: usize| e.data.get(k).map(String::as_str).unwrap_or("");
+        let at = format!("StateChange {} to {name}{from}", e.data.join(" "));
+        let mut lines = Vec::new();
+        let what = if !word(0).eq_ignore_ascii_case(CONNOR) {
+            "not Connor's: nothing".to_string()
+        } else if word(2) == ts::CONNOR_ROPE_STATE && !t.greeted && t.fall.is_none() {
+            t.greeted = true;
+            t.greeting = true;
+            let (n, v, c) = ts::GREETING;
+            lines.push("handsOff 1".to_string());
+            lines.push(format!("KQMonster::speak {name} Connor 2000 {n} {v} {c} 1 1"));
+            "Connor goes on a rope the first time: the greeting (controls off; its camera: not built, Q195)".to_string()
+        } else if word(1) == ts::CONNOR_SWAP_STATE && ranged && t.fall.is_none() {
+            let (n, v, c) = ts::RANGED_LINE;
+            lines.push(format!("KQMonster::speak {name} Connor 2000 {n} {v} {c} 1 1"));
+            "Connor readies a ranged weapon: its line".to_string()
+        } else {
+            "nothing (fighting.md 7a)".to_string()
+        };
+        self.world.fight_note(&name, format!("{at}: {what}"));
+        for line in lines {
+            let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+            self.world.note(format!("{at}: {line}"));
+            if ScriptHost::world_command(&mut self.world, &words, &at).is_none() {
+                self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
+            }
+        }
+        true
+    }
+
+    /// T-4a: the greeting's line has ended: controls on, its music.
+    fn tower_greeting_step(&mut self) {
+        let done: Vec<usize> = (0..self.world.anims.len())
+            .filter(|&j| {
+                let a = &self.world.anims[j];
+                a.character.as_deref().and_then(|c| c.tower.as_ref()).is_some_and(|t| t.greeting) && !self.world.talk.is_talking(&a.player.name)
+            })
+            .collect();
+        for j in done {
+            let name = self.world.anims[j].player.name.clone();
+            if let Some(t) = self.world.anims[j].character.as_deref_mut().and_then(|c| c.tower.as_mut()) {
+                t.greeting = false;
+            }
+            let at = format!("{name}'s greeting ended (fighting.md 7a)");
+            self.world.fight_note(&name, format!("{at}: controls on; the music {}", crate::tower_skeleton::MUSIC));
+            for line in ["handsOff 0".to_string(), format!("KQMusic::push {}", crate::tower_skeleton::MUSIC)] {
+                let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+                self.world.note(format!("{at}: {line}"));
+                if ScriptHost::world_command(&mut self.world, &words, &at).is_none() {
+                    self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
+                }
+            }
+        }
+    }
+
     /// T-3: the lines the world queued for a tower skeleton's fall, as
     /// script commands.
     fn run_tower_lines(&mut self) {
@@ -5309,6 +5374,7 @@ impl Active {
     pub fn update(&mut self) {
         let now = self.world.now();
         self.run_tower_lines();
+        self.tower_greeting_step();
         self.handle_due(now);
         self.world.characters_due(now);
         self.talk_step(now);
@@ -5729,6 +5795,11 @@ impl Active {
             let line = format!("TalkComplete {} to {}{from}: {line}", e.data.join(" "), e.target);
             self.world.talk.log.push(format!("t {:8.3}: {line}", self.world.now()));
             self.world.note(line);
+            return;
+        }
+        // T-4a (fighting.md 7a): the tower skeleton hears Connor's state
+        // changes itself (it has no script).
+        if e.kind == "StateChange" && self.tower_hears(&e, &from) {
             return;
         }
         // characters.md rule 15 (Q156): `$3` who changed, `$4` old, `$5` new.
@@ -7611,6 +7682,34 @@ endif
         let ai = c.ai.as_mut().unwrap();
         (ai.settings.alarm_radius, ai.settings.attack_dist, ai.settings.home_radius, ai.settings.chase_radius) = (4000.0, 1500.0, 3000.0, 6000.0);
         a
+    }
+
+    #[test]
+    fn the_tower_skeleton_greets_connor_once_on_a_rope_and_hears_a_ranged_weapon() {
+        // fighting.md 7a (T-4a).
+        let mut a = fighter();
+        let name = a.world.anims[0].player.name.clone();
+        a.world.anims[0].character.as_mut().unwrap().tower = Some(crate::tower_skeleton::TowerSkeleton::new(Some(5000.0), None, None, 0.0));
+        let tell = |a: &mut Active, old: &str, new: &str| {
+            let now = a.world.now();
+            a.world.queue.send(now, 0.0, &name, "StateChange", &["Connor".into(), old.into(), new.into()], "test");
+            a.update();
+        };
+        tell(&mut a, "2", "4096");
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("Connor goes on a rope the first time: the greeting"), "{log}");
+        assert!(a.world.log.iter().any(|l| l.contains("speak") && l.contains("2000 16 0 18")), "{:?}", a.world.log);
+        // Its line is not said in this test world: the greeting ends at once.
+        a.update();
+        assert!(a.world.fight_log.join("\n").contains("greeting ended (fighting.md 7a): controls on; the music mtower.aud"));
+        tell(&mut a, "2", "4096");
+        assert_eq!(a.world.fight_log.iter().filter(|l| l.contains("the greeting")).count(), 1, "only once");
+        // A swap ending with a ranged weapon ready; one ending with none: nothing.
+        a.world.weapon_mode = crate::weapons::WeaponMode::Ranged;
+        tell(&mut a, "32", "2");
+        a.world.weapon_mode = crate::weapons::WeaponMode::None;
+        tell(&mut a, "32", "2");
+        assert_eq!(a.world.fight_log.iter().filter(|l| l.contains("readies a ranged weapon")).count(), 1);
     }
 
     #[test]

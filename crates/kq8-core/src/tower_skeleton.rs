@@ -48,6 +48,15 @@ pub const LAND_BACK: f32 = 1400.0;
 pub const CUE50_AFTER_FALLEND: f64 = 3.0;
 /// The script the dropped item gets at the end.
 pub const DROP_SCRIPT: &str = "chainmal.cs";
+/// T-4a (7a): Connor's state numbers it reacts to (`characters.md` rule
+/// 16): the rope, and a weapon swap.
+pub const CONNOR_ROPE_STATE: &str = "4096";
+pub const CONNOR_SWAP_STATE: &str = "32";
+/// Its lines (2000.msg noun, verb, case): the greeting, the ranged weapon.
+pub const GREETING: (u8, u8, u8) = (16, 0, 18);
+pub const RANGED_LINE: (u8, u8, u8) = (16, 0, 102);
+/// The music the greeting starts.
+pub const MUSIC: &str = "mtower.aud";
 
 /// Where its fall is (7a "Dying"): the movement playing, or the wait for
 /// the second Cue 50.
@@ -111,6 +120,10 @@ pub struct TowerSkeleton {
     pub fall_ground: f32,
     pub cue50s: u8,
     pub dropped: Option<String>,
+    /// T-4a: `bGreetedConnor` (the greeting is said once), and the
+    /// greeting's line is being said (controls off until it ends).
+    pub greeted: bool,
+    pub greeting: bool,
 }
 
 impl TowerSkeleton {
@@ -127,6 +140,8 @@ impl TowerSkeleton {
             fall_ground: 0.0,
             cue50s: 0,
             dropped: None,
+            greeted: false,
+            greeting: false,
         }
     }
 }

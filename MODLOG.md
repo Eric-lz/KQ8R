@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-4a: the tower skeleton's greeting and its crossbow line
+
+**Changed:** Core `tower_skeleton.rs` (its lines, Connor's state numbers, the music; `greeted`, `greeting`), `active.rs` (`tower_hears`: a `StateChange` to the skeleton is handled by the program; `tower_greeting_step`: the greeting's end). 1 unit test. DESIGN T-4a. Provenance.
+**Why:** The user's choice: T-4's two lines now, the rest (the greeting's camera, what sends Cue 201) after Q195. `fighting.md` 7a.
+**Tested how:** `cargo test --workspace` (all pass, 572 in core); clippy: the same 2 warnings. `kq8-viewer --world DeadCity --sound off --no-ai --frames 2000 --command "KQMonster::stateChangeNotify Skeltowr Connor",25 --command "give SmCrossbow 1",30 --command "KQConner::setDoMode 1",40`; `fight.log`, `talk.log`. The greeting (Connor on a rope) by the unit test only: commands can't put him on a rope.
+**Result:** Update 41 "StateChange Connor 2 32: nothing"; 57 "StateChange Connor 32 2: Connor readies a ranged weapon: its line"; the skeleton turns to him and says 2000/16/0/102. Unit test: the greeting once (16/0/18, controls off), then controls on and `KQMusic::push mtower.aud` when its line ends; a second rope climb: no greeting; a swap ending with no weapon: no line.
+**Still broken / not tested:** **Not played by hand.** The greeting in a run (needs the rope). Its camera on the skeleton: not built (Q195 c).
+**Next:** K (characters made while playing).
+
 ## 2026-10-31 T-3 check: the skeleton shatters in mid-air (Q196); `shape-parts` prints one frame
 
 **Changed:** CLI `shape_parts.rs` / `main.rs`: `kq8 shape-parts <file> [seq]` prints only that sequence. QUESTIONS (new Q196). No game code.

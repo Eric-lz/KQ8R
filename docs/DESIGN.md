@@ -3559,6 +3559,14 @@ per step:
   readings** (logged): "behind" = its own +Y, "its side" = its own +X;
   the first shot looks at the point 0.9 of the way from the camera to
   it; the second Cue 50 brings the camera back with `follow Connor`.
+- **T-4a (built 2026-10-31, the user's choice: the lines now, the rest
+  after Q195):** a `StateChange` from Connor to the skeleton (it has no
+  script) is handled by the program: the first time his state becomes
+  the rope (4096): controls off, it says 16/0/18; when its line ends,
+  controls on and `KQMusic::push mtower.aud` (ours: the push; the trap's
+  `Off` pops it). A weapon swap (32) that ends with a ranged weapon
+  ready: 16/0/102 (ours: "readies" read as the swap's end). Not built:
+  the greeting's camera on it (Q195 c).
 - **T-4: what it hears and says**: the greeting the first time Connor
   climbs a rope (controls off, camera on it, line 16/0/18, then the
   music `mtower.aud`), the line when he readies a ranged weapon

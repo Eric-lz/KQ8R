@@ -4012,3 +4012,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `die2` ends: on the ground 1,400 behind; drops what it carries; `fallend` | 7a step 4 | update 551: `INVITEM_ChainMailShirt` thrown |
 | `fallend` ends: Cue 50 3 s later; first Cue 50: the scream's second part; second: camera back to Connor, controls on, the dropped item gets `chainmal.cs`, the ordinary finish (rule 32) | 7a steps 2, 5; **ours**: "back behind Connor" = `KQCamera::follow Connor` | update 603: experience 4000, `chainmal.cs` |
 | The ground heights: a line straight down against the drawn ground and the buildings | **ours** | — |
+
+## T-4a 2026-10-31: the tower skeleton's lines — core `tower_skeleton.rs`, `active.rs` (`tower_hears`, `tower_greeting_step`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| It hears Connor's state changes (`towSklTp.cs` asks); the first time he starts climbing a rope: controls off, line 2000/16/0/18; when it ends, controls on and the music `mtower.aud` | `fighting.md` 7a | unit test `the_tower_skeleton_greets_connor_once_on_a_rope_and_hears_a_ranged_weapon` |
+| Connor readies a ranged weapon: line 2000/16/0/102 | `fighting.md` 7a; **ours**: "readies" = a swap (32) ending with the ranged mode | `fight.log` update 57 "Connor readies a ranged weapon: its line"; `talk.log` 16 0 102 |
+| The music started with `KQMusic::push` | **ours** (the trap's `Off` pops it) | unit test |
+| Not built: the greeting's camera on it | Q195 c | — |
