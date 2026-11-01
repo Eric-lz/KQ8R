@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-3 check: the skeleton shatters in mid-air (Q196); `shape-parts` prints one frame
+
+**Changed:** CLI `shape_parts.rs` / `main.rs`: `kq8 shape-parts <file> [seq]` prints only that sequence. QUESTIONS (new Q196). No game code.
+**Why:** The user's look at T-3: in the last shot the skeleton never reaches the ground and explodes in mid-air; in the original it reaches the ground. The note's step 3 height is marked "not sure".
+**Tested how:** `cargo test -p kq8-cli`. `kq8 shape-parts deadcity/resource/skcmdie.kqs` (frames 0, 47, 52), `skcmdiex.kqs` (0, 24), `skcmrcfl.kqs`; the steps from `viewer.log`.
+**Result:** `die2`'s steps add up to 0: it has no fall of its own; the fall is inside `die` (body 5,472 down, 1,352 back by frame 52). `die2` starts with the body in exactly `die`'s last pose (the same matrix) at (107, 0, −471): for the picture to carry on, the object would move about 5,000 **down from its tower spot** and 1,352 back, where we (as the note reads) put it 5,000 above the ground and 600 back, so it shatters about 4,500 up. Step 4 does not line up the same way (`fallend` starts from another pose). Not changed: written as Q196, since step 4 can't be worked out from the data.
+**Still broken / not tested:** The skeleton shatters in mid-air until Q196 is answered.
+**Next:** T-4's two lines, or K; Q196 for A.
+
 ## 2026-10-31 T-3: the tower skeleton's fall (cutscene)
 
 **Changed:** Core `tower_skeleton.rs` (the fall's stages and offsets, `own_axes`, `look_angles`, 1 unit test), `fight.rs` (`tower_fall_start`), `active.rs` (`tower_fall_next` on each stage's end, `tower_cue50`, `run_tower_lines`, the world's `tower_lines`), `character_ai.rs` (the ground height 2,000 behind it, measured when it falls). DESIGN (T-3 as built, our readings). Provenance.

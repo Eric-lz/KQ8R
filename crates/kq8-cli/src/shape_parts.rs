@@ -3,14 +3,15 @@
 //! first and last frame of every loop. Used to check where a dropped
 //! weapon or an `Inv` item is laid (`fighting.md` rule 31a,
 //! `anim-scripts.md` rule 16): the part named like the item, and the
-//! item model's own part `body`.
+//! item model's own part `body`. With a sequence number, only that
+//! sequence (to follow a body from one movement into the next).
 
 use std::process::ExitCode;
 
 use kq8_data::shape::Shape;
 use kq8_data::GameDir;
 
-pub fn run(game: &GameDir, file: &str) -> ExitCode {
+pub fn run(game: &GameDir, file: &str, only: Option<usize>) -> ExitCode {
     let bytes = match crate::source::load(game, file) {
         Ok(b) => b,
         Err(e) => {
@@ -33,6 +34,9 @@ pub fn run(game: &GameDir, file: &str) -> ExitCode {
         let mut frames = vec![first];
         if count > 1 {
             frames.push(first + count - 1);
+        }
+        if let Some(n) = only {
+            frames = vec![n];
         }
         for seq in frames {
             println!("  sequence {seq}:");

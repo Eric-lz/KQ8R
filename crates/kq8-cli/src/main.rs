@@ -6,7 +6,7 @@
 //!   kq8 bitmap-verify [--game DIR]
 //!   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
 //!   kq8 shape-verify [--game DIR]
-//!   kq8 shape-parts <file> [--game DIR]   (a model's named parts per loop)
+//!   kq8 shape-parts <file> [seq] [--game DIR]   (a model's named parts per loop)
 //!   kq8 terrain-verify [--game DIR]
 //!   kq8 lightmap-verify [--game DIR]
 //!   kq8 lighting-verify [--game DIR]
@@ -58,7 +58,7 @@ const USAGE: &str = "usage:
   kq8 bitmap-verify [--game DIR]
   kq8 bitmap-png <file> [--palette <file>] [--game DIR]
   kq8 shape-verify [--game DIR]
-  kq8 shape-parts <file> [--game DIR]
+  kq8 shape-parts <file> [seq] [--game DIR]
   kq8 terrain-verify [--game DIR]
   kq8 lightmap-verify [--game DIR]
   kq8 lighting-verify [--game DIR]
@@ -113,7 +113,14 @@ fn main() -> ExitCode {
         (Some("bitmap-verify"), []) => bitmap_verify::run(&game),
         (Some("bitmap-png"), [image]) => bitmap_png::run(&game, image, palette.as_deref()),
         (Some("shape-verify"), []) => shape_verify::run(&game),
-        (Some("shape-parts"), [file]) => shape_parts::run(&game, file),
+        (Some("shape-parts"), [file]) => shape_parts::run(&game, file, None),
+        (Some("shape-parts"), [file, seq]) => match seq.parse::<usize>() {
+            Ok(n) => shape_parts::run(&game, file, Some(n)),
+            Err(_) => {
+                eprintln!("error: shape-parts: '{seq}' is not a sequence number");
+                ExitCode::FAILURE
+            }
+        },
         (Some("terrain-verify"), []) => terrain_verify::run(&game),
         (Some("lightmap-verify"), []) => lightmap_verify::run(&game),
         (Some("lighting-verify"), []) => lighting_verify::run(&game),
