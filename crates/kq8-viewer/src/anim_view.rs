@@ -68,6 +68,8 @@ struct Playing {
     position: [f32; 3],
     /// Smooth animation (S-5): its place between the last two updates.
     glide: crate::smooth_view::Glide,
+    /// T-2c check: drawn frames still to log after a play-once movement.
+    drawn_once_trace: u8,
     movements: Vec<DrawnMovement>,
     body: Entity,
     /// (movement, frame) shown.
@@ -206,6 +208,7 @@ impl AnimSim {
             source: Source::Core(index),
             script: r.script.clone(),
             glide: Default::default(),
+            drawn_once_trace: 0,
             rotation: placement.rotation,
             position: placement.position,
             movements,
@@ -645,6 +648,7 @@ pub fn spawn_animated(
             source,
             script: a.script.clone(),
             glide: Default::default(),
+            drawn_once_trace: 0,
             rotation,
             position: p.position,
             movements: drawn,
@@ -969,9 +973,13 @@ pub fn anim_draw(
         // Smooth animation (S-4): the frame and how far toward the next.
         let (frame, mix) = crate::smooth_view::frame_of(player, ahead);
         let frame = frame.min(drawn.frames.saturating_sub(1));
-        // A character's repeating movement moves its place, not the
-        // drawing (character-movement.md rule 1; M5 5a-2).
-        let loop_moves_base = player.loops_move_base && player.movement().is_some_and(|m| m.repeat);
+        // A character's movement moves its place, not the drawing
+        // (character-movement.md rule 1; M5 5a-2; play-once ones too since
+        // T-2b, T-2d: the drawing still added theirs, so twice).
+        let loop_moves_base = player.loops_move_base;
+        // T-2c check: a character's play-once movement with steps.
+        let once = player.loops_move_base && player.movement().is_some_and(|m| !m.repeat) && !drawn.steps.is_empty();
+        let once_name = if once || p.drawn_once_trace > 0 { player.movement_name().to_string() } else { String::new() };
         // Its place may have changed (a script's `move`, objects.md Q20 d;
         // core keeps it): the body follows (M4 4d-2).
         let base = player.base;
@@ -1009,6 +1017,7 @@ pub fn anim_draw(
         if smooth && mix > 0 && frame + 1 < drawn.steps.len() {
             pose = kq8_core::door::mix_transform(&pose, &pose_at_frame(&drawn.steps, frame + 1), mix as f32 / 255.0);
         }
+        let added = pose.p;
         if loop_moves_base {
             pose.p = [0.0; 3];
         }
@@ -1016,6 +1025,29 @@ pub fn anim_draw(
         if moved || smooth || !drawn.steps.is_empty() || p.movements.iter().any(|m| !m.steps.is_empty()) {
             let place = p.glide.drawn(update, kq8_core::collide::Placement { rotation: p.rotation, position: p.position }, a);
             let (m, at) = combine(&pose, &place.rotation, place.position);
+            // T-2c check (the user's report of a jump): a character's play-
+            // once movement with steps, per drawn frame: its place, the frame,
+            // the steps the drawing adds, and where the model is drawn.
+            if once || p.drawn_once_trace > 0 {
+                p.drawn_once_trace = if once { 5 } else { p.drawn_once_trace - 1 };
+                if let Some(log) = sim.characters.as_mut() {
+                    log.detail(format!(
+                        "update {update} +{a:.2}: {}: drawn: '{}' frame {frame} mix {mix}; place ({:.0}, {:.0}, {:.0}); steps added by the drawing ({:.0}, {:.0}, {:.0}){}; model at ({:.0}, {:.0}, {:.0})",
+                        p.name,
+                        once_name,
+                        place.position[0],
+                        place.position[1],
+                        place.position[2],
+                        added[0],
+                        added[1],
+                        added[2],
+                        if loop_moves_base { " (dropped: its place moves)" } else { "" },
+                        at[0],
+                        at[1],
+                        at[2]
+                    ));
+                }
+            }
             if let Ok(mut t) = transforms.get_mut(p.body) {
                 *t = bevy_transform_from(m, at);
             }

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-2d: the drawing no longer adds a play-once movement's steps (they were counted twice)
+
+**Changed:** Viewer `anim_view.rs`: a character's drawn pose leaves out the steps of every movement (was: repeating ones only), as core `named_anim.rs` does since T-2b; a log line per drawn frame of a character's play-once movement with steps (its place, the frame, the steps, where the model is drawn), in `characters.log`.
+**Why:** The user: after T-2c the skeleton still jumped forward a little at the end of its stagger. Measured instead of guessed ("log, don't look"): the viewer had its own copy of the old rule, so during `birth` and `reactback` it drew the steps on top of a place that already moved by them (`birth` frame 38: place y 123,549, model drawn at 123,046, 504 too far), and the extra vanished when the movement ended.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. The T-2b run (`reactback` at update 165) with the new trace; `characters.log`.
+**Result:** Model = place on every drawn frame (`birth`: 123,266 at frame 59 both; `reactback` frame 11: 125,444 both; `Stop` then at 125,434: the stagger's last frame's own step, entered in its last update). Its `birth` now really moves it 787 back on the tower (it was drawn twice that far before).
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** The user's look; T-3 (the fall cutscene).
+
 ## 2026-10-31 T-2c: a play-once movement's last frames move the character too
 
 **Changed:** Core `character.rs` (`movement_step`): the steps of the frames entered are applied also in the update where the movement ends and the next one starts. DESIGN unchanged (part of T-2b).
