@@ -988,6 +988,10 @@ pub struct WorldState {
     /// Bolts in the air (M5 5c-9), and how many were shot (their names).
     pub bolts: Vec<crate::fight::Bolt>,
     pub bolts_shot: u64,
+    /// U-9b (`ranged-weapons.md` 8c-8d): this update's thrown-rock moves
+    /// (for the traps) and landings (for their `Die` script).
+    pub rock_moves: Vec<(String, [f32; 3], [f32; 3])>,
+    pub rock_landings: Vec<(String, [f32; 3], Option<String>)>,
     /// Where Connor was at the last update (his speed for the aim, rule
     /// 36).
     pub connor_was: Option<[f32; 3]>,
@@ -4078,6 +4082,8 @@ impl Active {
                 projectiles: Default::default(),
                 bolts: Vec::new(),
                 bolts_shot: 0,
+                rock_moves: Vec::new(),
+                rock_landings: Vec::new(),
                 connor_was: None,
                 conv_infos: Vec::new(),
                 conversation: None,
@@ -4243,6 +4249,34 @@ impl Active {
             }
         }
         true
+    }
+
+    /// U-9b (`ranged-weapons.md` 8d, `traps.md` 8a): after the bolts'
+    /// step, each thrown rock's move is shown to the traps (type 1: the
+    /// plates' traps get `On`; a rock that dies inside never leaves); each
+    /// landing runs its `Die` script's lines (`rockHit.cs`: `getLoc` and
+    /// `dropItem Connor INVITEM_Rock` at the landing point).
+    pub fn rocks_after_flight(&mut self) {
+        use crate::collide::BallStack;
+        let point = BallStack { radius: 0.0, heights: vec![0.0] };
+        for (name, from, to) in std::mem::take(&mut self.world.rock_moves) {
+            let v = Visitor { name: &name, collision_type: kq8_data::characters::PROJECTILE_TYPE, from, position: to, min: [0.0; 3], max: [0.0; 3], balls: &point };
+            for call in self.traps_check(&v, false) {
+                self.world.fight_note("Connor", format!("{name}: {call} (traps.md 8a)"));
+            }
+        }
+        for (name, p, script) in std::mem::take(&mut self.world.rock_landings) {
+            let at = format!("{name} Die ({})", script.as_deref().unwrap_or("no script"));
+            if script.as_deref().is_some_and(|s| s.eq_ignore_ascii_case("rockHit.cs")) {
+                // Ours: its two lines run here, with the landing point as
+                // `$KQObject::loc` (the rock is no object our getLoc finds).
+                self.world.fight_note("Connor", format!("{at}: KQMonster::dropItem Connor {} at the landing point (ranged-weapons.md 8f; rockHit.cs's lines, ours)", crate::fight::ROCK_ITEM));
+                let line = format!("KQMonster::dropItem Connor {} {:.0} {:.0} {:.0}", crate::fight::ROCK_ITEM, p[0], p[1], p[2]);
+                self.run_lines(&[line], &at);
+            } else {
+                self.world.fight_note("Connor", format!("{at}: not rockHit.cs: nothing run (ours)"));
+            }
+        }
     }
 
     /// U-7 (`water.md` "Liquid damage", Q191): after Connor's move, the
@@ -6939,6 +6973,48 @@ endif
         let log = a.world.fight_log.join("\n");
         assert!(log.contains("spirit trap spirtp1 (Connor came in while a spirit is passing): loss = whole part of (level 5 x 0.2 x 10) = 10; below 1 % of maximum 50: set to whole part of (level x 0.1) = 0: health 3 -> 0"), "{log}");
         assert!(!log.contains("first hit by a character"), "not by a character (Q188 c): {log}");
+    }
+
+    #[test]
+    fn a_thrown_rock_flies_its_arc_and_keeps_a_plate_down() {
+        // ranged-weapons.md 8c-8d, traps.md 8a (U-9b): Dead City's plates.
+        use crate::trap::TrapSettings;
+        let mut a = fighter();
+        a.set_connor_stats(ConnorStats { stats: Stats([50, 10, 7, 0, 0]), level: 5 });
+        a.add_traps([Trap::new(TrapSettings {
+            name: "triptrp2".into(),
+            position: [0.0, 2000.0, 0.0],
+            min: [-250.0, -250.0, 0.0],
+            max: [250.0, 250.0, 475.0],
+            script: None,
+            mask: 519,
+            trap_type: 0,
+            inner_percent: None,
+            lookup_call: false,
+            spirit_damage: None,
+        })]);
+        let text = b"[Rock]\nclassType=KQProjectile\nshapeName=rok.kqs\nvelocity=2500\nmaxDistance=2500\nmeshName=rock\nscript=rockHit.cs\nparabola=1\npeakHeightOffset=500\nupVelocity=2500\n";
+        let keys = kq8_data::characters::ProjectileKeys::from_section(&kq8_data::kq_text::parse(text)[0]).unwrap();
+        assert!(keys.parabola && keys.peak_height_offset == 500.0 && keys.script.as_deref() == Some("rockHit.cs"));
+        // Facing +y (heading pi), Connor's feet at the origin.
+        a.world.launch_rock("prrock.kq", &keys, [0.0; 3], std::f32::consts::PI, [0.0, 2000.0, 0.0]);
+        let b = &a.world.bolts[0];
+        let r = b.rock.as_ref().unwrap();
+        assert!((b.position[2] - 1349.0).abs() < 1.0, "starts 500 below the hand: {:?}", b.position);
+        assert!((r.range - 1777.0).abs() < 1.0, "{}", r.range);
+        assert!((r.at(r.range / 3.0)[2] - 1849.0).abs() < 1.0, "the top is the hand a third of the way");
+        let mut n = 0;
+        while !a.world.bolts.is_empty() && n < 40 {
+            a.world.bolts_step(&FlatGround, &[], &[]);
+            a.rocks_after_flight();
+            n += 1;
+        }
+        let log = a.world.fight_log.join("\n");
+        assert!(a.world.bolts.is_empty(), "{log}");
+        assert!(log.contains("triptrp2 On") || log.contains("On rock"), "the plate's trap gets On: {log}");
+        assert!(log.contains("reaches the floor grid"), "{log}");
+        assert_eq!(a.world.traps[0].inside.len(), 1, "it never leaves: {log}");
+        assert!(!log.contains(" Off "), "{log}");
     }
 
     #[test]

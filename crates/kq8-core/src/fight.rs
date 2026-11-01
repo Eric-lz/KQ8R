@@ -336,6 +336,8 @@ pub struct Bolt {
     /// Azriel's Hammer (a `KQHammer` file): it flies back instead of
     /// being removed (`azriel-hammer.md` rules 7–9; M6 6b-2).
     pub hammer: Option<HammerFlight>,
+    /// A thrown rock (`ranged-weapons.md` 8c, U-9b): its arc.
+    pub rock: Option<RockFlight>,
 }
 
 /// Azriel's Hammer in flight (`azriel-hammer.md` rules 6–9).
@@ -361,6 +363,56 @@ pub fn hammer_damage(modifier: i64, ranged: i64, min: i64, max: i64) -> i64 {
 pub const HAMMER_LEVER_OBJECTS: [&str; 2] = ["lever1", "tmblrcyl"];
 /// The object whose script that is.
 pub const HAMMER_LEVER: &str = "lever1";
+
+/// `ranged-weapons.md` 8c (U-9b): where the rock leaves the hand at
+/// `throw`'s `do` frame (27): ahead of his feet and above them (data,
+/// `C_rktoss.kqs` part `rock`).
+pub const ROCK_HAND: [f32; 2] = [223.0, 1849.0];
+/// 8c: the straight drop's pull (units/s²). **Not sure** (the note: built
+/// on a value the program never sets; "roughly 8,000").
+pub const ROCK_DROP_PULL: f32 = 8000.0;
+/// 8c: a face whose normal z is below this is a side.
+pub const ROCK_SIDE_NZ: f32 = 0.707;
+/// The rock item a landing lays (`rockHit.cs`).
+pub const ROCK_ITEM: &str = "INVITEM_Rock";
+
+/// `ranged-weapons.md` 8c (U-9b): a thrown rock's flight (`parabola=1`):
+/// distance T along a fixed heading from the start point; its height two
+/// quarter-ellipses topping at the hand a third of the way.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RockFlight {
+    pub start: [f32; 3],
+    /// The fixed horizontal heading (unit length).
+    pub dir: [f32; 2],
+    /// M: the smaller of `maxDistance` and the horizontal distance to the
+    /// aim.
+    pub range: f32,
+    pub flown: f32,
+    pub up_speed: f32,
+    pub peak: f32,
+    /// Dropping straight down at this speed (after a side touch or the
+    /// range's end).
+    pub falling: Option<f32>,
+    pub script: Option<String>,
+}
+
+impl RockFlight {
+    /// The position after `t` along the way.
+    pub fn at(&self, t: f32) -> [f32; 3] {
+        let third = self.range / 3.0;
+        let hand = ROCK_HAND[1];
+        let big = self.peak + hand;
+        let ellipse = |u: f32| (1.0 - u * u).max(0.0).sqrt();
+        let h = if third <= 0.0 {
+            big
+        } else if t <= third {
+            hand + self.peak * ellipse((third - t) / third)
+        } else {
+            big * ellipse((t - third) / (2.0 * third))
+        };
+        [self.start[0] + t * self.dir[0], self.start[1] + t * self.dir[1], self.start[2] - big + h]
+    }
+}
 
 impl Bolt {
     /// Rule 27: its model turned to its direction (its model's front is
@@ -1509,6 +1561,7 @@ impl crate::active::WorldState {
             balls,
             updates: 0,
             hammer,
+            rock: None,
         };
         let shape = match &bolt.balls {
             Some(b) => format!("box {:?} as {} ball(s) of radius {:.0} at {:?} above it (Q140 a)", p.bounds.unwrap_or_default(), b.heights.len(), b.radius, b.heights),
@@ -1568,6 +1621,13 @@ impl crate::active::WorldState {
         let bolts = std::mem::take(&mut self.bolts);
         let mut kept = Vec::new();
         for mut b in bolts {
+            // ranged-weapons.md 8c (U-9b): a thrown rock flies its arc.
+            if b.rock.is_some() {
+                if let Some(b) = self.rock_step(b, ground, buildings, objects) {
+                    kept.push(b);
+                }
+                continue;
+            }
             let back = b.hammer.as_ref().is_some_and(|h| h.back);
             let from = b.position;
             let step = b.speed * dt;
@@ -1689,6 +1749,167 @@ impl crate::active::WorldState {
                 }
             }
         }
+    }
+}
+
+impl crate::active::WorldState {
+    /// `ranged-weapons.md` 8b-8c (U-9b): Connor's `throw` reached its `do`
+    /// cue: the rock leaves his hand (223 ahead, 1,849 up) toward `aim`.
+    pub fn launch_rock(&mut self, file: &str, p: &kq8_data::characters::ProjectileKeys, feet: [f32; 3], heading: f32, aim: [f32; 3]) {
+        let facing = [heading.sin(), -heading.cos()];
+        let start = [feet[0] + ROCK_HAND[0] * facing[0], feet[1] + ROCK_HAND[0] * facing[1], feet[2] + ROCK_HAND[1]];
+        let (dx, dy) = (aim[0] - start[0], aim[1] - start[1]);
+        let flat = (dx * dx + dy * dy).sqrt();
+        let dir = if flat > 1e-3 { [dx / flat, dy / flat] } else { facing };
+        let rock = RockFlight { start, dir, range: flat.min(p.max_distance), flown: 0.0, up_speed: p.up_velocity.unwrap_or(p.speed), peak: p.peak_height_offset, falling: None, script: p.script.clone() };
+        let at = rock.at(0.0);
+        // 8c: its damage on a top touch: Connor's ranged damage, kind 4
+        // (treated as Normal, fighting.md rule 32a "Do not reproduce").
+        let damage = self.connor_stats.map_or(0, |c| c.stats.0[2]);
+        self.bolts_shot += 1;
+        let name = format!("rock{}", self.bolts_shot);
+        self.fight_note(
+            "Connor",
+            format!(
+                "throws {name} ({file}): from his hand ({:.0}, {:.0}, {:.0}) toward ({:.0}, {:.0}, {:.0}): range {:.0} (maxDistance {}), heading ({:.3}, {:.3}); starts at ({:.0}, {:.0}, {:.0}), 500 below the hand; damage {damage} on a top touch (ranged-weapons.md 8c)",
+                start[0], start[1], start[2], aim[0], aim[1], aim[2], rock.range, p.max_distance, dir[0], dir[1], at[0], at[1], at[2]
+            ),
+        );
+        self.bolts.push(Bolt {
+            name,
+            shooter: "Connor".to_string(),
+            shape: p.shape.clone(),
+            position: at,
+            direction: [dir[0], dir[1], 0.0],
+            heading: (-dir[0]).atan2(dir[1]),
+            pitch: 0.0,
+            speed: p.speed,
+            travelled: 0.0,
+            max: rock.range,
+            damage,
+            kind: HitKind::Normal,
+            mask: p.collider_mask,
+            balls: None,
+            updates: 0,
+            hammer: None,
+            rock: Some(rock),
+        });
+    }
+
+    /// 8c: the rock's first touch on the way `from` → `to`: (distance,
+    /// what, point, the face's normal z). The shooter is ignored.
+    fn rock_touch(&self, b: &Bolt, from: [f32; 3], to: [f32; 3], buildings: &[crate::collide::BuildingCollider], objects: &[crate::collide::BoxCollider]) -> Option<(f32, Touched, [f32; 3], f32)> {
+        use crate::collide::{BallStack, CylinderCollider, ObjectHit};
+        let point = BallStack { radius: 0.0, heights: vec![0.0] };
+        let dist = |p: [f32; 3]| ((p[0] - from[0]).powi(2) + (p[1] - from[1]).powi(2) + (p[2] - from[2]).powi(2)).sqrt();
+        let mut best: Option<(f32, Touched, [f32; 3], f32)> = None;
+        let mut keep = |p: [f32; 3], what: Touched, nz: f32| {
+            let d = dist(p);
+            if best.as_ref().is_none_or(|(bd, ..)| d < *bd) {
+                best = Some((d, what, p, nz));
+            }
+        };
+        if b.mask & 0x8 != 0 {
+            for w in buildings.iter().filter(|w| !self.is_switched_off(&w.name)) {
+                if let Some(c) = w.sweep(&point, from, to) {
+                    keep(c.touch, Touched::Building(w.name.clone()), c.normal[2]);
+                }
+            }
+        }
+        for o in objects.iter().filter(|o| o.kind.collision_type & b.mask != 0 && !self.is_switched_off(&o.name)) {
+            if let Some(ObjectHit::Contact(c)) = o.sweep(&point, from, to) {
+                keep(c.touch, Touched::Object(o.name.clone(), o.kind.collision_type), c.normal[2]);
+            }
+        }
+        for (j, a) in self.anims.iter().enumerate() {
+            let Some(c) = a.character.as_deref() else { continue };
+            if a.gone || c.unborn || c.collision_type & b.mask == 0 || !self.characters_solid.contains(&a.player.name.to_ascii_lowercase()) {
+                continue;
+            }
+            let Some((min, max)) = c.bounds else { continue };
+            let cyl = CylinderCollider::from_box(&a.player.name, a.player.base.position, min, max, c.collision_type, c.collision_mask);
+            if let Some(k) = cyl.sweep(&point, from, to).contact {
+                keep(k.touch, Touched::Character(j), k.normal[2]);
+            }
+        }
+        best
+    }
+
+    /// 8c (U-9b): one update of a thrown rock. Its move is kept for the
+    /// traps (8d); its end (the floor grid, a top touch) is kept for its
+    /// `Die` script. Returns it while it flies.
+    fn rock_step(&mut self, mut b: Bolt, ground: &dyn crate::connor_mover::GroundLookup, buildings: &[crate::collide::BuildingCollider], objects: &[crate::collide::BoxCollider]) -> Option<Bolt> {
+        let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
+        let from = b.position;
+        let mut r = b.rock.take()?;
+        let mut range_end = false;
+        let to = match r.falling {
+            Some(v) => {
+                let v = v + ROCK_DROP_PULL * dt;
+                r.falling = Some(v);
+                [from[0], from[1], from[2] - v * dt]
+            }
+            None => {
+                // 8c: `upVelocity` until a third of the way, then `velocity`.
+                let speed = if r.flown < r.range / 3.0 { r.up_speed } else { b.speed };
+                r.flown += speed * dt;
+                if r.flown >= r.range {
+                    r.flown = r.range;
+                    range_end = true;
+                }
+                r.at(r.flown)
+            }
+        };
+        b.updates += 1;
+        let head = format!("{} update {}", b.name, b.updates);
+        if let Some((_, what, p, nz)) = self.rock_touch(&b, from, to, buildings, objects) {
+            self.rock_moves.push((b.name.clone(), from, p));
+            b.position = p;
+            if nz < ROCK_SIDE_NZ {
+                // A side: it drops straight down from there.
+                let line = format!("{head}: touches {} on a side (normal z {nz:.2}) at ({:.0}, {:.0}, {:.0}): drops straight down (8c)", touched_name(self, &what), p[0], p[1], p[2]);
+                self.fight_note("Connor", line);
+                r.falling.get_or_insert(0.0);
+                b.rock = Some(r);
+                return Some(b);
+            }
+            // A top: an object is hit, then it dies at the touch point.
+            let at = format!("{head}: lands on top of {{}} at ({:.0}, {:.0}, {:.0}) (normal z {nz:.2}); dies there (8c)", p[0], p[1], p[2]);
+            if matches!(what, Touched::Building(_)) {
+                self.fight_note("Connor", at.replace("{}", &touched_name(self, &what)));
+            } else {
+                self.bolt_hits(&b, what, &at);
+            }
+            self.rock_landings.push((b.name.clone(), p, r.script.clone()));
+            return None;
+        }
+        if let Some(h) = ground.ground(to[0], to[1]).map(|(h, _)| h).filter(|h| to[2] <= *h) {
+            let p = [to[0], to[1], h];
+            self.rock_moves.push((b.name.clone(), from, p));
+            self.fight_note("Connor", format!("{head}: at ({:.0}, {:.0}, {:.0}) reaches the floor grid ({h:.0}): put on it, dies there (8c)", to[0], to[1], to[2]));
+            self.rock_landings.push((b.name.clone(), p, r.script.clone()));
+            return None;
+        }
+        self.rock_moves.push((b.name.clone(), from, to));
+        let mut line = format!("{head}: at ({:.0}, {:.0}, {:.0}), {:.0} of {:.0} along", to[0], to[1], to[2], r.flown, r.range);
+        if range_end && r.falling.is_none() {
+            r.falling = Some(0.0);
+            line.push_str("; the range's end: drops straight down (8c; the pull: not sure)");
+        }
+        self.fight_note("Connor", line);
+        b.position = to;
+        b.rock = Some(r);
+        Some(b)
+    }
+}
+
+/// For the log.
+fn touched_name(w: &crate::active::WorldState, t: &Touched) -> String {
+    match t {
+        Touched::Building(n) => format!("building {n}"),
+        Touched::Object(n, _) => format!("object {n}"),
+        Touched::Character(j) => w.anims.get(*j).map_or("a character".to_string(), |a| a.player.name.clone()),
+        Touched::Connor => "Connor".to_string(),
     }
 }
 

@@ -3876,6 +3876,15 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
   - **U-9b: the rock's flight** (8c, 8d): a bolt with the two-ellipse
     arc, the floor grid / side / top touches, its moves shown to the
     traps (type 1; never leaves), `Die` → `rockHit.cs`.
+    **Done** 2026-11-01 (a unit test; no launch in the viewer until
+    U-9c). As built: a `Bolt` with a `RockFlight`; the start point is the
+    data's fixed hand point of frame 27 (223 ahead, 1,849 up), not read
+    from the model per frame; a point (no ball); a touch on a side
+    drops it, on a top hits the thing (buildings: no damage) and ends
+    it; the floor grid ends it; each move goes to the traps as a type-1
+    visitor; at its end `rockHit.cs`'s `dropItem` line is run at the
+    landing point (ours: its `getLoc` can't find a bolt). The drop's
+    pull is the note's "roughly 8,000" (not sure).
   - **U-9c: the click and the `ThrowRock` state** (8a, 8b).
 - **U-10 (Q193): river controls** (`objects.md` "River controls").
 - **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).

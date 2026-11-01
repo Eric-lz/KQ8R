@@ -4555,7 +4555,8 @@ impl Placer<'_> {
         let mut ranged: Vec<(String, String)> = named
             .iter()
             .filter_map(|n| self.items.kind(n.strip_prefix("invitem_").unwrap_or(n)))
-            .filter(|t| t.category == "LongWeapon")
+            // U-9b (ranged-weapons.md 8b): the rock's `prrock.kq` too.
+            .filter(|t| t.category == "LongWeapon" || t.category == "Rock")
             .filter_map(|t| Some((t.name.clone(), t.extra.clone()?)))
             .collect();
         for t in self.items.types.types.iter().filter(|t| t.category == "LongWeapon") {

@@ -4123,3 +4123,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | One item taken from `who`'s stack; a new one (count 1) put still at the point; z −1 / −2 = floor / surface; "is not carrying" otherwise | `ranged-weapons.md` 8f (Q186 e) | unit test `drop_item_takes_one_from_the_stack_and_lays_a_new_one`; Dead City `doors.log` update 30 |
 | An emptied stack leaves the inventory | **ours** | the unit test |
+
+## U-9b 2026-11-01: the thrown rock's flight — core `fight.rs` (`RockFlight`, `launch_rock`, `rock_step`, `rock_touch`), `active.rs` (`rocks_after_flight`); data `characters.rs` (`parabola`, `peakHeightOffset`, `upVelocity`, `script`); viewer `load.rs` (the `Rock` item's file loaded)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Start: the `rock` part at `throw`'s `do` frame: 1,849 up, 223 ahead | `ranged-weapons.md` 8c (data `C_rktoss.kqs`) | unit test: first position z 1,349 (500 below the hand) |
+| M = min(`maxDistance`, horizontal distance to the aim); T grows by `upVelocity` to M/3, then `velocity`; height start − H + h, H = 500 + 1,849, the two quarter-ellipses | 8c | unit test: the top at M/3 is the hand height |
+| Ends on the floor grid; a side touch (normal z < 0.707) drops it straight down; a top touch hits an object (Connor's ranged damage) and ends it; past M: drops | 8c | unit test "reaches the floor grid" |
+| The drop's pull 8,000 | 8c ("not sure") | — |
+| The flying rock is a type-1 visitor for the traps; deleted at its end without a move, it never leaves (no `Off`) | 8d, `traps.md` 8a | unit test: `triptrp2` On, still inside |
+| `Die`: `rockHit.cs`'s `dropItem Connor INVITEM_Rock` at the landing point, run as a line | 8c "Die", 8f; **ours**: run directly (no object for its `getLoc`) | — |
+| Kind 4 treated as Normal | `fighting.md` rule 32a | — |

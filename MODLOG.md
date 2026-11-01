@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-9b: the thrown rock's flight and the plates (Q186 c, d)
+
+**Changed:** Core `fight.rs` (`RockFlight`: the two-ellipse arc; `launch_rock`; `rock_step`: floor grid, side and top touches, the drop; `rock_touch`), `active.rs` (`rocks_after_flight`: the rock's moves to the traps, its landing's `dropItem`; world lists). Data `characters.rs` (projectile keys `parabola`, `peakHeightOffset`, `upVelocity`, `script`). Viewer `load.rs` (`prrock.kq` read with Connor's projectile files). 1 unit test. DESIGN U-9b, provenance.
+**Why:** Study A's Q186: the rock's arc, what presses a plate and why it stays down.
+**Tested how:** `cargo test --workspace` (all pass). Unit test `a_thrown_rock_flies_its_arc_and_keeps_a_plate_down` (a plate trap 2,000 ahead, mask 519). `kq8-viewer --world DeadCity --sound off --frames 30`: `characters.log` "[Connor's INVITEM_Rock]: shoots prrock.kq … speed 2500, range 2500".
+**Result:** The rock starts at z 1,349 (500 below the hand), tops at the hand a third of the way, the plate's trap gets `On`, the rock reaches the floor grid inside the box and is never let go (no `Off`).
+**Still broken / not tested:** Nothing throws it yet in the viewer (U-9c). Not looked at: the rock's drawing in flight (it is drawn as a bolt with `rok.kqs`). The drop's pull is "not sure" in the note.
+**Next:** U-9c (the click with the rock and the `ThrowRock` state).
+
 ## 2026-11-01 U-9a: `KQMonster::dropItem` (the rock's landing, Q186 e)
 
 **Changed:** Core `active.rs` (`drop_item_command`), `script.rs` (removed from the stubs); viewer `load.rs` (types a script drops get their model at load). 1 unit test. DESIGN U-9 (split into U-9a–c), provenance.
