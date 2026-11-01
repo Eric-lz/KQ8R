@@ -4135,3 +4135,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The flying rock is a type-1 visitor for the traps; deleted at its end without a move, it never leaves (no `Off`) | 8d, `traps.md` 8a | unit test: `triptrp2` On, still inside |
 | `Die`: `rockHit.cs`'s `dropItem Connor INVITEM_Rock` at the landing point, run as a line | 8c "Die", 8f; **ours**: run directly (no object for its `getLoc`) | — |
 | Kind 4 treated as Normal | `fighting.md` rule 32a | — |
+
+## U-9c 2026-11-01: the rock click and the `ThrowRock` state — viewer `connor_rock.rs`, `connor_view.rs`, `connor_tile.rs`, `door_view.rs`, `load.rs`; core `active.rs` (`rock_click`, `box_distance`, `Request::ConnorThrowRock`, `rock_aim`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The aim: the click line's point; an accepting object nearer than `maxDistance` (nearest box point): its position, and `ConnorAction` with the rock at once; no walk, no remark; else a throw at the point; the rock leaves the pointer | `ranged-weapons.md` 8a | Dead City `fight.log` update 40 |
+| On entry: weapon mode remembered, `away`, empty hands, `throw`; `do` (0.7778) launches; after: the old mode back, `out`, Stop, Wait | 8b | `connor.log` updates 41–78 (empty hands), 81–139 (the crossbow out) |
+| Its state number 512 in `StateChange` | `characters.md` rule 16 | — |
+| The turn before the throw; a script's ThrowRock with no click: 2,000 ahead; the old mode asked back through `setDoMode` | **ours** | `fight.log` update 138 |

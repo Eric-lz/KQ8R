@@ -3714,6 +3714,9 @@ impl Placer<'_> {
                 wanted.insert((Some("padpush.anm".to_string()), m.to_string()));
             }
         }
+        // ranged-weapons.md 8b (U-9c): the ThrowRock state plays his own
+        // `throw` (Conner.anm movement 41) wherever a rock can be held.
+        wanted.insert((None, crate::connor_view::ROCK_THROW.to_string()));
         // tile-puzzle.md rule 23 (U-8b): the Scales state plays these
         // itself; a script line only names the state.
         let scales = self.all_scripts.iter().any(|(_, text)| text.lines().any(|l| {

@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-9c: the rock click and Connor's `ThrowRock` state (Q186 a, b)
+
+**Changed:** Viewer new `connor_rock.rs` (the state: turn to the aim, weapon away, `throw`, its `do` launches the rock, the old mode back); `connor_view.rs` (hooked in; state number 512; the `do` cue), `connor_tile.rs` (other states refused meanwhile), `door_view.rs` (the click with the rock in hand; the launches; the thrown rocks to the traps after the characters' step), `load.rs` (his own `throw` loaded). Core `active.rs` (`rock_click`, `box_distance`, `setState Connor ThrowRock` → `Request::ConnorThrowRock`, `rock_aim`). DESIGN U-9c, provenance.
+**Why:** Batch 2 `ThrowRock` (Dead City's plates; Swamp, Gnome, Temple 1), blocked until Q186.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --no-ai --frames 3000 --at 113992,93925,3.14 --item INVITEM_Rock --aim-point 113992,95925,25,40` (and again with `--command "KQConner::setDoMode 1",20` and the click at 80); `fight.log`, `connor.log`, `doors.log`.
+**Result:** Update 40 the click → thrown at the ground point (113961, 95962, 0) (the plate `trip2` has `colliderType=0`, so the line never picks it); 41 ThrowRock, turns; 42 `throw`; 70 `do`: rock1 leaves at (113989, 94148, 1349), tops at 1,846 a third of the way, 81 on the floor grid in `triptrp2`'s box: "triptrp2 On rock1", `rockHit.cs`'s drop lays NoName30 at (113961, 95962, 0), `trip2` plays `down`; 78 Wait. With the crossbow drawn: put away at the click, the rock at 129, at the end `setDoMode 1` readies it again (139).
+**Still broken / not tested:** **Not played by hand, not looked at**: the throw's look, the rock in flight, the laid rock. Not built: Swamp's `Tile2` throw (8e). An accepting object the click line can pick (not the plates) not tried.
+**Next:** U-10 (river controls), U-11 (the weeper's bolt).
+
 ## 2026-11-01 U-9b: the thrown rock's flight and the plates (Q186 c, d)
 
 **Changed:** Core `fight.rs` (`RockFlight`: the two-ellipse arc; `launch_rock`; `rock_step`: floor grid, side and top touches, the drop; `rock_touch`), `active.rs` (`rocks_after_flight`: the rock's moves to the traps, its landing's `dropItem`; world lists). Data `characters.rs` (projectile keys `parabola`, `peakHeightOffset`, `upVelocity`, `script`). Viewer `load.rs` (`prrock.kq` read with Connor's projectile files). 1 unit test. DESIGN U-9b, provenance.

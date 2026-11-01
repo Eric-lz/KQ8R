@@ -39,8 +39,11 @@ use crate::Shared;
 mod tile;
 #[path = "connor_scales.rs"]
 mod scales;
+#[path = "connor_rock.rs"]
+mod rock;
 pub use tile::{unlit_step, TileCall};
 pub use scales::{LIST as SCALES_LIST, MOVEMENTS as SCALES_MOVEMENTS};
+pub use rock::THROW as ROCK_THROW;
 
 /// One drawable movement: its loop for the walker and its number of frames.
 pub struct DrawnMovement {
@@ -195,6 +198,12 @@ pub struct ConnorSim {
     pub tile: Option<tile::TileRun>,
     /// The `Scales` state (`tile-puzzle.md` rules 23-26a, U-8b).
     pub scales: Option<scales::ScalesRun>,
+    /// The `ThrowRock` state (`ranged-weapons.md` 8b, U-9c); the rocks its
+    /// `do` cue launched (feet, heading, aim) and the weapon mode to ask
+    /// back at its end, both taken by `door_view`.
+    pub rock: Option<rock::RockRun>,
+    pub rock_launches: Vec<([f32; 3], f32, [f32; 3])>,
+    pub rock_rearm: Option<WeaponMode>,
     pub tile_calls: Vec<TileCall>,
     /// The lit stone changed (rule 10): the new one, for the drawing.
     pub tile_lit_changed: Option<Option<kq8_core::tile_puzzle::Cell>>,
@@ -838,6 +847,9 @@ pub fn spawn_connor(
         choice_calls: Vec::new(),
         tile: None,
         scales: None,
+        rock: None,
+        rock_launches: Vec::new(),
+        rock_rearm: None,
         tile_calls: Vec::new(),
         tile_lit_changed: None,
         walk_end: None,
@@ -1185,6 +1197,9 @@ impl ConnorSim {
         // stand-in: Tile's.
         if self.scales.is_some() {
             return TILE;
+        }
+        if self.rock.is_some() {
+            return THROW_ROCK;
         }
         match self.walker.mode {
             Mode::Free if self.walker.moving() => MOVE,
@@ -2317,7 +2332,12 @@ pub fn connor_step(
     if sim.scales.is_some() {
         jump = false;
     }
-    for l in choice_lines.into_iter().chain(tile_lines).chain(scales_lines) {
+    // ranged-weapons.md 8b (U-9c): the rock throw; no jumping meanwhile.
+    let rock_lines = sim.rock_step(&mut intent);
+    if sim.rock.is_some() {
+        jump = false;
+    }
+    for l in choice_lines.into_iter().chain(tile_lines).chain(scales_lines).chain(rock_lines) {
         let l = format!("connor update {}: {l}", sim.updates);
         shared.log.lock().unwrap().detail(&l);
         sim.log.detail(l);
@@ -2552,6 +2572,8 @@ pub fn connor_step(
                     }
                     None => "playsound without a file name; nothing".to_string(),
                 },
+                // ranged-weapons.md 8b (U-9c): the rock leaves.
+                "do" if sim.rock_do(s.played) => "the rock leaves his hand (ranged-weapons.md 8b)".to_string(),
                 // fighting.md rule 41 (M5 5c-5): his swing's hit test.
                 "do" if sim.swing.as_ref().is_some_and(|w| w.movement == s.played) => {
                     sim.do_cues.push(s.played.to_string());

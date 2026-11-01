@@ -161,6 +161,9 @@ pub enum Request {
     ConnorTile { at: String },
     /// `KQMonster::setState Connor Scales` (`tile-puzzle.md` rule 23, U-8b).
     ConnorScales { at: String },
+    /// `ThrowRock` (`ranged-weapons.md` 8a-8b, U-9c): toward `aim` (`None`:
+    /// a script asked with no rock click before it).
+    ConnorThrowRock { aim: Option<[f32; 3]>, at: String },
     /// `deadHallTeleport <from> <to>` (`tile-puzzle.md` rule 22): Connor
     /// and the camera moved by the two buildings' offset.
     HallTeleport { from: String, to: String, at: String },
@@ -868,6 +871,9 @@ pub struct WorldState {
     pub camera_at: Option<[f32; 3]>,
     /// U-7: when Connor's last `poison<n>.aud` played (game time).
     pub poison_sound_at: f64,
+    /// U-9c (`ranged-weapons.md` 8a): the aim a rock click on an
+    /// accepting object kept for its script's `setState Connor ThrowRock`.
+    pub rock_aim: Option<[f32; 3]>,
     /// His heading (the turn about z, as `move Connor … rz` sets it), set
     /// with `connor_at`: `getLoc Connor` gives it as his turn.
     pub connor_heading: f32,
@@ -1465,6 +1471,30 @@ impl WorldState {
                 "1".into()
             }
         }
+    }
+
+    /// From `p` to the nearest point of object `name`'s box (`click.rs`),
+    /// for the rock click (U-9c): objects, doors, chests, buildings'
+    /// clickables, characters; `None` without a box.
+    pub(crate) fn box_distance(&self, name: &str, p: [f32; 3]) -> Option<f32> {
+        use crate::click::distance_to_box;
+        if let Some(i) = self.object_index(name) {
+            let o = &self.objects[i];
+            return o.bounds.map(|(min, max)| distance_to_box(p, &o.player.placement(), min, max));
+        }
+        if let Some(i) = self.door_index(name) {
+            let d = &self.doors[i];
+            return d.bounds.map(|(min, max)| distance_to_box(p, &d.door.placement(), min, max));
+        }
+        if let Some(i) = self.chest_index(name) {
+            let c = &self.chests[i];
+            return c.bounds.map(|(min, max)| distance_to_box(p, &c.chest.placement(), min, max));
+        }
+        if let Some(j) = self.character_index(name) {
+            let a = &self.anims[j];
+            return a.character.as_ref()?.bounds.map(|(min, max)| distance_to_box(p, &a.player.placement(), min, max));
+        }
+        self.live_clickable(name).map(|i| &self.clickables[i]).map(|c| distance_to_box(p, &c.placement, c.min, c.max))
     }
 
     fn make_world_item(&mut self, kind: &str, quantity: i64, mut position: [f32; 3], angles: [f32; 3], at: &str) -> Result<String, String> {
@@ -2938,6 +2968,13 @@ impl WorldState {
                 self.note(format!("{at}: KQMonster::setState Connor Tile: handed to Connor (tile-puzzle.md rule 7)"));
                 self.requests.push(Request::ConnorTile { at: at.to_string() });
             }
+            [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("ThrowRock") => {
+                // ranged-weapons.md 8a-8b (U-9c): toward the aim the rock
+                // click kept (rockme.cs runs inside that click).
+                let aim = self.rock_aim.take();
+                self.note(format!("{at}: KQMonster::setState Connor ThrowRock: handed to Connor, aim {} (ranged-weapons.md 8b)", aim.map_or("none kept".to_string(), |a| format!("({:.0}, {:.0}, {:.0})", a[0], a[1], a[2]))));
+                self.requests.push(Request::ConnorThrowRock { aim, at: at.to_string() });
+            }
             [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Scales") => {
                 // tile-puzzle.md rule 23 (U-8b).
                 self.note(format!("{at}: KQMonster::setState Connor Scales: handed to Connor (tile-puzzle.md rule 23)"));
@@ -4040,6 +4077,7 @@ impl Active {
                 connor_at: None,
                 camera_at: None,
                 poison_sound_at: f64::NEG_INFINITY,
+                rock_aim: None,
                 connor_heading: 0.0,
                 connor_react: (None, None),
                 required_weapon_mode: (-1, None),
@@ -4249,6 +4287,47 @@ impl Active {
             }
         }
         true
+    }
+
+    /// U-9c (`ranged-weapons.md` 8a): a world click with the rock in hand.
+    /// `picked`: what the click line met first; `point`: where. An object
+    /// that accepts the rock and is nearer than the rock's `maxDistance`
+    /// (to the nearest point of its box) is aimed at (its position) and
+    /// gets "Connor used this item on you" at once (its script asks for
+    /// `ThrowRock`); otherwise he throws at the point. Either way the rock
+    /// leaves the pointer. Returns the log line.
+    pub fn rock_click(&mut self, picked: Option<&str>, point: [f32; 3], feet: [f32; 3]) -> String {
+        let Some(rock) = self.world.hand.take() else { return "no rock in hand: nothing".to_string() };
+        let kind = self.world.items.get(&rock).map(|o| o.kind.clone()).unwrap_or_default();
+        let kind_name = self.world.items.kind(&kind).map_or(kind.clone(), |t| t.name.clone());
+        let file = self.world.items.kind(&kind).and_then(|t| t.extra.clone()).unwrap_or_default();
+        let max = self.world.projectiles.get(&file.to_ascii_lowercase()).map_or(2500.0, |k| k.max_distance);
+        let head = format!("rock click with {rock} ({kind_name})");
+        if let Some(name) = picked {
+            let types = self.world.items.types.clone();
+            let accepts = self.world.accepts_of(name).takes(&kind_name, &types);
+            let reach = self.world.box_distance(name, feet);
+            if accepts {
+                match reach {
+                    Some(d) if d < max => {
+                        let aim = self.world.place_of(name).map_or(point, |p| p.position);
+                        self.world.rock_aim = Some(aim);
+                        let line = format!("{head}: {name} accepts it, {d:.0} away (under {max}): aimed at its position ({:.0}, {:.0}, {:.0}); ConnorAction {rock} {kind_name} to it (ranged-weapons.md 8a)", aim[0], aim[1], aim[2]);
+                        self.world.fight_note("Connor", line.clone());
+                        if !self.call_named(name, &["ConnorAction", &rock, &kind_name]) {
+                            self.world.rock_aim = None;
+                            self.world.fight_note("Connor", format!("{head}: {name} has no script: nothing more"));
+                        }
+                        return line;
+                    }
+                    d => self.world.fight_note("Connor", format!("{head}: {name} accepts it but is {} away (not under {max}): thrown at the point, no remark (8a step 3)", d.map_or("an unknown distance".to_string(), |d| format!("{d:.0}")))),
+                }
+            }
+        }
+        let line = format!("{head}: thrown at the clicked point ({:.0}, {:.0}, {:.0}){} (ranged-weapons.md 8a step 3)", point[0], point[1], point[2], picked.map_or(String::new(), |n| format!(" (the line met {n})")));
+        self.world.fight_note("Connor", line.clone());
+        self.world.requests.push(Request::ConnorThrowRock { aim: Some(point), at: head });
+        line
     }
 
     /// U-9b (`ranged-weapons.md` 8d, `traps.md` 8a): after the bolts'

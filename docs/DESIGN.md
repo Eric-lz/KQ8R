@@ -3885,7 +3885,22 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     visitor; at its end `rockHit.cs`'s `dropItem` line is run at the
     landing point (ours: its `getLoc` can't find a bolt). The drop's
     pull is the note's "roughly 8,000" (not sure).
-  - **U-9c: the click and the `ThrowRock` state** (8a, 8b).
+  - **U-9c: the click and the `ThrowRock` state** (8a, 8b). **Done**
+    2026-11-01 (logs). As built: a world click with a `Rock` item in
+    hand takes the point the click line meets (else the drawn ground,
+    else its end); a picked object that accepts the rock within its
+    `maxDistance` (to the nearest point of its box) is aimed at and gets
+    `ConnorAction` (its script's `setState Connor ThrowRock` uses that
+    aim), else he throws at the point. The state (viewer
+    `connor_rock.rs`): an automatic turn to the aim, a drawn weapon put
+    away (the core empties the ready weapon, as the Tile state), `throw`;
+    its `do` cue launches the rock (U-9b); at its end the old mode is
+    asked back with the scripts' `setDoMode`. Ours: the turn comes
+    before the throw (the note: it "runs on during the state"); a
+    script's `ThrowRock` with no rock click aims 2,000 ahead. Dead City's
+    plates (`colliderType=0`) are never picked by the click line, so a
+    click on one throws at the ground point under the pointer (lands on
+    the plate).
 - **U-10 (Q193): river controls** (`objects.md` "River controls").
 - **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).
 - Q184 and Q187 confirm what is built (no change), except where U-x

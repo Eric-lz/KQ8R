@@ -108,6 +108,9 @@ pub struct DoorSim {
     /// M6 6a-3), and the climb asked for (taken by `rope_view`).
     rope_clicks: Vec<String>,
     pub rope_asked: Option<String>,
+    /// U-9c (`ranged-weapons.md` 8a): world clicks with the rock in hand:
+    /// what the line met, where, how.
+    rock_clicks: Vec<(Option<String>, [f32; 3], String)>,
     /// `talk.log` (M4 4a-2); `None` if it could not be made.
     talk_log: Option<Log>,
     /// `conversation.log` (M4 4e-3); `None` if it could not be made.
@@ -994,7 +997,7 @@ pub fn spawn_doors(
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
     active.start();
-    let mut sim = DoorSim { active, spawns: Vec::new(), char_spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok(), rope_clicks: Vec::new(), rope_asked: None };
+    let mut sim = DoorSim { active, spawns: Vec::new(), char_spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok(), rope_clicks: Vec::new(), rope_asked: None, rock_clicks: Vec::new() };
     for line in sim.active.take_log() {
         sim.log.detail(line);
     }
@@ -1384,6 +1387,17 @@ pub fn trap_step(
                 ground_asks.drains.push((words, at.clone()));
                 format!("{at}: applied: matchHeights {words:?} queued for the ground")
             }
+            Request::ConnorThrowRock { aim, at } => {
+                // ranged-weapons.md 8b (U-9c): a drawn weapon is put away
+                // (its mode comes back at the end).
+                let had = sim.active.world.put_weapon_away(&at).map(|c| c.from);
+                let p = connor.mover.position;
+                let h = connor.walker.heading;
+                // Ours: a script's ThrowRock with no rock click: 2,000 ahead.
+                let aim = aim.unwrap_or([p[0] + 2000.0 * h.sin(), p[1] - 2000.0 * h.cos(), p[2]]);
+                let line = connor.enter_rock(aim, had, &at);
+                format!("{at}: applied: Connor {line}")
+            }
             Request::ConnorScales { at } => {
                 // tile-puzzle.md rule 23 (U-8b): a drawn weapon put away
                 // first, as for the Tile state.
@@ -1714,6 +1728,8 @@ pub fn character_gravity(
     let o = objects.as_ref().map_or(&[][..], |o| &o.0[..]);
     // M5 5a-4: sight and the active list, then the movers.
     sim.active.world.characters_ai(&lookup.0, b, o);
+    // U-9b: the thrown rocks' moves to the traps, their landings.
+    sim.active.rocks_after_flight();
     sim.active.world.characters_gravity(&lookup.0, b, o);
     // fighting.md rule 31a (C-2): the line tests of the weapons laid by a
     // death this update, then thrown-items.md (M5 5e-1): thrown items,
@@ -1810,6 +1826,11 @@ pub fn door_click_input(
     let walls = ClickBuildings { buildings: buildings.as_deref().map_or(&[][..], |b| &b.0[..]), active: &sim.active };
     let pick = sim.active.pick_line(origin, dir, &walls);
     let from = format!("update {updates}: {how}: line from ({:.0}, {:.0}, {:.0})", origin[0], origin[1], origin[2]);
+    // U-9c: how far along the line the pick met something.
+    let pick_t = match &pick {
+        Pick::Seen { t, .. } | Pick::Building { t, .. } => Some(*t),
+        Pick::Nothing => None,
+    };
     let (line, picked) = match pick {
         Pick::Seen { name, t } => (format!("{from} hits {name} first, at {t:.0} units (box)"), Some(name)),
         Pick::Building { name, t, behind } => {
@@ -1832,6 +1853,22 @@ pub fn door_click_input(
     if rope_held {
         let line = format!("{line}; the rope is in hand: the click starts the climb, whatever it meets (ropeandhook.md rule 10)");
         sim.rope_clicks.push(how.clone());
+        shared.log.lock().unwrap().summary(&line);
+        sim.log.detail(line);
+        return;
+    }
+    // ranged-weapons.md 8a (U-9c): with the rock in hand: the point under
+    // the pointer (the first thing the line meets, else the drawn ground,
+    // else the line's end).
+    let rock_held = w.hand.as_ref().and_then(|h| w.items.get(h)).and_then(|o| w.items.kind(&o.kind)).is_some_and(|t| t.category == "Rock");
+    if rock_held {
+        let far: [f32; 3] = std::array::from_fn(|k| origin[k] + dir[k] * kq8_core::active::CLICK_LINE_LENGTH);
+        let point = match pick_t {
+            Some(t) => std::array::from_fn(|k| origin[k] + dir[k] * t),
+            None => lookup.as_deref().and_then(|g| kq8_core::connor_mover::GroundLookup::drawn_line_hit(&g.0, origin, far)).unwrap_or(far),
+        };
+        let line = format!("{line}; the rock is in hand: a throw at ({:.0}, {:.0}, {:.0}) (ranged-weapons.md 8a)", point[0], point[1], point[2]);
+        sim.rock_clicks.push((picked.clone(), point, how.clone()));
         shared.log.lock().unwrap().summary(&line);
         sim.log.detail(line);
         return;
@@ -2143,6 +2180,20 @@ pub fn door_step(
             let what = format!("{m} at the cue's phase {phase:.4}; the hammer starts at his shoot offset, never the part (azriel-hammer.md rule 5, the user's check)");
             w.connor_shoot(c.mover.position, c.turn_matrix(), None, aim, &what);
         }
+        // ranged-weapons.md 8b-8c (U-9c): the rock leaves at `throw`'s
+        // `do`; at the end the old weapon mode is asked back.
+        for (feet, heading, aim) in std::mem::take(&mut c.rock_launches) {
+            let w = &mut sim.active.world;
+            let file = w.items.kind(kq8_core::fight::ROCK_ITEM).and_then(|t| t.extra.clone()).unwrap_or_default();
+            match w.projectiles.get(&file.to_ascii_lowercase()).cloned() {
+                Some(keys) => w.launch_rock(&file, &keys, feet, heading, aim),
+                None => w.fight_note("Connor", format!("ThrowRock: the rock's projectile file '{file}' was not loaded: no rock")),
+            }
+        }
+        if let Some(mode) = c.rock_rearm.take() {
+            let r = sim.active.test_command(&format!("KQConner::setDoMode {}", mode.number()), "ThrowRock's end");
+            sim.active.world.fight_note("Connor", format!("ThrowRock's end: KQConner::setDoMode {} ({r:?}): the old mode back (ranged-weapons.md 8b)", mode.number()));
+        }
         for (who, how) in std::mem::take(&mut sim.active.world.hammers_back) {
             let line = if who.eq_ignore_ascii_case(kq8_core::talk::CONNOR) { c.throw_caught(&how) } else { format!("{how}: thrown by {who}, not Connor: nothing") };
             sim.active.world.fight_note("Connor", line);
@@ -2188,6 +2239,16 @@ pub fn door_step(
             format!("world click with the rope ({how}): {rope} leaves the pointer; the camera aim test passes always (\"Do not reproduce\"); the rope state is asked for (rules 10-12)")
         };
         sim.active.world.rope_note(line);
+    }
+    // ranged-weapons.md 8a (U-9c): the rock clicks, as the rope's.
+    for (picked, point, how) in std::mem::take(&mut sim.rock_clicks) {
+        let line = match &connor {
+            _ if hands_off => format!("world click with the rock ({how}): ignored (handsOff)"),
+            _ if sim.active.world.connor_dying => format!("world click with the rock ({how}): ignored (Connor is dying or dead)"),
+            Some(c) => sim.active.rock_click(picked.as_deref(), point, c.mover.position),
+            None => format!("world click with the rock ({how}): no Connor"),
+        };
+        sim.active.world.fight_note("Connor", format!("{how}: {line}"));
     }
     for (name, _) in due {
         let line = format!("update {updates}: test --click: clicks {name}");
