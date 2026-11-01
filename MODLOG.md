@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-8a: animated objects are drawn from their movements, not `shapeName` (Q189)
+
+**Changed:** Viewer `load.rs`: a `KQAnimObject` with a movement list takes its current movement's model; its `shapeName` is not used (logged when it differs). DESIGN U-8a, provenance.
+**Why:** Study A's Q189: Dead City's scales name `shapeName` files that don't exist and were skipped, which blocked the scales puzzle (D-10b).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry|DeadCity --sound off --frames 30`, `viewer.log` compared with the run before the change.
+**Result:** Dead City: `scale`, `scalelt`, `scalert` load (models `sclf.kqs`, `sclfldsh.kqs`, `sclfrdsh.kqs`), boxes from `BOUNDS.KQ` `scale` / `scalelt` / `scalert` as the note gives. Animated objects: Daventry 148 → 166, Dead City 465 → 484: objects whose `shapeName` equals their movement's model were drawn still and now play their movements (Daventry's trees `tree16`–`tree20`, `girltree`, `Foam`; Dead City's tower flames, `skstatbs`, `skstattp`, `well2`, `sylphwtr`).
+**Still broken / not tested:** **Not looked at by eye**: please check that Daventry's trees and Dead City's tower flames now move as in the original. Classes built on `KQAnimObject` (doors?) unchanged.
+**Next:** U-8b (the `Scales` state).
+
 ## 2026-11-01 U-7: liquid damage for Connor (Q191)
 
 **Changed:** Core `water.rs` (the rules: timer, damage per update, kind, deep; `LiquidSample`), `connor_update.rs` / `connor_mover.rs` (his water test keeps what it saw after the move), `active.rs` (`connor_liquid`: the damage, the poison sound every 2.5 s), `fight.rs` (`hit_connor_full`: a hit from the ground plays no ouch). Data `envinfo.rs` (FIRE, ICE, ONTOP). Viewer `door_view.rs` (hands it over after his update; the ouch skipped), `connor_view.rs` (`hurt` with no ouch), `load.rs` (`world.cs`'s three timers read at load). 1 unit test. DESIGN U-7, provenance.

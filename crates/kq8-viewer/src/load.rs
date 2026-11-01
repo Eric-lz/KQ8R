@@ -3388,13 +3388,24 @@ impl Placer<'_> {
         // animation, shown at its start frame (objects.md "Animated
         // objects at load").
         let mut animation = None;
-        if p.shape.is_none() {
+        // objects.md "Animated objects at load" rule 3 (Q189, U-8a): a
+        // `KQAnimObject` never loads its `shapeName`; it is drawn from its
+        // current movement's model (Dead City's scales name files that
+        // don't exist).
+        let anim_object = p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQAnimObject"));
+        if p.shape.is_none() || anim_object {
             match kq8_data::objects::current_loop(&file, s) {
                 Ok(Some(c)) => {
+                    if let Some(old) = p.shape.as_deref().filter(|o| !o.eq_ignore_ascii_case(&c.shape)) {
+                        self.log.detail(format!("animated {label}[{}]: shapeName={old} not used, its movement's model {} instead (objects.md \"Animated objects at load\" rule 3)", p.name, c.shape));
+                    }
                     p.shape = Some(c.shape.clone());
                     animation = Some(c);
                 }
                 Ok(None) => {}
+                Err(e) if p.shape.is_some() => {
+                    self.log.detail(format!("animated {label}[{}]: animation lookup failed ({e}): its shapeName is drawn (ours)", p.name));
+                }
                 Err(e) => {
                     self.log.detail(format!("skip {label}[{}]: animation lookup failed: {e}", p.name));
                     *self.skipped_map(unused).entry("animation lookup failed".into()).or_default() += 1;

@@ -4096,3 +4096,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Kind Fire / Ice / Normal by the flags; the ordinary hit; no ouch, `poison<n>.aud` at most every 2.5 s | rule 7 | `doors.log` updates 12, 50 |
 | Which of `poison1`–`3`: a roll | **ours** | — |
 | The timers read from `world.cs`'s text at load (its `Init` is not run as a script by the viewer) | **ours** (as `MaxMonsters`) | `items.log` "terrain damage timers from world.cs" |
+
+## U-8a 2026-11-01: animated objects drawn from their movements — viewer `load.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| A `KQAnimObject` never loads its `shapeName`; it is drawn from its current movement's model | `objects.md` "Animated objects at load" rule 3 (Q189 a) | Dead City `viewer.log`: `scale`, `scalelt`, `scalert` loaded (were skipped) |
+| Box: current movement's model in `BOUNDS.KQ`, then its own name | rule 4 (Q189 b) | `viewer.log` "doors: [scalelt] box item289=scalelt (−2750, −590, −2175)..(−1725, 570, −2005)" |
+| Only the class `KQAnimObject`; a failed movement lookup keeps `shapeName` | **ours** | — |

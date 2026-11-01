@@ -3844,6 +3844,17 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
   (`objects.md` 3–5: don't skip them; box from the current movement's
   model, then the object's name); then D-10b, the `Scales` state
   (`tile-puzzle.md` 23–27, 26a).
+  - **U-8a done** 2026-11-01 (logs): a `KQAnimObject` with a movement
+    list is drawn from its current movement's model and its `shapeName`
+    is not used (only that class: the classes built on it are not named
+    in the data; ours). The three scales load with the boxes `scale`,
+    `scalelt`, `scalert`. Side effect, as the rule says: objects whose
+    `shapeName` equals their movement's model were drawn still and now
+    play their movements (Daventry's 17 trees `tree16`–`tree20`,
+    `girltree`, and `Foam`; Dead City's 11 tower flames, `skstatbs`,
+    `skstattp`, `well2`, `sylphwtr`). If a movement lookup fails, the
+    `shapeName` is drawn as before (ours).
+  - **U-8b:** the `Scales` state.
 - **U-9 (Q186): `ThrowRock`** (`ranged-weapons.md` 8, `traps.md` 8a).
 - **U-10 (Q193): river controls** (`objects.md` "River controls").
 - **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).
