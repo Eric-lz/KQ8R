@@ -563,16 +563,18 @@ impl Character {
     /// when a movement started, ended or changed in this update, or for a
     /// play-once one.
     fn movement_step(&mut self, player: &NamedAnimPlayer, played: &Played) {
-        if played.started.is_some() || played.transition.is_some() {
+        if played.transition.is_some() {
             return;
         }
-        // The frames entered (repeating, or T-2b play-once up to its end).
-        if let Some(own) = played.travel {
+        // The frames entered (repeating, or T-2b play-once up to its end),
+        // also when the next movement starts in the update it ends (the
+        // user's check of T-2b: its last frames were dropped).
+        if let Some(own) = played.travel.filter(|_| played.started.is_none() || played.finished.is_some()) {
             let r = &player.base.rotation;
             self.walk.step = std::array::from_fn(|j| (0..3).map(|i| own[i] * r[i][j]).sum());
             return;
         }
-        if played.finished.is_some() {
+        if played.started.is_some() || played.finished.is_some() {
             return;
         }
         let Some(m) = player.movement().filter(|m| m.repeat) else { return };

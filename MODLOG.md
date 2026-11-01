@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-10-31 T-2c: a play-once movement's last frames move the character too
+
+**Changed:** Core `character.rs` (`movement_step`): the steps of the frames entered are applied also in the update where the movement ends and the next one starts. DESIGN unchanged (part of T-2b).
+**Why:** The user's check of T-2b: at the end of the stagger the skeleton jumped a little in front of where its animation ended. When `reactback` ended, `Stop` started in the same update, and that update's steps were dropped.
+**Tested how:** `cargo test --workspace` (all pass); clippy: the same 2 warnings. The T-2b run (`reactback` at update 165); `characters.log`.
+**Result:** The whole stagger now moves it 414 back (y 125,848 → 125,434), the model's steps add up to 412.5 (`skcmrcbk.kqs`); before: 404.
+**Still broken / not tested:** **Not looked at by eye.**
+**Next:** The user's look; T-3 (the fall cutscene).
+
 ## 2026-10-31 T-2b: play-once movements move characters (the skeleton's stagger pushes it back)
 
 **Changed:** Core `door.rs` (`once_travel`: the steps of the frames a play-once movement enters), `named_anim.rs` (a character's play-once movement reports them; its drawing no longer adds them), `character.rs` (`movement_step` passes them to its mover, also in the update it ends). DESIGN T-2b. Provenance.
