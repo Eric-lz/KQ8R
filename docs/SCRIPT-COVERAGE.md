@@ -15,17 +15,17 @@ What the game's scripts (`.cs`) and object files (`.kq`) ask of the program, fro
 | --- | ---: | ---: | --- | --- | --- |
 | Daventry | 174 | 92 | 10 (15) | 2 (13) | — |
 | CastleD | 17 | 29 | 4 (6) | 0 (0) | — |
-| DeadCity | 281 | 97 | 7 (14) | 1 (1) | Scales, ThrowRock |
-| Swamp | 93 | 82 | 11 (27) | 1 (1) | ThrowRock, Tile2 |
-| Gnome | 111 | 79 | 12 (62) | 2 (9) | ThrowRock |
-| Barren | 118 | 84 | 12 (42) | 1 (1) | Tile3 |
+| DeadCity | 281 | 97 | 7 (14) | 1 (1) | — |
+| Swamp | 93 | 82 | 11 (27) | 1 (1) | Tile2 |
+| Gnome | 111 | 79 | 12 (62) | 1 (1) | — |
+| Barren | 118 | 84 | 12 (42) | 0 (0) | Tile3 |
 | IceWorld | 78 | 82 | 10 (31) | 1 (29) | — |
 | Snowexit | 13 | 35 | 6 (7) | 0 (0) | — |
-| temple1 | 59 | 51 | 7 (9) | 0 (0) | ThrowRock |
+| temple1 | 59 | 51 | 7 (9) | 0 (0) | — |
 | temple2 | 37 | 55 | 8 (10) | 0 (0) | — |
 | temple3 | 30 | 45 | 7 (9) | 0 (0) | — |
 | temple4 | 17 | 68 | 13 (17) | 0 (0) | Die |
-| Common | 30 | 14 | 2 (2) | 2 (2) | — |
+| Common | 30 | 14 | 2 (2) | 1 (1) | — |
 
 Not counted as commands: 139 calls of other scripts by name, 0 lines starting with a variable. Loading hints are left out of the summary's counts.
 
@@ -73,7 +73,6 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `preloadShape` | stub (loading hint?) | 309 (0) | Daventry 76, DeadCity 7, Swamp 1, Gnome 10, Barren 44, IceWorld 97, temple2 22, temple4 52 | `Daventry/miltrap1.cs` |
 | `KQGame::letCatchUp` | stub | 32 (0) | Daventry 1, DeadCity 1, Gnome 1, IceWorld 29 | `Daventry/WATERTP.CS` |
 | `doPopup` | stub | 14 (0) | Daventry 12, Swamp 1, Common 1 | `Daventry/CAMERA1.CS` |
-| `KQMonster::dropItem` | stub | 10 (0) | Gnome 8, Barren 1, Common 1 | `Gnome/ARMORGNM.CS` |
 | `lockShape` | start-up only: counted, not run (loading hint?) | 379 (379) | Daventry 71, DeadCity 49, Gnome 48, Barren 43, IceWorld 86, temple1 50, temple2 32 | `Daventry/PERMWRLD.CS` |
 | `lockInterior` | start-up only: counted, not run (loading hint?) | 112 (112) | Daventry 26, DeadCity 18, Swamp 6, Gnome 16, Barren 16, IceWorld 9, temple1 10, temple2 5, temple3 6 | `Daventry/PERMWRLD.CS` |
 | `alias` | start-up only: counted, not run | 45 (45) | Daventry 13, DeadCity 3, Swamp 6, Gnome 7, Barren 8, IceWorld 4, temple2 3, temple4 1 | `Daventry/NEWWORLD.CS` |
@@ -150,6 +149,7 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `KQCamera::setRange` | built | 10 (0) | Daventry 2, Barren 2, Common 6 | `Daventry/ropetrp2.cs` |
 | `KQConner::setRopeCamBottomLimit` | built | 10 (0) | Swamp 2, Barren 5, IceWorld 3 | `Swamp/FIENROP4.CS` |
 | `KQConner::setRopeCamTopLimit` | built | 10 (0) | Swamp 2, Barren 5, IceWorld 3 | `Swamp/FIENROP4.CS` |
+| `KQMonster::dropItem` | built | 10 (0) | Gnome 8, Barren 1, Common 1 | `Gnome/ARMORGNM.CS` |
 | `KQObject::dither` | built | 10 (0) | Daventry 2, DeadCity 8 | `Daventry/keepwall.cs` |
 | `makeTranslucent` | built | 10 (0) | Daventry 2, DeadCity 6, temple2 1, temple4 1 | `Daventry/WIZARD.CS` |
 | `teleportersEarned` | built | 10 (0) | Daventry 2, DeadCity 2, Swamp 2, Gnome 2, Barren 1, IceWorld 1 | `Daventry/KeepDoor.cs` |
@@ -184,15 +184,15 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 
 | State | Status | Uses | Worlds | First seen in |
 | --- | --- | ---: | --- | --- |
-| `ThrowRock` | stub | 9 | DeadCity 1, Swamp 6, Gnome 1, temple1 1 | `DeadCity/rockme.cs` |
 | `Die` | stub | 3 | temple4 3 | `temple4/vortrap.cs` |
 | `Tile2` | stub | 3 | Swamp 3 | `Swamp/fiendoor.cs` |
 | `Tile3` | stub | 3 | Barren 3 | `Barren/tiletpn.cs` |
-| `Scales` | stub | 2 | DeadCity 2 | `DeadCity/PORTRAP3.CS` |
 | `Special` | built | 182 | Daventry 52, CastleD 1, DeadCity 32, Swamp 10, Gnome 4, Barren 24, IceWorld 26, Snowexit 1, temple1 4, temple2 11, temple3 3, temple4 14 | `Daventry/AX.CS` |
 | `Portal` | built | 29 | Daventry 3, CastleD 1, DeadCity 2, Swamp 3, Gnome 1, Barren 2, IceWorld 3, Snowexit 2, temple1 1, temple2 2, temple3 2, temple4 1, Common 6 | `Daventry/portaltp.CS` |
 | `wait` | built | 13 | Daventry 2, DeadCity 4, Swamp 3, Barren 3, IceWorld 1 | `Daventry/cliftrap.cs` |
+| `ThrowRock` | built | 9 | DeadCity 1, Swamp 6, Gnome 1, temple1 1 | `DeadCity/rockme.cs` |
 | `Choice` | built | 6 | Daventry 1, Barren 2, IceWorld 3 | `Daventry/ROOFTRAP.CS` |
+| `Scales` | built | 2 | DeadCity 2 | `DeadCity/PORTRAP3.CS` |
 | `Tile` | built | 1 | DeadCity 1 | `DeadCity/DHALLTRP.CS` |
 
 ## Event kinds (`sendEvent … <kind>`, also in `.kq` movement cues)
