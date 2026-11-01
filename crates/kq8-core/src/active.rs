@@ -4115,7 +4115,7 @@ impl Active {
     /// (`sound.md` rule 41, `doors.md` rules 19-20; its ouch sound is not
     /// played yet, no data sends one to an object). Kind 0 normal, 1
     /// projectile, 2 fire, 3 ice; the flag is not used. On a character:
-    /// not in the notes (Q190), logged only.
+    /// (U-5, `fighting.md` rule 29a) the ordinary hit.
     fn attack_event(&mut self, e: &Pending, from: &str) {
         let word = |k: usize| e.data.get(k).map(String::as_str).unwrap_or("");
         let attacker = word(0).to_string();
@@ -4130,8 +4130,16 @@ impl Active {
         if e.target.eq_ignore_ascii_case(CONNOR) {
             self.world.fight_note("Connor", format!("{at}: kind {} damage {damage} (connor-collision.md rules 16-17)", kind.name()));
             self.world.hit_connor(&attacker, damage, kind);
-        } else if self.world.anims.iter().any(|a| a.character.is_some() && a.player.name.eq_ignore_ascii_case(&e.target)) {
-            self.world.note(format!("{at}: on a character: not in the notes (Q190); nothing"));
+        } else if let Some(j) = self.world.anims.iter().position(|a| !a.gone && a.character.is_some() && a.player.name.eq_ignore_ascii_case(&e.target)) {
+            // fighting.md rule 29a (Q190, U-5): the ordinary hit; damage 0
+            // with a script runs `ProjImmune`; any kind but 1-3 counts as
+            // Normal (rule 32a "Do not reproduce").
+            if damage == 0 && self.call_named(&e.target, &["ProjImmune"]) {
+                self.world.fight_note(&e.target, format!("{at}: damage 0: its script gets ProjImmune (fighting.md rule 29a)"));
+            } else {
+                self.world.fight_note(&e.target, format!("{at}: kind {} damage {damage}: the ordinary hit (fighting.md rule 29a)", kind.name()));
+                self.world.hit_character(j, &attacker, damage, kind);
+            }
         } else {
             let line = self.world.object_takes(&e.target, damage, kind);
             self.world.note(format!("{at}: kind {} damage {damage}: {line} (sound.md rule 41; its ouch sound: not built)", kind.name()));
@@ -6835,6 +6843,24 @@ endif
         let log = a.world.fight_log.join("\n");
         assert!(log.contains("spirit trap spirtp1 (Connor came in while a spirit is passing): loss = whole part of (level 5 x 0.2 x 10) = 10; below 1 % of maximum 50: set to whole part of (level x 0.1) = 0: health 3 -> 0"), "{log}");
         assert!(!log.contains("first hit by a character"), "not by a character (Q188 c): {log}");
+    }
+
+    #[test]
+    fn an_attack_event_on_a_character_is_the_ordinary_hit() {
+        // fighting.md rule 29a (Q190, U-5): lever1.cs's `KQAttackEvent $1 0 1 0`.
+        let mut a = fighter();
+        let name = a.world.anims[0].player.name.clone();
+        let health = |a: &Active| a.world.anims[0].character.as_ref().unwrap().fight.as_ref().unwrap().stats.0[0];
+        let before = health(&a);
+        a.test_command(&format!("sendEvent 0 {name} KQAttackEvent lever1 0 1 0"), "t");
+        a.update();
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("the ordinary hit (fighting.md rule 29a)"), "{log}");
+        assert!(health(&a) < before, "{log}");
+        // Kind 4 (the rock) counts as Normal.
+        a.test_command(&format!("sendEvent 0 {name} KQAttackEvent lever1 4 1 0"), "t");
+        a.update();
+        assert!(a.world.fight_log.join("\n").contains("kind Normal damage 1: the ordinary hit"), "{:?}", a.world.fight_log);
     }
 
     #[test]

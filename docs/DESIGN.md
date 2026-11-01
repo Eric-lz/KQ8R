@@ -3820,6 +3820,8 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
 - **U-5 (Q190): `KQAttackEvent` on a character** is the ordinary hit
   (`fighting.md` 29a); a kind above 3 dies as Normal (32a "Do not
   reproduce").
+  **Done** 2026-11-01 (logs and a unit test). The event's last word
+  ("react") is not used on characters (all data uses 0).
 - **U-6 (Q192): ground flags follow the square's current material**
   (`water.md`): the water test, footsteps and (U-7) damage read the
   material the square has now, so a drained bed is dry rock.

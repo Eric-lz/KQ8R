@@ -4070,3 +4070,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Then the trap's ordinary hit: Normal, 1, must react | Q188 b | unit test `a_spirit_trap_drains_connor_only_while_a_spirit_passes` |
 | The health change in any state; the hit part ignored while dying, nothing on the rope | Q188 c | — |
 | The first-hit tip only for a character's hit or a projectile | Q188 c (`fighting.md` rule 29) | the same unit test |
+
+## U-5 2026-11-01: `KQAttackEvent` on a character — core `active.rs` (`attack_event`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The ordinary hit of rules 16–29 (roll, protection, flinch, alarm) | `fighting.md` rule 29a (Q190) | Dead City `fight.log` update 30: Skelking 800 → 799, flinches |
+| Damage 0 with a script: `ProjImmune` instead | rule 29a | — |
+| Kinds other than 1–3 count as Normal | rule 32a "Do not reproduce" | unit test `an_attack_event_on_a_character_is_the_ordinary_hit` |

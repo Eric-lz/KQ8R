@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-5: `KQAttackEvent` on a character is the ordinary hit (Q190)
+
+**Changed:** Core `active.rs` `attack_event`: on a character, `hit_character` (rules 16–29); damage 0 with a script runs `ProjImmune`; kinds other than 1–3 stay Normal. 1 unit test. DESIGN U-5, provenance.
+**Why:** Study A's Q190 (it was logged only).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --frames 1500 --command "sendEvent 0 Skelking KQAttackEvent lever1 0 1 0",30`; `fight.log`.
+**Result:** Update 30: "kind Normal damage 1: the ordinary hit"; "hit by lever1 … health 800 -> 799; chase timer 5 s … flinches: 'React'".
+**Still broken / not tested:** `lever1.cs` itself not run (the lever scene). The event's "react" word is not used on characters.
+**Next:** U-6 (ground flags follow the current material).
+
 ## 2026-11-01 U-4: the spirit drain in whole numbers (Q188)
 
 **Changed:** Core `fight.rs`: `spirit_numbers` (loss = whole part of level × damage × 10; floor = whole part of level × 0.1, slightly short), `spirit_drain` (the change in any state; then the trap's hit with "must react"), `hit_connor_with` (must react; the first-hit tip only for a character or a projectile). Unit tests: 1 new, 1 changed. DESIGN U-4, provenance.
