@@ -3658,7 +3658,7 @@ impl WorldState {
     pub fn camera_flight_ended(&mut self) {
         let now = self.now();
         self.queue.send(now, 0.0, CONNOR, "KQCueEvent", &["201".to_string(), "0".to_string()], "the end of a camera flight");
-        self.note("a camera flight ended: Cue 201 to Connor (fighting.md 7a)".to_string());
+        self.note("a camera flight ended: Cue 201 to Connor (fighting.md 7a)");
     }
 
     /// `KQMonster::stateChangeNotify <recipient> <issuer>` and
