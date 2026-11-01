@@ -3787,6 +3787,15 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
   greeting: camera follows Connor, controls on, alarm radius
   `realAlarm`, 2000/16/0/98 if Connor is invisible. The second Cue 50:
   camera cut to Connor + (0, −5,000, 1,000) in his axes, then follow.
+  **Done** 2026-11-01 (logs and unit tests). As built: the viewer runs
+  the flights, so it tells the core where the camera is each update and
+  how many flights ended; the Cue 201 comes in the next update (ours).
+  The greeting's cut and the second Cue 50's are `move KQCamera` lines
+  with a fixed view, the flight back an `addCamLoc` + `flyToCamLoc`
+  aimed at the skeleton. With the camera's place unknown (unit tests) the
+  controls come back at the line's end (ours). Not built: the music's
+  second notice at the second Cue 50 (inferred in the note). Asked:
+  Q197 (in front of Connor or behind).
 - **U-3 (Q185): far characters and animated objects are frozen.**
   `object-lighting.md` rule 37, `character-movement.md` rule 21: only
   near ones are updated (animation, state, sight, mover); far ones are

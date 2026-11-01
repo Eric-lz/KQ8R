@@ -58,8 +58,15 @@ pub const CONNOR_SWAP_STATE: &str = "32";
 /// Its lines (2000.msg noun, verb, case): the greeting, the ranged weapon.
 pub const GREETING: (u8, u8, u8) = (16, 0, 18);
 pub const RANGED_LINE: (u8, u8, u8) = (16, 0, 102);
-/// The music the greeting starts.
+/// The music the greeting starts, 0.2 s after the flight back starts.
 pub const MUSIC: &str = "mtower.aud";
+pub const MUSIC_AFTER: f64 = 0.2;
+/// U-2 (Q195 c): the greeting's camera, in its own axes from it.
+pub const GREET_CAMERA: [f32; 3] = [0.0, -500.0, 1200.0];
+/// Q195 b: the second Cue 50's camera, in Connor's own axes from him.
+pub const BACK_TO_CONNOR: [f32; 3] = [0.0, -5000.0, 1000.0];
+/// Q195 d: said at Cue 201 if Connor is invisible.
+pub const INVISIBLE_LINE: (u8, u8, u8) = (16, 0, 98);
 
 /// Where its fall is (7a "Dying"): the movement playing, or the wait for
 /// the second Cue 50.
@@ -127,6 +134,10 @@ pub struct TowerSkeleton {
     /// greeting's line is being said (controls off until it ends).
     pub greeted: bool,
     pub greeting: bool,
+    /// U-2: the camera's place when the greeting began (it flies back
+    /// there), and when the music is due.
+    pub camera_back: Option<[f32; 3]>,
+    pub music_due: Option<f64>,
 }
 
 impl TowerSkeleton {
@@ -145,6 +156,8 @@ impl TowerSkeleton {
             dropped: None,
             greeted: false,
             greeting: false,
+            camera_back: None,
+            music_due: None,
         }
     }
 }

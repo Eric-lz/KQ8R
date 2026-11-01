@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-2: Cue 201 at the end of camera flights; the tower skeleton's greeting camera (Q195)
+
+**Changed:** Core `active.rs`: `camera_flight_ended` (Cue 201 to Connor), Connor passes Cue 201 to his state-change list (not in a Tile state), `tower_cue201` (only after the greeting: follow Connor, controls on, `realAlarm`, the invisible line), the greeting's cut and flight back, the music 0.2 s later, the second Cue 50's cut to Connor; `run_lines`; `camera_at`. `tower_skeleton.rs` (offsets, `camera_back`, `music_due`). Viewer `game_camera.rs` (counts ended flights), `door_view.rs` (tells the core the camera's place and the ended flights). 1 new unit test, 1 changed. DESIGN U-2, provenance, QUESTIONS Q197.
+**Why:** Study A's Q195: nothing in the data sent Cue 201; it is the end of any camera flight.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --frames 1500 --command "KQMonster::stateChangeNotify Skeltowr Connor",25 --command "KQCamera::addCamLoc 181000 48000 3000 1",30 --command "KQCamera::flyToCamLoc 180557 50000 2264",31`; `doors.log`, `camera.log`, `fight.log`. The greeting by unit test only (commands can't put Connor on a rope).
+**Result:** Camera flight 4/4 at update 36; update 37 "a camera flight ended: Cue 201 to Connor", "passed on to his state-change list: Skeltowr", "before its greeting: nothing". Unit test: greeting cut, `addCamLoc` back + `flyToCamLoc`, then Cue 201 sets the alarm radius 0 → 5,000.
+**Still broken / not tested:** **Not played.** The greeting in a real run (needs the rope). The music's second notice at the second Cue 50 not built. Q197: the second Cue 50's camera lands in front of Connor with our axes. Note: the T-3 test's `sendEvent 0 Skeltowr KQCueEvent 201 0` now does nothing (no greeting yet), as in the original.
+**Next:** U-3 (far characters frozen).
+
 ## 2026-11-01 U-1: the tower skeleton's fall in the corrected order (Q196)
 
 **Changed:** Core `tower_skeleton.rs` (stages `teeter`, `die`, `fallend`, `die2`; constants renamed), `active.rs` (`tower_fall_next`: after `die` up high and `fallend`; after `fallend` on the ground, drops, `die2`; after `die2` hidden, Cue 50 in 3 s). Viewer `anim_view.rs`: every character's shown / hidden is followed (was only those loaded underground). DESIGN U (plan), provenance.

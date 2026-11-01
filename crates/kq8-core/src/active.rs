@@ -861,6 +861,9 @@ pub struct WorldState {
     pub connor_can_turn: bool,
     /// Where Connor stands, set by the caller before scripts run.
     pub connor_at: Option<[f32; 3]>,
+    /// Where the camera is, set by the caller before scripts run (U-2:
+    /// the tower skeleton's greeting remembers it).
+    pub camera_at: Option<[f32; 3]>,
     /// His heading (the turn about z, as `move Connor … rz` sets it), set
     /// with `connor_at`: `getLoc Connor` gives it as his turn.
     pub connor_heading: f32,
@@ -3558,6 +3561,14 @@ impl WorldState {
         if equal { "0" } else { "1" }.into()
     }
 
+    /// U-2 (`fighting.md` 7a, Q195 a): a camera flight has ended (the
+    /// viewer runs the flights): Cue 201 to Connor, who passes it on.
+    pub fn camera_flight_ended(&mut self) {
+        let now = self.now();
+        self.queue.send(now, 0.0, CONNOR, "KQCueEvent", &["201".to_string(), "0".to_string()], "the end of a camera flight");
+        self.note("a camera flight ended: Cue 201 to Connor (fighting.md 7a)".to_string());
+    }
+
     /// `KQMonster::stateChangeNotify <recipient> <issuer>` and
     /// `clearStateChangeNotify` (rule 13).
     fn state_change_notify(&mut self, words: &[String], at: &str) -> String {
@@ -3971,6 +3982,7 @@ impl Active {
                 script_rng: crate::emitter::Rng::new(0x5C41_9700),
                 connor_can_turn: false,
                 connor_at: None,
+                camera_at: None,
                 connor_heading: 0.0,
                 connor_react: (None, None),
                 required_weapon_mode: (-1, None),
@@ -4129,6 +4141,8 @@ impl Active {
         let Some(j) = self.world.character_index(&e.target) else { return false };
         let name = self.world.anims[j].player.name.clone();
         let ranged = self.world.weapon_mode == crate::weapons::WeaponMode::Ranged;
+        let camera = self.world.camera_at;
+        let (p, r) = (self.world.anims[j].player.base.position, self.world.anims[j].player.base.rotation);
         let Some(t) = self.world.anims[j].character.as_deref_mut().and_then(|c| c.tower.as_mut()) else { return false };
         let word = |k: usize| e.data.get(k).map(String::as_str).unwrap_or("");
         let at = format!("StateChange {} to {name}{from}", e.data.join(" "));
@@ -4138,10 +4152,19 @@ impl Active {
         } else if word(2) == ts::CONNOR_ROPE_STATE && !t.greeted && t.fall.is_none() {
             t.greeted = true;
             t.greeting = true;
+            t.camera_back = camera;
             let (n, v, c) = ts::GREETING;
+            // Q195 c: third person, controls off, it plays `Stop`, the
+            // camera cut to it + (0, -500, 1,200) in its own axes.
+            let (behind, _) = ts::own_axes(&r);
+            let cam = [p[0] + ts::GREET_CAMERA[1] * behind[0], p[1] + ts::GREET_CAMERA[1] * behind[1], p[2] + ts::GREET_CAMERA[2]];
+            let (tilt, heading) = ts::look_angles(cam, p);
+            lines.push("setThirdPerson".to_string());
             lines.push("handsOff 1".to_string());
+            lines.push(format!("sendEvent 0 {name} KQAnimPlayEvent Stop"));
+            lines.push(format!("move KQCamera 0 {:.0} {:.0} {:.0} {tilt:.4} 0 {heading:.4}", cam[0], cam[1], cam[2]));
             lines.push(format!("KQMonster::speak {name} Connor 2000 {n} {v} {c} 1 1"));
-            "Connor goes on a rope the first time: the greeting (controls off; its camera: not built, Q195)".to_string()
+            format!("Connor goes on a rope the first time: the greeting (third person, controls off, 'Stop', the camera cut to ({:.0}, {:.0}, {:.0}) looking at it; the camera's place remembered: {})", cam[0], cam[1], cam[2], camera.map_or("unknown".to_string(), |c| format!("({:.0}, {:.0}, {:.0})", c[0], c[1], c[2])))
         } else if word(1) == ts::CONNOR_SWAP_STATE && ranged && t.fall.is_none() {
             let (n, v, c) = ts::RANGED_LINE;
             lines.push(format!("KQMonster::speak {name} Connor 2000 {n} {v} {c} 1 1"));
@@ -4160,27 +4183,84 @@ impl Active {
         true
     }
 
-    /// T-4a: the greeting's line has ended: controls on, its music.
+    /// T-4a, U-2 (Q195 c): the greeting's line has ended: the camera
+    /// flies back to where it was (no time: distance / 5,000 a second),
+    /// looking at it; the music 0.2 s later. The controls stay off until
+    /// the flight's end sends Cue 201.
     fn tower_greeting_step(&mut self) {
-        let done: Vec<usize> = (0..self.world.anims.len())
-            .filter(|&j| {
-                let a = &self.world.anims[j];
-                a.character.as_deref().and_then(|c| c.tower.as_ref()).is_some_and(|t| t.greeting) && !self.world.talk.is_talking(&a.player.name)
-            })
-            .collect();
-        for j in done {
+        use crate::tower_skeleton as ts;
+        let now = self.world.now();
+        let mut runs: Vec<(String, Vec<String>, String)> = Vec::new();
+        for j in 0..self.world.anims.len() {
             let name = self.world.anims[j].player.name.clone();
-            if let Some(t) = self.world.anims[j].character.as_deref_mut().and_then(|c| c.tower.as_mut()) {
+            let talking = self.world.talk.is_talking(&name);
+            let a = &mut self.world.anims[j];
+            let p = a.player.base.position;
+            let Some(t) = a.character.as_deref_mut().and_then(|c| c.tower.as_mut()) else { continue };
+            if t.greeting && !talking {
                 t.greeting = false;
+                t.music_due = Some(now + ts::MUSIC_AFTER);
+                let mut lines = Vec::new();
+                let what = match t.camera_back {
+                    Some(c) => {
+                        lines.push(format!("KQCamera::addCamLoc {:.0} {:.0} {:.0} 1", c[0], c[1], c[2]));
+                        lines.push(format!("KQCamera::flyToCamLoc {:.0} {:.0} {:.0}", p[0], p[1], p[2]));
+                        format!("its line ended: the camera flies back to ({:.0}, {:.0}, {:.0}), looking at it; the music {} in {} s", c[0], c[1], c[2], ts::MUSIC, ts::MUSIC_AFTER)
+                    }
+                    None => {
+                        // Ours: with no flight there is no Cue 201, so the
+                        // controls come back here.
+                        lines.push("handsOff 0".to_string());
+                        format!("its line ended: the camera's place was not known: no flight back (so no Cue 201), controls on (ours); the music {} in {} s", ts::MUSIC, ts::MUSIC_AFTER)
+                    }
+                };
+                runs.push((name, lines, what));
+            } else if t.music_due.is_some_and(|d| now + 1e-6 >= d) {
+                t.music_due = None;
+                runs.push((name, vec![format!("KQMusic::push {}", ts::MUSIC)], format!("the music {}", ts::MUSIC)));
             }
-            let at = format!("{name}'s greeting ended (fighting.md 7a)");
-            self.world.fight_note(&name, format!("{at}: controls on; the music {}", crate::tower_skeleton::MUSIC));
-            for line in ["handsOff 0".to_string(), format!("KQMusic::push {}", crate::tower_skeleton::MUSIC)] {
-                let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
-                self.world.note(format!("{at}: {line}"));
-                if ScriptHost::world_command(&mut self.world, &words, &at).is_none() {
-                    self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
-                }
+        }
+        for (name, lines, what) in runs {
+            let at = format!("{name}'s greeting (fighting.md 7a)");
+            self.world.fight_note(&name, format!("{at}: {what}"));
+            self.run_lines(&lines, &at);
+        }
+    }
+
+    /// U-2 (`fighting.md` 7a, Q195 a, d): Cue 201 to the tower skeleton.
+    /// Before its greeting: nothing. After: the camera follows Connor,
+    /// the controls and first person come back, its alarm radius becomes
+    /// `realAlarm`; with Connor invisible it says 2000/16/0/98.
+    fn tower_cue201(&mut self, j: usize, from: &str) {
+        let invisible = self.world.connor_invisible();
+        let a = &mut self.world.anims[j];
+        let name = a.player.name.clone();
+        let Some(c) = a.character.as_deref_mut() else { return };
+        let Some(t) = c.tower.as_ref() else { return };
+        let at = format!("KQCueEvent 201 to {name}{from}");
+        if !t.greeted || t.greeting {
+            let why = if t.greeting { "its greeting is still under way" } else { "before its greeting" };
+            self.world.fight_note(&name, format!("{at}: {why}: nothing (fighting.md 7a)"));
+            return;
+        }
+        let real = t.real_alarm;
+        let old = c.ai.as_mut().map(|ai| std::mem::replace(&mut ai.settings.alarm_radius, real));
+        let mut lines = vec!["KQCamera::follow Connor".to_string(), "handsOff 0".to_string(), "setThirdPerson".to_string()];
+        if invisible {
+            let (n, v, k) = crate::tower_skeleton::INVISIBLE_LINE;
+            lines.push(format!("KQMonster::speak {name} Connor 2000 {n} {v} {k} 1 1"));
+        }
+        self.world.fight_note(&name, format!("{at}: after its greeting: the camera follows Connor, controls on, first person allowed; alarm radius {} -> {real} (realAlarm){} (fighting.md 7a)", old.map_or("unknown".to_string(), |o| o.to_string()), if invisible { "; Connor is invisible: its line 16/0/98" } else { "" }));
+        self.run_lines(&lines, &at);
+    }
+
+    /// Runs `lines` as script commands, each logged with `at`.
+    fn run_lines(&mut self, lines: &[String], at: &str) {
+        for line in lines {
+            let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
+            self.world.note(format!("{at}: {line}"));
+            if ScriptHost::world_command(&mut self.world, &words, at).is_none() {
+                self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
             }
         }
     }
@@ -4298,9 +4378,15 @@ impl Active {
         let lines: Vec<String> = if first {
             vec![format!("KQMonster::speak {name} {name} 2000 16 12 22 2 2")]
         } else {
-            vec!["KQCamera::follow Connor".to_string(), "handsOff 0".to_string()]
+            // Q195 b: a cut to Connor + (0, -5,000, 1,000) in his own axes,
+            // looking at him; then the camera follows him.
+            let (h, c) = (self.world.connor_heading, self.world.connor_at.unwrap_or([0.0; 3]));
+            let (o, up) = (crate::tower_skeleton::BACK_TO_CONNOR[1], crate::tower_skeleton::BACK_TO_CONNOR[2]);
+            let cam = [c[0] - o * h.sin(), c[1] + o * h.cos(), c[2] + up];
+            let (tilt, heading) = crate::tower_skeleton::look_angles(cam, c);
+            vec![format!("move KQCamera 0 {:.0} {:.0} {:.0} {tilt:.4} 0 {heading:.4}", cam[0], cam[1], cam[2]), "KQCamera::follow Connor".to_string(), "handsOff 0".to_string(), "setThirdPerson".to_string()]
         };
-        self.world.fight_note(&name, format!("{at}: {}", if first { "the scream's second part (fighting.md 7a step 2)" } else { "the camera back to Connor, controls on; its death finishes (7a step 5, rule 32)" }));
+        self.world.fight_note(&name, format!("{at}: {}", if first { "the scream's second part (fighting.md 7a step 2)" } else { "the camera cut to Connor + (0, -5,000, 1,000) in his axes, then follows him; controls on, first person allowed; its death finishes (7a step 5, rule 32; the music's second notice: not built)" }));
         for line in lines {
             let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
             self.world.note(format!("{at}: {line}"));
@@ -5983,6 +6069,23 @@ impl Active {
             self.attack_event(&e, &from);
             return;
         }
+        // fighting.md 7a (Q195, U-2): the end of a camera flight sends
+        // Cue 201 to Connor; unless he is in a Tile state he passes it on
+        // to every object on his state-change list.
+        if e.kind == "KQCueEvent" && e.target.eq_ignore_ascii_case(CONNOR) && e.data.first().map(String::as_str) == Some(crate::tower_skeleton::CUE_REAL_ALARM) {
+            let tile = self.world.connor_state == Some(crate::character::state_number::TILE);
+            let to: Vec<String> = self.world.notify.get("connor").cloned().unwrap_or_default().into_iter().filter(|r| !r.eq_ignore_ascii_case(CONNOR)).collect();
+            if tile {
+                self.world.note(format!("KQCueEvent 201 to Connor{from}: he is in a Tile state: not passed on (fighting.md 7a)"));
+            } else {
+                self.world.note(format!("KQCueEvent 201 to Connor{from}: passed on to his state-change list: {} (fighting.md 7a)", if to.is_empty() { "nobody".to_string() } else { to.join(", ") }));
+                let now = self.world.now();
+                for r in to {
+                    self.world.queue.send(now, 0.0, &r, "KQCueEvent", &e.data, "Connor passes Cue 201 on");
+                }
+            }
+            return;
+        }
         // T-3 (fighting.md 7a "Dying"): Cue 50 during its fall.
         if e.kind == "KQCueEvent" && e.data.first().map(String::as_str) == Some(crate::tower_skeleton::CUE_FALL) {
             if let Some(j) = self.world.anims.iter().position(|a| a.player.name.eq_ignore_ascii_case(&e.target) && a.character.as_deref().and_then(|c| c.tower.as_ref()).is_some_and(|t| t.fall.is_some())) {
@@ -5990,17 +6093,14 @@ impl Active {
                 return;
             }
         }
-        // fighting.md 7a (T-1): Cue 201 gives the tower skeleton its
-        // real alarm radius.
+        // fighting.md 7a (T-1; U-2, Q195): Cue 201 after its greeting:
+        // the camera follows Connor, controls and first person back, its
+        // real alarm radius; its line if Connor is invisible.
         if e.kind == "KQCueEvent" && e.data.first().map(String::as_str) == Some(crate::tower_skeleton::CUE_REAL_ALARM) {
             if let Some(j) = self.world.character_index(&e.target) {
-                if let Some(c) = self.world.anims[j].character.as_deref_mut() {
-                    if let (Some(t), Some(ai)) = (c.tower.as_ref(), c.ai.as_mut()) {
-                        let old = std::mem::replace(&mut ai.settings.alarm_radius, t.real_alarm);
-                        let line = format!("KQCueEvent 201 to {}{from}: alarm radius {old} -> {} (realAlarm, fighting.md 7a)", e.target, t.real_alarm);
-                        self.world.fight_note(&e.target, line);
-                        return;
-                    }
+                if self.world.anims[j].character.as_deref().is_some_and(|c| c.tower.is_some()) {
+                    self.tower_cue201(j, &from);
+                    return;
                 }
             }
         }
@@ -7787,9 +7887,14 @@ endif
         let log = a.world.fight_log.join("\n");
         assert!(log.contains("Connor goes on a rope the first time: the greeting"), "{log}");
         assert!(a.world.log.iter().any(|l| l.contains("speak") && l.contains("2000 16 0 18")), "{:?}", a.world.log);
-        // Its line is not said in this test world: the greeting ends at once.
+        // Its line is not said in this test world: the greeting ends at
+        // once; with no camera place known, the controls come back here.
         a.update();
-        assert!(a.world.fight_log.join("\n").contains("greeting ended (fighting.md 7a): controls on; the music mtower.aud"));
+        assert!(a.world.fight_log.join("\n").contains("no flight back (so no Cue 201), controls on (ours)"), "{:?}", a.world.fight_log);
+        for _ in 0..4 {
+            a.update();
+        }
+        assert!(a.world.fight_log.join("\n").contains("greeting (fighting.md 7a): the music mtower.aud"), "0.2 s later: {:?}", a.world.fight_log);
         tell(&mut a, "2", "4096");
         assert_eq!(a.world.fight_log.iter().filter(|l| l.contains("the greeting")).count(), 1, "only once");
         // A swap ending with a ranged weapon ready; one ending with none: nothing.
@@ -7798,6 +7903,40 @@ endif
         a.world.weapon_mode = crate::weapons::WeaponMode::None;
         tell(&mut a, "32", "2");
         assert_eq!(a.world.fight_log.iter().filter(|l| l.contains("readies a ranged weapon")).count(), 1);
+    }
+
+    #[test]
+    fn the_greeting_flies_the_camera_back_and_cue_201_from_connor_wakes_the_tower_skeleton() {
+        // fighting.md 7a (Q195, U-2).
+        let mut a = fighter();
+        let name = a.world.anims[0].player.name.clone();
+        a.world.anims[0].character.as_mut().unwrap().tower = Some(crate::tower_skeleton::TowerSkeleton::new(Some(5000.0), None, None, 0.0));
+        a.world.anims[0].character.as_mut().unwrap().ai.as_mut().unwrap().settings.alarm_radius = 0.0;
+        a.world.state_change_notify(&["KQMonster::stateChangeNotify".into(), name.clone(), "Connor".into()], "t");
+        let cue201 = |a: &mut Active| {
+            a.world.camera_flight_ended();
+            a.update();
+            a.update();
+        };
+        // Before the greeting: passed on, but nothing.
+        cue201(&mut a);
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("before its greeting: nothing"), "{log}");
+        assert!(a.world.log.iter().any(|l| l.contains("passed on to his state-change list") && l.contains(&name)), "{:?}", a.world.log);
+        // The greeting with the camera's place known: the cut, then the flight back.
+        a.world.camera_at = Some([100.0, -6000.0, 2000.0]);
+        let now = a.world.now();
+        a.world.queue.send(now, 0.0, &name, "StateChange", &["Connor".into(), "2".into(), "4096".into()], "test");
+        a.update();
+        assert!(a.world.log.iter().any(|l| l.contains("move KQCamera 0 ")), "the cut: {:?}", a.world.log);
+        a.update();
+        assert!(a.world.log.iter().any(|l| l.contains("KQCamera::addCamLoc 100 -6000 2000 1")), "{:?}", a.world.log);
+        assert!(a.world.log.iter().any(|l| l.contains("KQCamera::flyToCamLoc")), "{:?}", a.world.log);
+        // The flight's end: its real alarm radius.
+        cue201(&mut a);
+        let log = a.world.fight_log.join("\n");
+        assert!(log.contains("after its greeting: the camera follows Connor, controls on") && log.contains("-> 5000 (realAlarm)"), "{log}");
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().ai.as_ref().unwrap().settings.alarm_radius, 5000.0);
     }
 
     #[test]

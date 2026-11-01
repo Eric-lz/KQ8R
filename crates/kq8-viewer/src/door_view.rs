@@ -1038,7 +1038,7 @@ pub fn switch_off(c: &mut BoxCollider) {
 pub fn trap_step(
     sim: Option<ResMut<DoorSim>>,
     connor: Option<ResMut<ConnorSim>>,
-    camera: Option<ResMut<GameCam>>,
+    mut camera: Option<ResMut<GameCam>>,
     colliders: Option<ResMut<ObjectColliders>>,
     view: Option<ResMut<ViewBlockerSet>>,
     anim: Option<ResMut<crate::anim_view::AnimSim>>,
@@ -1072,6 +1072,14 @@ pub fn trap_step(
     let portal = sim.active.world.connor_portal.is_some();
     sim.active.world.connor_state = Some(if portal { kq8_core::character::state_number::PORTAL } else { connor.state_number() });
     sim.active.world.connor_at = Some(connor.mover.position);
+    // U-2 (fighting.md 7a): where the camera is, and the flights that
+    // ended in its last update (Cue 201 to Connor).
+    if let Some(c) = camera.as_mut() {
+        sim.active.world.camera_at = Some(c.position());
+        for _ in 0..c.take_flights_ended() {
+            sim.active.world.camera_flight_ended();
+        }
+    }
     sim.active.world.connor_heading = connor.walker.heading;
     // potions.md rule 26 (M5 5g-9, Q146): a cutscene hides him from
     // characters; the hammer throw's handsOff keeps the pointer and doesn't.
@@ -1171,7 +1179,6 @@ pub fn trap_step(
     sim.flush_items(&shared);
     sim.flush_rope(&shared);
     sim.flush_talk(&shared);
-    let mut camera = camera;
     // characters.md rules 9-11 (Q155): the Choice state's calls from his
     // update (DoChoice, StartChoice after a swap); what they ask is applied
     // below with the rest.

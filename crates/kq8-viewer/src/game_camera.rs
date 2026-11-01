@@ -108,6 +108,11 @@ struct Keys {
 }
 
 impl GameCam {
+    /// The flights ended since the last call (U-2).
+    pub fn take_flights_ended(&mut self) -> u32 {
+        std::mem::take(&mut self.flights_ended)
+    }
+
     /// The camera's position after the last update (game units).
     pub fn position(&self) -> [f32; 3] {
         self.cam.position
@@ -189,6 +194,9 @@ pub struct GameCam {
     /// `follow_due` carries it from the flight's last update to the tick.
     after_flight: Option<bool>,
     follow_due: Option<bool>,
+    /// U-2 (`fighting.md` 7a, Q195): flights ended since the core was last
+    /// told (each sends Cue 201 to Connor).
+    flights_ended: u32,
 }
 
 impl GameCam {
@@ -441,6 +449,8 @@ impl GameCam {
                 s.height.map_or(String::new(), height_note)
             );
             self.flight = None;
+            self.flights_ended += 1;
+            line += "; Cue 201 to Connor (fighting.md 7a)";
             if let Some(hold) = self.after_flight.take() {
                 self.follow_due = Some(hold);
                 line += "; Connor is followed again (tile-puzzle.md rule 13)";
@@ -598,6 +608,7 @@ pub fn make(
         skip_next_move: false,
         move_skipped: false,
         after_flight: None,
+        flights_ended: 0,
         follow_due: None,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt | centre_line_at_connor (height above his feet where the view's centre line passes him; his box is 1,300 tall)");

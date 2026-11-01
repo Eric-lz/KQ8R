@@ -4041,3 +4041,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | After `fallend`: on the ground 1,400 behind; drops its items; `die2` there | 7a step 4 | update 533: on the ground (z 2898), chain mail thrown |
 | After `die2`: hidden (not drawn, not solid); Cue 50 3 s later | 7a step 5 | update 558; `characters.log` 559 "not drawn" |
 | The ground height measured once when the fall starts (the point 2,000 behind = 600 + 1,400) | **ours** | — |
+
+## U-2 2026-11-01: Cue 201 and the tower skeleton's greeting camera — core `active.rs` (`camera_flight_ended`, Connor's pass-on, `tower_cue201`, `tower_greeting_step`, `tower_hears`, `tower_cue50`, `run_lines`), `tower_skeleton.rs`; viewer `game_camera.rs` (`flights_ended`), `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| The end of any camera flight sends Cue 201 to Connor; he passes it on to his state-change list unless in a Tile state | `fighting.md` 7a "Cue 201" (Q195 a) | `doors.log` update 37 "passed on … Skeltowr" |
+| Sent one update after the flight's last update | **ours** (the viewer runs the flights) | update 36 → 37 |
+| Cue 201 acts only after the greeting: follow Connor, controls on, first person allowed, alarm `realAlarm`; 2000/16/0/98 if Connor is invisible | 7a "Cue 201" (Q195 a, d) | unit test `the_greeting_flies_the_camera_back_and_cue_201_from_connor_wakes_the_tower_skeleton` |
+| Greeting: third person, controls off, `Stop`, the camera's place remembered, cut to it + (0, −500, 1,200) in its own axes looking at it; at the line's end a flight back with no time, aimed at it; the music 0.2 s later | 7a (Q195 c) | unit tests |
+| The cuts as `move KQCamera` with a fixed view; the flight as `addCamLoc … 1` + `flyToCamLoc <its position>` | **ours** (how) | — |
+| No camera place known: controls on at the line's end | **ours** | unit test |
+| Second Cue 50: cut to Connor + (0, −5,000, 1,000) in his own axes, looking at him, then follow | 7a (Q195 b); which side: Q197 | — |
