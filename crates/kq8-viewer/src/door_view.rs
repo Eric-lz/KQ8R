@@ -927,6 +927,13 @@ pub fn spawn_doors(
     if let Some(c) = active.world.connor_stats {
         main_log.summary(format!("connor start: Connor {:?} level {} after the start-up scripts (health / hand / ranged / armour / experience)", c.stats.0, c.level));
     }
+    // water.md "Liquid damage" rule 2 (U-7): world.cs's Init sets them.
+    for (name, value) in &objects.damage_timers {
+        if active.scripts.vars.get(name).is_none() {
+            active.scripts.vars.set(name, value.clone());
+        }
+    }
+    start_lines.push(format!("terrain damage timers from world.cs: {} (water.md \"Liquid damage\" rule 2; others not set: 1,000 damage)", if objects.damage_timers.is_empty() { "none".to_string() } else { objects.damage_timers.iter().map(|(n, v)| format!("{n} {v}")).collect::<Vec<_>>().join(", ") }));
     // character-movement.md rule 20 (M5 5a-4).
     if let Some(n) = objects.max_monsters {
         active.world.max_monsters = n;
@@ -1072,6 +1079,10 @@ pub fn trap_step(
     let portal = sim.active.world.connor_portal.is_some();
     sim.active.world.connor_state = Some(if portal { kq8_core::character::state_number::PORTAL } else { connor.state_number() });
     sim.active.world.connor_at = Some(connor.mover.position);
+    // U-7 (water.md "Liquid damage"): the square under him after his move.
+    if let Some(s) = connor.mover.liquid.take() {
+        sim.active.connor_liquid(s);
+    }
     // U-2 (fighting.md 7a): where the camera is, and the flights that
     // ended in its last update (Cue 201 to Connor).
     if let Some(c) = camera.as_mut() {
@@ -1294,10 +1305,11 @@ pub fn trap_step(
             asked = true;
         }
         let line = match r {
-            Request::ConnorHurt { roll_over, special, at } => {
+            Request::ConnorHurt { roll_over, special, at, terrain } => {
                 let ouch = sim.active.world.connor_fight.as_ref().map_or(kq8_core::fight::DEFAULT_OUCH.to_string(), |f| f.ouch_sound.clone());
                 let now = sim.active.world.now();
-                let line = connor.hurt(roll_over, special.as_deref(), &ouch, now);
+                // water.md "Liquid damage" rule 7 (U-7): no ouch from the ground.
+                let line = connor.hurt(roll_over, special.as_deref(), (!terrain).then_some(ouch.as_str()), now);
                 sim.active.world.fight_note("Connor", format!("{at}: {line}"));
                 format!("{at}: applied: Connor {line}")
             }

@@ -557,6 +557,12 @@ impl crate::active::WorldState {
 
     /// The same, with "must react" (rule 16: he flinches whatever the roll).
     pub(crate) fn hit_connor_with(&mut self, from: &str, d: i64, kind: HitKind, must_react: bool) {
+        self.hit_connor_full(from, d, kind, must_react, false);
+    }
+
+    /// The same; `terrain`: a hit from the ground (`water.md` "Liquid
+    /// damage" rule 7): his ouch sound is not played.
+    pub(crate) fn hit_connor_full(&mut self, from: &str, d: i64, kind: HitKind, must_react: bool, terrain: bool) {
         if self.god_mode {
             self.fight_note("Connor", format!("hit by {from}, {}, damage {d}: nothing, god mode is on (test switch, ours)", kind.name()));
             return;
@@ -616,7 +622,7 @@ impl crate::active::WorldState {
             // react a script set (Dead City's tower) tried first.
             let percent = self.connor_react.0.unwrap_or(CONNOR_REACT_PERCENT);
             let special = self.connor_react.1.clone().filter(|(_, p)| dmg.flinch_roll(*p)).map(|(m, _)| m);
-            self.requests.push(crate::active::Request::ConnorHurt { roll_over: must_react || dmg.flinch_roll(percent), special, at });
+            self.requests.push(crate::active::Request::ConnorHurt { roll_over: must_react || dmg.flinch_roll(percent), special, at, terrain });
         }
     }
 }

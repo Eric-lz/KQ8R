@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-7: liquid damage for Connor (Q191)
+
+**Changed:** Core `water.rs` (the rules: timer, damage per update, kind, deep; `LiquidSample`), `connor_update.rs` / `connor_mover.rs` (his water test keeps what it saw after the move), `active.rs` (`connor_liquid`: the damage, the poison sound every 2.5 s), `fight.rs` (`hit_connor_full`: a hit from the ground plays no ouch). Data `envinfo.rs` (FIRE, ICE, ONTOP). Viewer `door_view.rs` (hands it over after his update; the ouch skipped), `connor_view.rs` (`hurt` with no ouch), `load.rs` (`world.cs`'s three timers read at load). 1 unit test. DESIGN U-7, provenance.
+**Why:** Study A's Q191; the user's check of D-11a (most of the River of Death did nothing).
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --no-ai --frames 3000 --at 187000,174000,0 --hold 1,0,0,10,40`; `fight.log`, `doors.log`, `items.log`.
+**Result:** "terrain damage timers from world.cs: PoisonTime 5, FastPoisonTime 0". In the blood river (poison, surface 288 above his feet) at level 8: damage 1 every update from update 12 while he walks, no ouch, `poison1.aud` at 12 and `poison2.aud` at 50; health 80 → 49 by update 55, nothing after he stops. First run (before reading the timers): 1,000 damage, he died at once, which is what a lava square (`FastPoisonTime 0`) now does.
+**Still broken / not tested:** **Not played.** Not built: characters in liquids, immunities, objects on fire, the `ontop` sinking (Barren). Which River of Death squares are deep enough: not counted square by square.
+**Next:** U-8 (the scales).
+
 ## 2026-11-01 U-6: ground flags follow the square's current material (Q192)
 
 **Changed:** Data `terrain.rs`: the flags per material are kept (`material_flags`), `set_square_material`. Viewer `ground_anim_view.rs`: every animator change writes its squares' new flags into the live terrain, logged when they change. DESIGN U-6, provenance.

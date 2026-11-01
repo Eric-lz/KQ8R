@@ -21,6 +21,10 @@ pub const FAST_POISON: u32 = 0x80;
 pub const SWAMP: u32 = 0x100;
 /// The liquids: water, poison, fastpoison/lava, swamp (0x1C8).
 pub const LIQUID: u32 = WATER | POISON | FAST_POISON | SWAMP;
+/// `fire`, `ice` and `ontop` (water.md "Liquid damage", Q191).
+pub const FIRE: u32 = 0x200;
+pub const ICE: u32 = 0x400;
+pub const ONTOP: u32 = 0x800;
 
 /// Flags of one `textureN=` value, read as the note says.
 pub fn line_flags(value: &str) -> u32 {

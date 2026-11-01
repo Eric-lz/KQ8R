@@ -3830,6 +3830,16 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
   squares into the live terrain (`GroundLookup`), which the water test,
   the footsteps and (U-7) the damage read.
 - **U-7 (Q191): liquid damage** (`water.md` "Liquid damage").
+  **Done** 2026-11-01 for Connor (logs and a unit test). As built: his
+  water test after each move records the square's flags, the surface and
+  his feet; after his update the core works out the damage (the timer
+  from the world's variables: `world.cs` `Init`'s three timers are read
+  from its text at load, as `MaxMonsters`), hits him the ordinary way
+  without his ouch, and plays `poison<n>.aud` at most every 2.5 s (which
+  of the three: a roll, ours). **Not built:** characters and other
+  moving objects in liquids (rule 6 "any object"), immunities
+  (`addImmunity`, Swamp), objects set on fire (rule 4), the `ontop`
+  sinking (rule 6, Barren's lava; the hit is built).
 - **U-8 (Q189): the scales.** Animated objects never load `shapeName`
   (`objects.md` 3–5: don't skip them; box from the current movement's
   model, then the object's name); then D-10b, the `Scales` state

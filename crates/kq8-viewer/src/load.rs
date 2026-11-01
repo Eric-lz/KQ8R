@@ -1625,6 +1625,9 @@ pub struct Objects {
     /// `KQWorld::MaxMonsters` from `world.cs` (`character-movement.md`
     /// rule 20; M5 5a-4).
     pub max_monsters: Option<usize>,
+    /// U-7 (`water.md` "Liquid damage" rule 2): the terrain damage timers
+    /// `world.cs` sets in its `Init` (name, value).
+    pub damage_timers: Vec<(String, String)>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -2150,6 +2153,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     objects.item_lines = item_lines;
     objects.ground = Some(terrain.clone());
     objects.max_monsters = world_palette_name(world, "MaxMonsters").and_then(|v| v.parse().ok());
+    objects.damage_timers = ["PoisonTime", "FastPoisonTime", "SwampTime"].iter().filter_map(|t| world_palette_name(world, t).map(|v| (format!("KQWorld::{t}"), v))).collect();
     objects
 }
 
@@ -4898,6 +4902,7 @@ impl Placer<'_> {
             character_lines: self.character_lines,
             ground: None,
             max_monsters: None,
+            damage_timers: Vec::new(),
         }
     }
 }

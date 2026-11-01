@@ -119,6 +119,7 @@ pub fn tick<'a>(
     world: &dyn MoverWorld,
 ) -> Tick {
     let mut notes = Vec::new();
+    let started_at = mover.position;
     // The jump animation ended last update: gravity on, Fall (rule 4).
     if walker.mode == Mode::Jump && walker.phase >= 1.0 {
         mover.end_jump();
@@ -260,6 +261,8 @@ pub fn tick<'a>(
         ));
     }
     mover.submerged = submerged;
+    // U-7 (water.md "Liquid damage"): what the test saw, for the damage.
+    mover.liquid = water.map(|(surface, flags)| crate::water::LiquidSample { flags, surface, feet: z, moved: mover.position != started_at });
     match report.fall {
         // ropeandhook.md rule 28 (M6 6a-3): the rope state can't be left
         // for a landing or a fall death.

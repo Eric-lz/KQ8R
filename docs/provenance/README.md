@@ -4085,3 +4085,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | --- | --- | --- |
 | A square's flags are looked up from the material it has now; an animator's change changes them at once | `water.md` "The flags follow the square's current material" (Q192) | Dead City `ground_anim.log`: "ground flags 0x40 -> 0x4" on all 120 blood squares |
 | Footsteps follow too (inferred in the note) | `water.md` (Q192 b) | `connor.log`: water steps to update 32, rock steps from 35 |
+
+## U-7 2026-11-01: liquid damage (Connor) — core `water.rs` (`timer_name`, `damage`, `kind_number`, `deep`, `LiquidSample`), `connor_update.rs`, `connor_mover.rs` (`liquid`), `active.rs` (`connor_liquid`), `fight.rs` (`hit_connor_full`); data `envinfo.rs`; viewer `door_view.rs`, `connor_view.rs` (`hurt`), `load.rs` (`damage_timers`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| After every move; poison → `PoisonTime`, fastpoison/lava → `FastPoisonTime`, swamp → `SwampTime`; 0 or unset = 1,000 | `water.md` "Liquid damage" rules 1–2 (Q191) | unit test `the_liquid_damage_numbers` |
+| x = 0.66 × Connor's level ÷ value; ≥ 1: whole part every update; else 1 when k (second's fraction × 15, rounded) is a multiple of n = whole part of 1/x, at most 8 | rule 3 | the unit test (levels 1, 2, 3, 4, 8, 16) |
+| Only deep (liquid, surface ≥ feet + 250), or `ontop` with the surface at most 100 below the feet | rule 6 | `fight.log`: blood 288 deep, level 8: −1 every update while he moves, nothing once he stands |
+| Kind Fire / Ice / Normal by the flags; the ordinary hit; no ouch, `poison<n>.aud` at most every 2.5 s | rule 7 | `doors.log` updates 12, 50 |
+| Which of `poison1`–`3`: a roll | **ours** | — |
+| The timers read from `world.cs`'s text at load (its `Init` is not run as a script by the viewer) | **ours** (as `MaxMonsters`) | `items.log` "terrain damage timers from world.cs" |

@@ -665,6 +665,9 @@ pub struct Mover {
     pub balls: BallStack,
     /// The water test's result after the last move (water.md).
     pub submerged: bool,
+    /// What the water test saw after this update's move, for the liquid
+    /// damage (U-7); taken by the caller.
+    pub liquid: Option<crate::water::LiquidSample>,
     /// This jump has had a glancing steep hit already (for the log).
     pub jump_glanced: bool,
     /// Collision type bit 4 (Connor's): the Fall state and "steep ground
@@ -789,6 +792,7 @@ impl Mover {
             push_from: position,
             balls: BallStack::from_box(CONNOR_BOX.0, CONNOR_BOX.1),
             submerged: false,
+            liquid: None,
             jump_glanced: false,
             falls: true,
             terrain_in_passes: true,

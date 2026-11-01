@@ -180,7 +180,7 @@ pub enum Request {
     /// can be cut short and his last flinch ended over 2 s ago, else his
     /// ouch sound plays (at most once a second). The caller decides: it
     /// has his movement.
-    ConnorHurt { roll_over: bool, special: Option<String>, at: String },
+    ConnorHurt { roll_over: bool, special: Option<String>, at: String, terrain: bool },
     /// Connor's health fell below 0 (rules 18, 29): his dying state, by
     /// the hit's kind.
     ConnorDies { kind: crate::fight::HitKind, at: String },
@@ -864,6 +864,8 @@ pub struct WorldState {
     /// Where the camera is, set by the caller before scripts run (U-2:
     /// the tower skeleton's greeting remembers it).
     pub camera_at: Option<[f32; 3]>,
+    /// U-7: when Connor's last `poison<n>.aud` played (game time).
+    pub poison_sound_at: f64,
     /// His heading (the turn about z, as `move Connor … rz` sets it), set
     /// with `connor_at`: `getLoc Connor` gives it as his turn.
     pub connor_heading: f32,
@@ -3988,6 +3990,7 @@ impl Active {
                 connor_can_turn: false,
                 connor_at: None,
                 camera_at: None,
+                poison_sound_at: f64::NEG_INFINITY,
                 connor_heading: 0.0,
                 connor_react: (None, None),
                 required_weapon_mode: (-1, None),
@@ -4195,6 +4198,54 @@ impl Active {
             }
         }
         true
+    }
+
+    /// U-7 (`water.md` "Liquid damage", Q191): after Connor's move, the
+    /// damage of the square under him. Only after a move; deep (or the
+    /// `ontop` case); the timer from the world's variables; an ordinary hit
+    /// with no ouch, `poison<n>.aud` at most every 2.5 s instead.
+    pub fn connor_liquid(&mut self, s: crate::water::LiquidSample) {
+        use crate::water as w;
+        if !s.moved {
+            return;
+        }
+        let flags = s.flags;
+        let Some(timer) = w::timer_name(flags) else { return };
+        let ontop = flags & kq8_data::envinfo::ONTOP != 0 && s.surface >= s.feet - w::ONTOP_BELOW;
+        if !ontop && !w::deep(flags, s.surface, s.feet) {
+            return;
+        }
+        let Some(level) = self.world.connor_stats.map(|c| c.level) else { return };
+        let value = self.scripts.vars.get(timer).map(number_value);
+        let now = self.world.now();
+        let k = w::place_in_second(now);
+        let d = w::damage(value, level, k);
+        if d == 0 {
+            return;
+        }
+        let kind = match w::kind_number(flags) {
+            2 => crate::fight::HitKind::Fire,
+            3 => crate::fight::HitKind::Ice,
+            _ => crate::fight::HitKind::Normal,
+        };
+        let sinking = if ontop { "; an `ontop` square: his keep-on-ground and gravity would go off and he would sink 15 (not built)" } else { "" };
+        self.world.fight_note(
+            "Connor",
+            format!(
+                "liquid damage (water.md \"Liquid damage\"): flags {flags:#x}, surface {:.0} above his feet; {timer} = {}; level {level}, k {k}: damage {d}, kind {}{sinking}",
+                s.surface - s.feet,
+                value.map_or("not set".to_string(), |v| v.to_string()),
+                kind.name()
+            ),
+        );
+        if now + 1e-6 >= self.world.poison_sound_at + w::POISON_SOUND_EVERY {
+            self.world.poison_sound_at = now;
+            let n = 1 + (self.world.fight_rng.fraction() * 3.0).floor().min(2.0) as u32;
+            let line = format!("KQSound::play poison{n}.aud");
+            self.world.note(format!("liquid damage: {line} (water.md rule 7; which of the three: ours, a roll)"));
+            self.run_lines(&[line], "liquid damage");
+        }
+        self.world.hit_connor_full("the ground", d, kind, false, true);
     }
 
     /// T-4a, U-2 (Q195 c): the greeting's line has ended: the camera

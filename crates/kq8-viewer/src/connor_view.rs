@@ -1246,7 +1246,7 @@ impl ConnorSim {
     /// its `loop=` line says so or it has ended) and his last flinch ended
     /// over 2 s ago; otherwise his ouch sound, at most once a second (a
     /// flinch also starts that second). Returns the line for `fight.log`.
-    pub fn hurt(&mut self, roll_over: bool, special: Option<&str>, ouch: &str, now: f64) -> String {
+    pub fn hurt(&mut self, roll_over: bool, special: Option<&str>, ouch: Option<&str>, now: f64) -> String {
         use kq8_core::fight::{FLINCH_PAUSE, OUCH_EVERY};
         let can_cut = self.can_be_cut_short();
         let w = &self.walker;
@@ -1274,10 +1274,12 @@ impl ConnorSim {
             }
             (why, _) => {
                 let why = why.unwrap_or_default();
-                if now + 1e-6 >= self.last_ouch + OUCH_EVERY {
+                if let Some(ouch) = ouch.filter(|_| now + 1e-6 >= self.last_ouch + OUCH_EVERY) {
                     self.last_ouch = now;
                     self.sounds.push(kq8_core::sound::Start::placed_one_shot(ouch, self.mover.position, "his ouch sound (fighting.md rule 24)".into()));
                     format!("no flinch ({why}): his ouch sound {ouch} (rule 24)")
+                } else if ouch.is_none() {
+                    format!("no flinch ({why}); no ouch sound (a hit from the ground, water.md rule 7)")
                 } else {
                     format!("no flinch ({why}); no ouch sound, the last was {:.2} s ago (at most once a second, rule 24)", now - self.last_ouch)
                 }
