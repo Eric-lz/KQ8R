@@ -17,8 +17,11 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
   trap `On` for good, `traps.md` 8a); **Q189** animated objects never
   load `shapeName` (build the scales; `objects.md` 3–5); **Q191 / Q192**
   liquid damage and live ground flags (`water.md`); **Q190** a kill with
-  kind 4 never finishes in the original (treat as Normal); **Q185** the
-  endless reset is the original's rule too (a user check is suggested);
+  kind 4 never finishes in the original (treat as Normal); **Q185**
+  (corrected after the user's check): characters and animated objects
+  update **only while near**; far = drawn, frozen, not solid; off = put
+  home (`object-lighting.md` rule 37); a thrown rock flies through trap
+  boxes (user's check);
   Q184 skins, Q187, Q188, Q193, Q194 (details in QUESTIONS.md).
 
 - **2026-10-31 (B): batch 2 D-8 to D-11a built** (logs and unit tests,

@@ -506,12 +506,13 @@ the rock is in hand (`INVITEM_Rock` taken from the bar):
 - The flying rock is type 1, so when its path touches the trap box the
   trap is told and the rock enters it: **`On`** (the script plays the
   plate's `down`).
-- The rock's own touch rule does **not** look at what it touched (an
-  ordinary object ignores traps, a projectile does not), so the trap
-  box counts as a surface for the rock too: coming down through the
-  box's top it **dies on the box's top face** (about 500 above the
-  plate, `BBMaxZ`); hitting a side it drops straight down past it.
-  Traced, not checked in play (How to check).
+- **The rock is not stopped by the trap box** (the user's check in the
+  original, 2026-11-01: the rock lies on the plate, at most a little
+  above it, and the plate stays down). It flies on through the box and
+  ends on the floor grid as usual. (The first version of this note
+  read the code as the box stopping it 500 up; the touch that tells the
+  trap evidently doesn't reach the rock's own touch rule. Why exactly:
+  not traced. Build it as seen: traps never stop projectiles.)
 - A trap only lets a visitor go when that visitor reports a move. The
   rock is deleted at `Die` without one, so it **stays on the trap's
   list for good**: no `Off` is ever sent for it. Everything that enters
@@ -536,8 +537,8 @@ of `Tile2`'s throw belongs to the Swamp study.
 `rockHit.cs`'s `KQMonster::dropItem Connor INVITEM_Rock <loc>` removes
 **one** rock from Connor's stack and makes a **new** rock item (count 1)
 in the world at the landing point, placed still (z −1 / −2 mean ground
-/ surface as usual; otherwise exactly that height, so a rock that died
-on a trap box's top lies there in the air). If Connor has no rock left
+/ surface as usual; otherwise exactly that height: on a plate, the floor
+grid height where the rock came down). If Connor has no rock left
 by then (two rocks in flight, one carried) the command prints "is not
 carrying" and no rock is made.
 
@@ -692,12 +693,10 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
   position every update. Expected: it starts about 1,350 above
   Connor's feet (hand 1,849 − 500), is back at hand height after a third
   of the way, and the trap `triptrp2` gets `On` in the update its path
-  first touches the box; the rock then stops on the box's top (about
-  525 above `locZ`) and the new rock item is made there. No `Off`
-  afterwards, even when Connor walks on and off the plate.
-  **User check in the original:** after the throw, does the rock lie on
-  the plate or float about half a man's height above it? Does the plate
-  ever come back up?
+  first touches the box; the rock flies on to the floor grid and the
+  new rock item is made there. No `Off` afterwards, even when Connor
+  walks on and off the plate. (Matches the user's check in the original,
+  2026-11-01: the rock lies on the plate and the plate stays down.)
 - Throw a rock at plain ground 2,500 away: it lands short (on flat
   ground the floor grid stops it before the range's end).
 - Weeper drain: log Connor's health each update while drained; expect

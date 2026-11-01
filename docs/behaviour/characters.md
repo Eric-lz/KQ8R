@@ -258,10 +258,12 @@ Words used here:
 ### What plays at load (question 3)
 
 11. **A character does nothing until it is first in range** (traced). Its
-    update (animation, state, mover) runs only while it is **near or far**
-    (`object-lighting.md` rules 34–37), not while it is off or hidden. So
-    its first movement starts in the first update in which it is near or
-    far, not when it is loaded. (Ordinary animated objects behave the same
+    update (animation, state, mover) runs only while it is **near**
+    (`object-lighting.md` rule 37, bit 0x1; corrected 2026-11-01, Q185:
+    the first version said "near or far"; when far it is drawn but
+    frozen), not while it is far, off or hidden. So its first movement
+    starts in the first update in which it is near, not when it is
+    loaded. (Ordinary animated objects behave the same
     way, `anim-scripts.md` rule 3.)
 12. **The start-up** (traced; **corrected 2026-10-19**, Q116 and Q121;
     refines `anim-scripts.md` rule 3 for characters):
@@ -982,7 +984,7 @@ directions by pressing forward or back while facing one of them.
 
 | What | Value | Source |
 | --- | --- | --- |
-| update only while | near or far (not off, not hidden) | traced |
+| update only while | near (not far, off or hidden; corrected 2026-11-01) | traced |
 | `Stop` random start | random frame, speed 0.9–1.1 | traced |
 | default `flags` for characters | 0x10 (random `Stop` at Wait start) | traced |
 | `birthDelay` default | 0 s (Daventry: goblin18, goblin20 1 s; RoadZ1 3, RoadZ5 3.5) | traced, data |

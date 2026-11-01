@@ -13,6 +13,15 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
 **Still broken / not tested:** **Not looked at by eye.** A respawn through the real scripts (`ratkarma.cs` from `boxsmrt.cs`) not run. Copies don't move their mouths and cast no shadow.
 **Next:** The user's look; the study session's answers (Q186–Q196).
 
+## 2026-11-01 Study (A): corrections from the user's checks (Q185, Q186)
+
+**Changed:** `character-movement.md` rules 20, 21 and How to check; `object-lighting.md` rule 37 (bit 0x1 = the update tick); `characters.md` rule 11 and its table; `connor-physics.md` (characters' gravity); `ranged-weapons.md` 8d, 8f, How to check. QUESTIONS Q185, Q186.
+**Why:** The user checked both in the original: the rock lies on the plate (not ~500 above it) and the plate stays down; the Daventry goblin freezes in the haze when far, moves again when Connor steps closer, and goes home only when Connor walks away.
+**Tested how:** Re-read the group masks in `Mask.exe`: animated objects get the update-tick bit in their near set (0x449) but not their far set (0x440); `KQMonster` and the goblin files change neither. Matches the user's three zones exactly.
+**Result:** Characters (and animated objects) update **only while near** (≤ 0.83 × `visibleDistance`); far = drawn, frozen, not solid; off = the reset home. The notes said "near or far" in five places; corrected. Rock: the trap box is not a surface for the rock (why, not traced; built as seen).
+**Still broken / not tested:** Why the goblin runs away after its alarm instead of at Connor: not traced. Why the trap box doesn't stop the rock: not traced.
+**Next:** B: freeze far characters and animated objects (no updates, not solid, still drawn); keep the rock flying through trap boxes.
+
 ## 2026-11-01 Study (A): Q184–Q196 answered, Q110 (a)
 
 **Changed:** Behaviour notes only (no code): `inventory.md` (new "Connor's look for the armour he wears"; remark numbers, Q110 a), `character-movement.md` rule 21 (Q185), `ranged-weapons.md` sections 8–9 rewritten (rock throw Q186, weeper bolt Q194), `emitters.md` `terAnimSwitch` (Q187, open q. 3 closed), `traps.md` (spirit drain in whole numbers Q188; new rule 8a: a deleted visitor never leaves), `objects.md` (animated objects' `shapeName` and boxes Q189; river controls Q193), `tile-puzzle.md` rule 26a (Q189, open q. 3), `fighting.md` rules 29a, 32a (Q190) and 7a (Q195, Q196), `water.md` (live ground flags Q192, new "Liquid damage" Q191). QUESTIONS: Q184–Q196 answered, Q110 (a). Scratch in `re/` (not committed).

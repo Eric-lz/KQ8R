@@ -712,6 +712,17 @@ an object takes part in the game at all.
     **lights group**, the list the frame's light gathering walks (rule 3):
     lights carried by its model (rule 26b) shine only while it has 0x400.
     **0x2** keeps it in the near / far / off test itself.
+    **0x1 is the per-update tick** (corrected 2026-11-01, Q185, after the
+    user's check in the original): only an object with bit 0x1 gets the
+    15-a-second update (animation, state, sight, mover, gravity). An
+    animated object or a character gets 0x1 added to its **near** set
+    (near 0x449) but **not** to its far set (0x440), so with the default
+    masks **a far animated object or character is drawn, frozen in its
+    last pose, not solid, and not updated**; only when near does it move
+    and animate. Files that set `groupsActive3DFar = 1089` (0x441: 20
+    files, the torch flames) keep ticking when far; `groupsAlways=1097`
+    (Connor) always ticks. Plain objects have no 0x1 at all (they tick
+    only while something moves them, e.g. a thrown item).
     **`KQPointLight` is different** (corrected 2026-10-16, Q77 b): it is
     not an ordinary object and has no group masks. When it enters the
     world it puts itself straight into the lights group and stays there

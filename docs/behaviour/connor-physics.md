@@ -916,7 +916,8 @@ these differences; details in `characters.md` rule 8:
   A file's `colliderMask=0` (the Wizard, the Knight) removes the terrain
   test and building floors; only the ground check catches them.
 - **Gravity** is on unless `monUseGravity=0`, and the mover runs only in
-  the character's update (near or far, not hidden).
+  the character's update (near only, not far or hidden; corrected
+  2026-11-01, `object-lighting.md` rule 37).
 - **No Fall state, no fall death, and landing on steep ground does not
   switch gravity on**: those three need collision type bit 4, which only
   Connor has.
