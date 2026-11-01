@@ -4534,6 +4534,8 @@ impl Placer<'_> {
                 match w.first().copied() {
                     Some("kqmonster::inventory") => named.extend(w.get(2).map(|s| s.to_string())),
                     Some("give") => named.extend(w.get(1).map(|s| s.to_string())),
+                    // U-9a: `rockHit.cs` lays a rock.
+                    Some("kqmonster::dropitem") => named.extend(w.get(2).map(|s| s.to_string())),
                     Some("kqobject::tossitems") => named.extend(w.get(3).into_iter().flat_map(|v| v.split(',')).map(str::to_string)),
                     _ => {}
                 }

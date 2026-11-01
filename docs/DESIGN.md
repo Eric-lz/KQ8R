@@ -3868,6 +3868,15 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     the state left before the walk, the turn off a dish at once, its
     state number = Tile's, the tie at heading 1.57 → 2.207.
 - **U-9 (Q186): `ThrowRock`** (`ranged-weapons.md` 8, `traps.md` 8a).
+  Three commits:
+  - **U-9a: `KQMonster::dropItem`** (8f; was a stub): one item from the
+    carrier's stack, a new still one (count 1) at the point (z −1 / −2
+    the ground), "is not carrying" otherwise. **Done** 2026-11-01 (logs,
+    a unit test; ours: an emptied stack leaves the inventory).
+  - **U-9b: the rock's flight** (8c, 8d): a bolt with the two-ellipse
+    arc, the floor grid / side / top touches, its moves shown to the
+    traps (type 1; never leaves), `Die` → `rockHit.cs`.
+  - **U-9c: the click and the `ThrowRock` state** (8a, 8b).
 - **U-10 (Q193): river controls** (`objects.md` "River controls").
 - **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).
 - Q184 and Q187 confirm what is built (no change), except where U-x

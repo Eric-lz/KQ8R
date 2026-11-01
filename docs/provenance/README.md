@@ -4116,3 +4116,10 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Gravity and keep-on-ground off for `onscale1` / `offscale1`, back on for the second | rule 26a (Q189) | `connor.log` z: 3,966 at the end of `onscale1`, then settles on the dish |
 | Other states and weapon swaps refused as in Tile | "The scales" intro | — |
 | Camera spots not built; the state left before the walk; the turn off a dish at once; state number Tile's; the tie at 1.57 → 2.207 | **ours** (Q198) | — |
+
+## U-9a 2026-11-01: `KQMonster::dropItem` — core `active.rs` (`drop_item_command`), `script.rs` (no longer a stub); viewer `load.rs` (`item_models`)
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| One item taken from `who`'s stack; a new one (count 1) put still at the point; z −1 / −2 = floor / surface; "is not carrying" otherwise | `ranged-weapons.md` 8f (Q186 e) | unit test `drop_item_takes_one_from_the_stack_and_lays_a_new_one`; Dead City `doors.log` update 30 |
+| An emptied stack leaves the inventory | **ours** | the unit test |

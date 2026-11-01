@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-9a: `KQMonster::dropItem` (the rock's landing, Q186 e)
+
+**Changed:** Core `active.rs` (`drop_item_command`), `script.rs` (removed from the stubs); viewer `load.rs` (types a script drops get their model at load). 1 unit test. DESIGN U-9 (split into U-9a–c), provenance.
+**Why:** `rockHit.cs` lays the thrown rock with it (`ranged-weapons.md` 8f); it only wrote a log line.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world DeadCity --sound off --no-ai --frames 1500 --command "give INVITEM_Rock 2",20 --command "KQMonster::dropItem Connor INVITEM_Rock 181000 48000 -1",30`; `doors.log`, `items.log`.
+**Result:** "Connor's NoName30 x2 -> x1; NoName31 (INVITEM_Rock x1) put still at (181000, 48000, 864)" (z −1 → the floor). Unit test: a third drop with none left says "is not carrying".
+**Still broken / not tested:** **Not looked at**: whether the laid rock is drawn (its model `rok.kqs` is loaded).
+**Next:** U-9b (the rock's flight).
+
 ## 2026-11-01 U-8b: the scales' `Scales` state (D-10b)
 
 **Changed:** Viewer new `connor_scales.rs` (the state: keys, onto and off the dishes, stepping away), `connor_view.rs` (hooked in like Tile; its state number), `connor_tile.rs` (`tile_holds` also refuses other states on the scales), `door_view.rs` (entering; weapon swaps refused), `load.rs` (`conscale.anm`'s movements loaded). Core `active.rs` (`setState Connor Scales` → `Request::ConnorScales`). 1 unit test. DESIGN U-8b, provenance, QUESTIONS Q198.

@@ -1426,6 +1426,43 @@ impl WorldState {
         }
     }
 
+    /// `KQMonster::dropItem <who> <type> x y z` (`ranged-weapons.md` 8f,
+    /// U-9a; `rockHit.cs`): one item of the type is taken from `who`'s
+    /// stack and a new one (count 1) is put still into the world there
+    /// (z −1 / −2: the floor / surface); "is not carrying" otherwise.
+    fn drop_item_command(&mut self, words: &[String], at: &str) -> String {
+        let [_, who, kind, x, y, z, ..] = words else {
+            self.note(format!("{at}: usage: KQMonster::dropItem <who> <type> x y z: '{}'", words.join(" ")));
+            return "1".into();
+        };
+        let held = self.items.objects.iter().position(|o| o.carried_by(who) && o.kind.eq_ignore_ascii_case(kind) && o.quantity > 0);
+        let Some(k) = held else {
+            self.note(format!("{at}: KQMonster::dropItem: {who} is not carrying {kind}; nothing (ranged-weapons.md 8f)"));
+            return "1".into();
+        };
+        let position = [number_value(x) as f32, number_value(y) as f32, number_value(z) as f32];
+        let before = self.items.objects[k].quantity;
+        self.items.objects[k].quantity -= 1;
+        let stack = self.items.objects[k].name.clone();
+        if self.items.objects[k].quantity == 0 {
+            // Ours: an empty stack leaves the inventory.
+            self.items.objects[k].place = crate::item::Place::Gone;
+        }
+        let made = self.make_world_item(kind, 1, position, [0.0; 3], at);
+        self.connor_stats_events += 1;
+        match made {
+            Ok(name) => {
+                let p = self.items.get(&name).and_then(|o| o.placement()).map_or(position, |pl| pl.position);
+                self.note(format!("{at}: KQMonster::dropItem: {who}'s {stack} x{before} -> x{}; {name} ({kind} x1) put still at ({:.0}, {:.0}, {:.0}) (ranged-weapons.md 8f)", before - 1, p[0], p[1], p[2]));
+                "0".into()
+            }
+            Err(e) => {
+                self.note(format!("{at}: KQMonster::dropItem: {kind}: {e}; not made"));
+                "1".into()
+            }
+        }
+    }
+
     fn make_world_item(&mut self, kind: &str, quantity: i64, mut position: [f32; 3], angles: [f32; 3], at: &str) -> Result<String, String> {
         if position[2] == -1.0 || position[2] == -2.0 {
             let floor = position[2] == -1.0;
@@ -3770,6 +3807,7 @@ impl ScriptHost for WorldState {
             "KQCamera::setRange" => Some(self.set_range(words, at)),
             "KQCamera::addCamLoc" | "KQCamera::flyToCamLoc" | "KQCamera::cutToCamLoc" => Some(self.cam_loc(words, at)),
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
+            "KQMonster::dropItem" => Some(self.drop_item_command(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
             "getConInventory" => Some(self.get_con_inventory(at)),
             "exist" => Some(self.exist(words, at)),
@@ -6901,6 +6939,24 @@ endif
         let log = a.world.fight_log.join("\n");
         assert!(log.contains("spirit trap spirtp1 (Connor came in while a spirit is passing): loss = whole part of (level 5 x 0.2 x 10) = 10; below 1 % of maximum 50: set to whole part of (level x 0.1) = 0: health 3 -> 0"), "{log}");
         assert!(!log.contains("first hit by a character"), "not by a character (Q188 c): {log}");
+    }
+
+    #[test]
+    fn drop_item_takes_one_from_the_stack_and_lays_a_new_one() {
+        // ranged-weapons.md 8f (U-9a): rockHit.cs's line.
+        // (The test list's stacking type stands in for the rock.)
+        let mut a = fighter();
+        a.world.items = crate::item::tests::items();
+        a.world.items.make("INVITEM_Crystal", 2, crate::item::Place::Carried("Connor".into())).unwrap();
+        a.test_command("KQMonster::dropItem Connor INVITEM_Crystal 100 200 300", "t");
+        assert_eq!(a.world.items.count("Connor", "INVITEM_Crystal"), 1);
+        let laid: Vec<_> = a.world.items.objects.iter().filter(|o| o.kind == "INVITEM_Crystal" && o.in_world()).collect();
+        assert_eq!(laid.len(), 1);
+        assert_eq!((laid[0].quantity, laid[0].placement().map(|p| p.position)), (1, Some([100.0, 200.0, 300.0])));
+        a.test_command("KQMonster::dropItem Connor INVITEM_Crystal 0 0 0", "t");
+        a.test_command("KQMonster::dropItem Connor INVITEM_Crystal 0 0 0", "t");
+        assert!(a.world.log.iter().any(|l| l.contains("Connor is not carrying INVITEM_Crystal")), "{:?}", a.world.log);
+        assert_eq!(a.world.items.objects.iter().filter(|o| o.kind == "INVITEM_Crystal" && o.in_world()).count(), 2);
     }
 
     #[test]
