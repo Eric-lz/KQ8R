@@ -329,6 +329,16 @@ is not left with `tileExit`, only by stepping away, below).
     y > 50,000 he turns to −0.933, with y < 50,000 to −2.207 (exactly
     50,000: nothing happens); then `offscale1`, `offscale2`, the camera
     goes to (214,421, 49,340, 4,190) and follows him again.
+26a. **Gravity during the steps** (traced 2026-11-01, Q189): just before
+    `onscale1` (onto a dish) and before `offscale1` (off it) the state
+    switches **gravity and keep-on-ground off**; the movement's own steps
+    carry him up or down. When `onscale1` / `offscale1` ends it switches
+    both **back on** (keep-on-ground in its usual floor mode) and plays
+    `onscale2` / `offscale2` with ordinary gravity, so he settles on
+    the dish box or the floor under him. Step up / down are not touched.
+    The positions in rules 25–26 are put on him with the start-spot move
+    (heading set, height 2,900) before `onscale1`, and with a relative
+    move (turn 180°, 200 up) after `onscale2`.
 27. **The puzzle itself is script** (data): the dish colliders
     (`scalelt.cs` / `scalert.cs` on `ConnorCollision`), the feather and
     the `DeadCity::Scales::*` variables; `scalcmpl.cs` runs the win,
@@ -420,9 +430,8 @@ is not left with `tileExit`, only by stepping away, below).
 
 1. ~~The camera "hold" switch~~: answered 2026-10-30, rule 7a.
 2. The internal notice 0.5 s after `deadHallTeleport` (not traced).
-3. Scales: what happens to Connor's movement while `onscale2` /
-   `offscale2` play (the program sets some mover switches first; maybe a
-   held last frame; not traced).
+3. ~~Scales: Connor's movement while `onscale2` / `offscale2` play~~:
+   answered 2026-11-01 (Q189), rule 26a.
 4. ~~The camera flight speed after a teleport~~: answered 2026-10-30,
    rule 13 ("The camera flight").
 5. **Tile2 (Swamp) and Tile3 (Barren) are separate states**, not the

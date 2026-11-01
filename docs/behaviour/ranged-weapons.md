@@ -418,53 +418,178 @@ Words used here:
     - which swing plays (`Attack` / `AttackB`, Shift `Attack2`) is
       `fighting.md` rule 40.
 
-### 8. Throwing a rock (Connor's `ThrowRock` state, traced 2026-10-28, batch 2)
+### 8. Throwing a rock (Connor's `ThrowRock` state, traced 2026-10-28, batch 2; details traced 2026-11-01, Q186)
 
-Scripts set it (`KQMonster::setState Connor ThrowRock`; Dead City
-`rockme.cs`, Swamp six times, Gnome and Temple 1 once).
+**8a. The click** (traced, Q186 a, b). A left click in the world while
+the rock is in hand (`INVITEM_Rock` taken from the bar):
+1. The point under the pointer is found the same way as for any click
+   (the first thing the line from the camera meets, else the line's
+   end). That point becomes the **aim**.
+2. If the thing hit is an object that **accepts the rock** (its
+   `acceptsInventory`) **and** Connor is closer to it than the rock's
+   `maxDistance` (2,500; measured from Connor to the nearest point of
+   the object's box, as for item clicks), the aim is changed to the
+   **object's own position** and the object is sent the usual "Connor
+   used this item on you" (`ConnorAction` with the rock) at once. Its
+   script decides the rest (`rockme.cs`: `setState Connor ThrowRock`).
+   There is **no walk up** and no remark when it is too far.
+3. Otherwise (nothing accepting it, or too far) he simply **throws at
+   the clicked point**: he turns toward it (third person only) and goes
+   straight into `ThrowRock`. (In the Swamp's `Tile2` state the state's
+   own throw runs instead; 8e.)
+4. Either way the rock leaves the pointer and the pointer goes back to
+   his weapon mode's.
 
+**8b. The state** (traced):
 - **On entry**: forced third person; his weapon mode is remembered;
   `away` plays; his projectile file becomes the rock item's
-  (`prrock.kq`) for now.
-- After `away` he plays **`throw`** (`Conner.anm` movement 41,
-  `c_rktoss`, 36 frames). Its cue at phase 0.7778 is `do`, which
-  launches the projectile by the ordinary ranged "do" path (section 6;
-  aim not traced, probably the same as a bow shot at the clicked
-  object).
-- After `throw`: his own projectile file is put back; if a weapon was
-  out, the old mode returns and `out` plays; then `Stop`, he may use
-  first person again, and he goes to `Wait`.
-- He cannot leave the state before that; afterwards only to Wait, Move,
-  Special or Die.
-- **The rock** (data, `prrock.kq`): speed 2,500, maximum distance 2,500,
-  a parabola with `peakHeightOffset` 500 and `upVelocity` 2,500. A rock
-  hitting a character counts as kind 4, so a target it kills reports
-  `Die` with `Normal` (traced). Its damage: not traced.
-- **When it lands** (data): `rockHit.cs` runs on `Die` and drops
-  `INVITEM_Rock` at the landing spot (`KQMonster::dropItem Connor
-  INVITEM_Rock`), so the rock can be picked up again. Dead City's
-  targets are the pressure plates `trip2`–`trip15`
-  (`acceptsInventory=INVITEM_Rock`, script `rockme.cs`).
+  (`prrock.kq`, the item's last column) for now.
+- After `away`: if a weapon was out, he goes to empty hands; then
+  **`throw`** (`Conner.anm` movement 41, `c_rktoss`, 36 frames). Its
+  cue at phase 0.7778 (frame 27) is `do`, which launches the rock.
+- After `throw`: with empty hands before, he is done; else the old
+  mode returns and `out` plays, then he is done. Done = his own
+  projectile file back, `Stop`, first person allowed again, `Wait`.
+- He cannot leave the state before that; afterwards only to Wait,
+  Move, Special or Die. Turning toward the aim (8a step 3) runs on
+  during the state.
 
-### 9. The weeper's draining bolt (`KQWeepBolt`, traced 2026-10-28, batch 2)
+**8c. The flight with `parabola=1`** (traced, Q186 c):
+- **Start point**: the rock model part named by the projectile's
+  `meshName` (`rock`) in `throw`'s current frame, turned with Connor
+  and added to his position. At the `do` frame (27) that part is 1,849
+  above his feet and 223 in front of him (data, `C_rktoss.kqs`).
+  "Hand height" below = that 1,849.
+- **Range** M = the smaller of `maxDistance` (2,500) and the
+  **horizontal** distance from the start point to the aim. The heading
+  is the direction from the start point to the aim, fixed for the whole
+  flight.
+- **Distance flown** T grows each update by speed × time: `upVelocity`
+  (2,500 per second) until T passes M/3, then `velocity` (2,500). So the
+  rock covers M in M/2,500 seconds (at most 1 s; 15 updates a second).
+- **Position every update**: T along the heading, horizontally from the
+  start point; height = start height − H + h, where H =
+  `peakHeightOffset` (500) + hand height (1,849) = 2,349, and
+  - while T ≤ M/3 (rising): h = hand height + 500 × √(1 − ((M/3 − T) ÷ (M/3))²);
+  - after that (falling): h = H × √(1 − ((T − M/3) ÷ (2M/3))²).
+
+  So the arc's **top is the hand point itself, a third of the way**;
+  the rock starts 500 below the hand (a visible drop at launch), and at
+  the end of the range it would be H = 2,349 below the hand, about 500
+  below his feet. The curve is two quarter-ellipses, not gravity.
+- **What ends it**:
+  - the **floor grid** under it reaching its height: it is put on the
+    floor grid there and dies (`Die`);
+  - touching something (its collision mask is the default 0x1F: types
+    1, 2, 4, 8 and 0x10; the shooter is ignored): a touch on a **side**
+    (a face steeper than 45°, normal z below 0.707) makes it **drop
+    straight down** from there; a touch on a **top** face ends it: if
+    the thing is an object it is hit (below), then the rock dies at the
+    touch point;
+  - T passing M with nothing touched: it drops straight down to the
+    floor grid. (The drop speed is built on a value the program never
+    sets first, so it is not certain; roughly 8,000 units/s². Not sure.)
+- **`Die`** runs the projectile's script (`rockHit.cs`) with the rock's
+  position where it died, so `$KQObject::loc` is the landing point.
+- **Damage on what it hits** (top touches only): an attack with
+  **Connor's ranged damage** (the number in the bar, whatever ranged
+  weapon he carries), kind **4**, through the ordinary hit rules
+  (`fighting.md`). An object with the projectile-immune type bit 0x4000
+  takes 0 and runs `ProjImmune` instead. See `fighting.md` rule 32a: a
+  character killed by a kind-4 hit never finishes dying in the
+  original.
+
+**8d. The pressure plates** (traced, Q186 d):
+- The plates themselves (`trip2` …) have `colliderType=0`: the rock
+  passes through them. What matters is the **trap box** on each plate
+  (`triptrp2` …, mask 519 = types 1, 2, 4, 0x200).
+- The flying rock is type 1, so when its path touches the trap box the
+  trap is told and the rock enters it: **`On`** (the script plays the
+  plate's `down`).
+- The rock's own touch rule does **not** look at what it touched (an
+  ordinary object ignores traps, a projectile does not), so the trap
+  box counts as a surface for the rock too: coming down through the
+  box's top it **dies on the box's top face** (about 500 above the
+  plate, `BBMaxZ`); hitting a side it drops straight down past it.
+  Traced, not checked in play (How to check).
+- A trap only lets a visitor go when that visitor reports a move. The
+  rock is deleted at `Die` without one, so it **stays on the trap's
+  list for good**: no `Off` is ever sent for it. Everything that enters
+  later (Connor, a rock item that moves) only gives `Cue 301` / `Cue
+  302`, which the plate scripts ignore. **So once a thrown rock has
+  touched a plate's trap, the plate stays down for the rest of the
+  visit**, and picking the rock up again changes nothing. (After a world
+  change or a reload the trap starts with an empty list; what the plate
+  does then is not traced.)
+- `dropItem` places the new rock **still**, with no throw (8f), so the
+  dropped item never sets a trap off by itself.
+
+**8e. `Tile2` (Swamp)** (traced, Q186 f, partly): a rock click in
+`Tile2` does not switch to `ThrowRock`; the `Tile2` state starts its own
+throw (controls off, its own movement, the rock's projectile file) and
+stays in `Tile2`. This is what `fienfire.cs`'s "won't really change
+state" means. A script's `setState Connor ThrowRock` while in a Tile
+state is a change the Tile state refuses (`tile-puzzle.md`). The rest
+of `Tile2`'s throw belongs to the Swamp study.
+
+**8f. The inventory** (traced, Q186 e): nothing is taken at the throw.
+`rockHit.cs`'s `KQMonster::dropItem Connor INVITEM_Rock <loc>` removes
+**one** rock from Connor's stack and makes a **new** rock item (count 1)
+in the world at the landing point, placed still (z −1 / −2 mean ground
+/ surface as usual; otherwise exactly that height, so a rock that died
+on a trap box's top lies there in the air). If Connor has no rock left
+by then (two rocks in flight, one carried) the command prints "is not
+carrying" and no rock is made.
+
+### 9. The weeper's draining bolt (`KQWeepBolt`, traced 2026-10-28, batch 2; details traced 2026-11-01, Q194)
 
 A projectile class (Dead City `PRweeper.kq`). Keys besides the ordinary
 projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
 `fireAnim`, `hurtAnim`, `doneAnim`, `shootOffset`, `hitOffset`.
 
+- **Where the weeper gets it** (traced and data, Q194 a): the type
+  lines `weeper` and `weeperup` in `GAME/Kq/Monstats.mtl` hold
+  **`INVITEM_WeeperEyes`** (`invHold` column). That item (`Invinfo.itl`
+  item 21, ID 1220) is a `LongWeapon` whose last column is
+  `Prweeper.kq`. Holding a ranged weapon makes a character ranged and
+  gives it that weapon's projectile file (`fighting.md` rule 34), as
+  for the spriggans' crossbow. No name rule is involved.
+- **When it fires** (traced and data, Q194 b): like any ranged character
+  (`fighting.md` rules 35–36): within 1.25 × its attack distance when
+  its attack time has come. The `attack` movement (`weepfire`, 12
+  frames) has `Do` at 0.5, which launches the bolt at Connor (aimed at
+  his position raised by 0.75 × his box height, led for his movement).
+  It flies like an ordinary bolt (straight, speed 8,000, range 10,000)
+  until it touches something.
 - When it touches a character other than its shooter it stops and
   starts **draining**, unless the target is in a `Special` state (then
-  the bolt just vanishes).
-- It lays a chain of `suckFile` objects about every 250 units on the
-  line from the shooter (z + `shootOffset`) to the target
-  (z + `hitOffset`), the last one being `suckEnd`, and starts
-  `suckSound`. The shooter plays `fireAnim`, the target `hurtAnim`.
-- Every 0.25 s the target loses 1 health, for `duration` seconds
-  (data: 3 s, so about 12 health).
-- Then the sound stops, the chain goes, the shooter plays `doneAnim`
-  and waits a full `attackDelay` before its next attack; the target
-  goes back to `Wait`.
-- Not sure: the exact spacing rule that sets the number of chain pieces.
+  the bolt just vanishes). A touch on anything that is not a character
+  removes it.
+- **The chain** (traced, Q194 e): from the shooter's position raised by
+  `shootOffset` (1,400) to the target's raised by `hitOffset` (1,000):
+  n = whole part of (length ÷ 250) − 2 pieces, at least 1, at 250, 500,
+  … from the shooter's end along the line, turned along it; the last
+  piece is `suckEnd` (`lifesuk2.kq`), the others `suckFile`
+  (`lifesuck.kq`). `suckSound` starts, looping.
+- The shooter goes to `Special` playing `fireAnim` (`suck`); the target
+  goes to `Special` playing `hurtAnim` (Q194 d: Connor's `magicReact`,
+  `Conner.anm` movement 27). In `Special` Connor's keys do nothing, so
+  he cannot move or cut it short; the movement holds or loops as its
+  own data says until the drain ends.
+- **The drain**: a counter adds each update's time; when it is above
+  0.25 s it is set back to 0 and the target loses 1 health (a plain
+  health change: no roll, no protection, no flinch, no ouch). With 15
+  updates a second that is every 4th update (3.75 a second), for
+  `duration` (3 s): about 11 health.
+- **The end**: when the time is up (or shooter or target is gone) the
+  sound stops, the shooter goes to Wait and then to `Special` with
+  `doneAnim` (`suckstop`); the **target is put in Wait** (for Connor:
+  his ordinary standing); the shooter's next attack waits a full
+  `attackDelay`. The bolt is removed.
+- **`mustReact=1`** (Q194 c): for ordinary bolts this is the hit's
+  "always react" switch (the target flinches whatever the roll,
+  `fighting.md` rule 16). The weeper's bolt never sends a hit (it only
+  drains), so on it the key changes nothing.
 
 ## Numbers and units
 
@@ -561,6 +686,22 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
 - Keep the rest, including no ammunition and the steepness limit.
 
 ## How to check
+
+**The rock and the weeper (added 2026-11-01, Q186, Q194):**
+- Dead City, throw a rock at `trip2` from 2,000 away: log the rock's
+  position every update. Expected: it starts about 1,350 above
+  Connor's feet (hand 1,849 − 500), is back at hand height after a third
+  of the way, and the trap `triptrp2` gets `On` in the update its path
+  first touches the box; the rock then stops on the box's top (about
+  525 above `locZ`) and the new rock item is made there. No `Off`
+  afterwards, even when Connor walks on and off the plate.
+  **User check in the original:** after the throw, does the rock lie on
+  the plate or float about half a man's height above it? Does the plate
+  ever come back up?
+- Throw a rock at plain ground 2,500 away: it lands short (on flat
+  ground the floor grid stops it before the range's end).
+- Weeper drain: log Connor's health each update while drained; expect
+  −1 every 4th update, 11 in all for `duration` 3, then Connor in Wait.
 
 **Our logs (B):** per request: the key or slot, the state (taken or
 dropped), the mode asked, the movements played (`away` / `out` /

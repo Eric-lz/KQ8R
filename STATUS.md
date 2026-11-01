@@ -5,7 +5,21 @@ B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-10-31)
+## Where we are (2026-11-01)
+
+- **2026-11-01 (A): Q184–Q196 answered** (traced, nothing checked in
+  the original), plus Q110 (a). For B, the ones that change what is
+  built: **Q196** the tower skeleton's fall order is `teeter`, `die`,
+  `fallend`, `die2` (the note had the last two swapped; `fighting.md`
+  7a); **Q195** Cue 201 = the end of any camera flight, passed on from
+  Connor to his state-change list; **Q186** the rock throw
+  (`ranged-weapons.md` 8: the arc, and a thrown rock keeps a plate's
+  trap `On` for good, `traps.md` 8a); **Q189** animated objects never
+  load `shapeName` (build the scales; `objects.md` 3–5); **Q191 / Q192**
+  liquid damage and live ground flags (`water.md`); **Q190** a kill with
+  kind 4 never finishes in the original (treat as Normal); **Q185** the
+  endless reset is the original's rule too (a user check is suggested);
+  Q184 skins, Q187, Q188, Q193, Q194 (details in QUESTIONS.md).
 
 - **2026-10-31 (B): batch 2 D-8 to D-11a built** (logs and unit tests,
   **not played by hand**): `matchHeights` and `terAnimSwitch` (the blood
@@ -711,14 +725,11 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- **New for A (2026-10-31): Q187–Q190**: `terAnimSwitch`'s "current
-  step" (low); the spirit drain's whole numbers and whether its 1-point
-  hit can kill (Q188); the scale and dishes have no `shapeName` file, so
-  they are not loaded: what the game does then, and which box they use
-  (Q189, blocks the scales); `KQAttackEvent` sent to a character (Q190).
-- **New for A (2026-10-31): Q186**: Connor's rock throw onto pressure
-  plates (aim, the arc of `prrock.kq`, what presses the plate and keeps
-  it down, when the rock leaves the inventory). Blocks D-11 `ThrowRock`.
+- **Answered by A (2026-11-01): Q184–Q196, Q110 (a)** (see "Where we
+  are"). **Still open for A (older, low priority, not done):** Q24
+  (frame-by-frame steps), Q28 (b)(c), Q30 (b), Q41 (rest), Q106, Q108
+  (a)(c), Q109 (a gold/rocks, b, c, e, f), Q110 (c)(d)(e), Q111, Q113
+  (a)–(c).
 - **Built 2026-10-24 (B-1 to B-8):** Q160, Q161, Q162, Q163 (one gap
   fixed), Q164, Q165, Q166, Q108 b. Still open for A: Q108 a, c, d;
   whether a saved game keeps `setHaze`'s values (we have no saving yet).

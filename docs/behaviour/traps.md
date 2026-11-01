@@ -125,6 +125,14 @@ never blocks anything.
    empty, the script runs with `$2` = `Off`, `$3` = the object's name.
    Otherwise `$2` = `Cue`, `$3` = `302`, `$4` = the name. While the world
    is being shut down, no `Off` is sent.
+8a. **A visitor that is deleted never leaves** (traced 2026-11-01,
+   Q186 d): a trap only checks a visitor when that visitor reports a
+   move. An object removed from the world while inside (a projectile at
+   its `Die`, for instance) reports nothing, so it stays on the list:
+   no `Off`, and later visitors only give `Cue 301` / `Cue 302`. In the
+   data this is how a thrown rock keeps a Dead City plate down
+   (`ranged-weapons.md` 8d). Build it the same way (or a "removed"
+   list entry that never counts as leaving) so the plates behave.
 9. So `On` comes when he first **touches** the box, and `Off` only once
    he is **out of touch and his middle is outside** it.
 
@@ -194,6 +202,34 @@ Connor when a spirit is passing. Extra key: `damage` (a fraction; data
   **maximum** health (20%), never below 1% of maximum (if it would go
   lower, it is set to 1%), and takes a 1-point hit that makes him flinch.
   Leaving clears "Connor inside".
+- **The drain in whole numbers** (traced 2026-11-01, Q188):
+  - loss = whole part of (level × `damage` × 10) (cut, not rounded);
+    with `damage` .2 that is **2 × level** (20 % of the maximum, which
+    is 10 × level);
+  - if (health − loss) ÷ maximum would be **below 0.01**, health is set
+    instead to the whole part of (level × 0.1), and the program's 0.1
+    is slightly under 0.1, so this is **0 for levels 1–10** and **1 for
+    levels 11–20**;
+  - the change is sent as a plain health change (no roll, no
+    protection), queued for "now";
+  - right after it, queued behind it, comes an **ordinary hit** from the
+    trap: kind 0 (Normal), damage **1**, "must react" on (rule
+    `fighting.md` 16, so he always flinches). It is a real hit: roll,
+    protection, and a loss of **at least 1** unless his protection is
+    100 (then nothing). So after the floor he can **die**: at level 10
+    or below the floor is 0 and the hit takes him to −1 (death,
+    `fighting.md` rule 18). B's stand-in floor (round(0.01 × max))
+    differs: it gives 1 from level 5 and 2 from level 15; the original
+    gives 0 up to level 10 and 1 from 11 to 20.
+  - it is **not** a hit "by a character": the first-hit tip of
+    `fighting.md` rule 29 is not given (that needs a character or kind
+    1); the low-health tip (health under half) can be;
+  - Connor's state is not looked at by the trap. While he is dying the
+    hit part is ignored (his hit handler ignores the dying states) but
+    the health change still happens; on the rope the hit does nothing
+    (the rope state takes no damage) and the health change still
+    happens; in a `Special` state the hit goes through that state's own
+    hit handling (not traced separately).
 - **Possible original bug** (traced): since Cue 2 is ignored and only
   Cue 0 clears the spirit, once a spirit has passed every later entry
   may drain him. Not checked in play; the user should decide whether to

@@ -317,6 +317,22 @@ and listed squares of Daventry's animators have material 15 in
   one-material second cycle (material 161, the drained river) after the
   scales (`tile-puzzle.md` rule 27); Swamp `kettle.cs` ×10; Daventry
   `milltree.cs`.
+- **Which step** (traced 2026-11-01, Q187): the animator keeps the
+  number of the entry its **next** change will show (a change shows
+  that entry, then counts on). "Past the new cycle's end" means that
+  next entry is not in the new cycle; then the next change shows entry
+  0. Example: entry 2 of 4 is showing, so the next is 3; switched to a
+  3-entry cycle, the next change shows entry 0. B's reading (D-8a) is
+  right.
+- **Nothing is shown at once**: the swap changes no square and does not
+  touch the timer; the new cycle's material appears at the next due
+  change (up to `delay` later). B's reading is right.
+- **Do not reproduce** (traced): the swap copies the second cycle into
+  the first cycle's storage by the second cycle's length; when the
+  second cycle is longer than the first, the original writes past the
+  end of that storage. Give each cycle its own storage. (Dead City's
+  blood cycles and Daventry's mill tree don't hit it; Swamp's `kettle`
+  animators not checked.)
 
 ## Numbers and units
 
@@ -378,9 +394,9 @@ and listed squares of Daventry's animators have material 15 in
 
 1. What makes an emitter "active" (emitter rule 12).
 2. Whether particles get the emitter's `translucency` (rule 9).
-3. Whether changed ground materials change the envInfo flags of the
-   square (no effect in Daventry; matters for other worlds, e.g. Swamp's
-   26 animators).
+3. ~~Whether changed ground materials change the envInfo flags of the
+   square~~: yes, at once (answered 2026-11-01, Q192, `water.md` "The
+   flags follow the square's current material").
 4. Script commands, unused by the data: `KQEmitter::setLoc`, `setRadius`,
    `setForceMin`, `setForceMax`, `setGravity`, `setRotMin`, `setRotMax`,
    `setMaxSinPeriod`, `setMaxParticles`, `setMaxLife`, `setFollowObject`,

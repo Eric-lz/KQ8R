@@ -108,8 +108,9 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
    - **Quest item or money**:
      - if it is the item already held: it is **put back** (pointer back
        to the play pointer, the item reappears in the strip);
-     - `INVITEM_Scroll` can't be taken: Connor says the line `0.MSG`
-       (0, 92, 14, 0) instead, at most once every 3 s and not while he
+     - `INVITEM_Scroll` can't be taken: Connor says the line file 0,
+       noun 92, verb 14, case 0, sequence 1 (`0.MSG`; Q110 a, re-read
+       2026-11-01) instead, at most once every 3 s and not while he
        talks;
      - otherwise, if the type has a cursor, it becomes **the item in
        hand**: the pointer turns into the type's cursor picture
@@ -120,7 +121,9 @@ weapons, health/potion slots, rope, rocks), see `interface.md`.
    - **Rock**: held like a quest item, except in three special states
      (puzzle states; **not** the rope, corrected 2026-10-21,
      `ropeandhook.md` rule 38), where Connor says "I have no
-     time to trifle with that." (`0.MSG` 0, 0, 0, 0, seq 3).
+     time to trifle with that." (file 0, noun 0, verb 0, case 0, sequence 3 of `0.MSG`; Q110 a).
+     All remark numbers in this note are file, noun, verb, case, then
+     the sequence.
    - **Rope**: if Connor isn't at a rope place, he says `0.MSG` file 0,
      noun 0, verb 58, case 37 "I am not near anything to climb." and the
      rope is **not** held; at a rope place it is held like a quest item and
@@ -294,6 +297,64 @@ scripts.
     Connor is missing it prints `getConInventory:  can't find Connor`;
     if he has no inventory, `getConInventory:  can't find Connor's
     inventory`; in both cases the variables are left as they were.
+
+## Connor's look for the armour he wears (traced 2026-11-01, Q184)
+
+1. **One body skin at a time.** `Connor.kq`'s `ConnerSkinList` (third
+   person) and `ConnerFpSkinList` (first-person arms) list 13 items
+   (`invItem0` … `invItem12`: leather gloves, leather boots, leather
+   armour, chain-mail shirt, chain-mail gloves, plate mail, bronze
+   plate, chain-mail suit, full armour, helmet, temple armour,
+   Strength, birthday suit) and 76 skins, each a picture with a number
+   (a set of bits: item N = bit 2^N). Both lists have the same 13 items
+   and the same 76 numbers in the same order (data), so one position in
+   the list serves both.
+2. **Changing it.** When an item **goes into** Connor's inventory or
+   **comes out** of it, and the item is one of the 13 **and** its
+   category is an armour place (armour, pants, gloves, helmet,
+   footwear; full / under armour count), the game takes the number of
+   the skin he has now and **adds** the item's bit (going in) or
+   **flips** it (coming out). Then it looks for the **first** skin whose
+   number is **exactly** that. That skin becomes his skin, in third
+   person and first person alike. (Weapons and potions never change it
+   here; Strength has its own rule 4.)
+3. **No exact match** (traced; a bug in the original): the lookup
+   gives "none", and the program then reads the entry just before the
+   list's start, which is not a skin. What it draws then is undefined
+   (garbage or a crash), and every later change starts from that broken
+   value. **Do not reproduce:** keep B's "most of the wanted bits and no
+   others" choice (as the face list, `potions.md` "Do not reproduce" 3).
+   The order matters: `inventory.md` rule 8 takes the old piece off
+   **before** the new one goes on, so the in-between number is the
+   wanted one minus the old piece.
+4. **Strength** (`potions.md` rule 25): while it runs, the drawn skin is
+   the entry whose number is the Strength bit alone (2048: `coniron.bmp`
+   / `armconfx.bmp`), whatever armour he wears; the armour number is
+   kept underneath and comes back at the end.
+5. **How the skin is drawn**: every material of his model whose
+   **original** texture name is the list's first picture (`con0.bmp`;
+   in first person `armcon0.bmp`) is drawn with the chosen picture
+   instead (the same swap as `characters.md` rule 4a). The name is
+   swapped even when the picture is **not in the world's files**; the
+   texture is then looked up by that name when drawn, so a missing one
+   behaves as any missing texture (`models-and-textures.md` Q4: what
+   the drawing shows for a missing name). Daventry has no `con63.bmp`;
+   B's "keep his own skin" stand-in is a fair choice (not traced
+   further). Q184 c.
+6. **Not the model or the movements** (Q184 d): the helmet's
+   `helmet.kqs` is only the item's model lying in the world
+   (`Invinfo.itl` model column); wearing it changes only the skin
+   number. The temple armour switches his movement lists (rule 8,
+   `contpsd2.anm`, `conicbw2.anm`). The full armour uses `conner2.anm`
+   only on a portal arrival (`world-change.md` rule 5). A command
+   `KQConner::helmetize <short list> <long list>` exists but no script
+   uses it (not traced).
+7. **Examples** (data): gloves + boots = 1 + 2 = 3 → `con4.bmp`
+   (entry 4 has the number 3); + leather armour = 7 → `con7.bmp`;
+   chain-mail suit alone = 128 → `con30.bmp`; leather armour + suit =
+   132 → `con30.bmp` (entry 71); helmet + suit + leather armour = 644 →
+   `con63.bmp` (entry 73). Where two entries have the same number
+   (`con32` / `con33` both 512) the first wins.
 
 ## Numbers and units
 

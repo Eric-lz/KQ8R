@@ -381,6 +381,20 @@ Words used here:
       gives up after its 5 s chase timer (twice its alarm radius is 0)
       (inferred from the traced rules).
 
+29a. **A `KQAttackEvent` sent to a character** (traced 2026-11-01, Q190):
+    `sendEvent 0 <character> KQAttackEvent <attacker> <kind> <damage>
+    <react>` is exactly the hit of rules 16–29, as a swing or a bolt
+    would give it: damage 0 with a script runs `ProjImmune` instead;
+    otherwise the kind is remembered (as given, any number), the
+    character's current state handles the hit (Wait and Move: rule 22
+    with roll, protection, flinch, ouch; other states their own way: a
+    talking character takes the damage without flinching), and then, for any character
+    other than Connor, it remembers where Connor is and the alarm spreads
+    (rule 26). So Dead City's `lever1.cs` (`KQAttackEvent $1 0 1 0`,
+    twice) costs the Skeleton King 1 health or so per event and alarms
+    him and anyone near who can see. **Kinds**: 0 Normal, 1 Projectile,
+    2 Fire, 3 Ice; any other number (4 is the thrown rock's) is kept as
+    it is; it only matters if the hit kills (rule 32a).
 ### 6. Connor being hit
 
 29. Traced, Connor's side only as far as the fight needs:
@@ -533,6 +547,16 @@ Words used here:
     `g2dead.kqs` / `G2_ided.kqs`; spriggan `spdeath.kqs` / `spided.kqs` /
     projectile `sp_dead8.KQS`; zombie `zdead.kqs` / `Z-ided.kqs`; bow
     spriggans `spbdeath.kqs` / `spbided.kqs`.
+32a. **A kill with a kind above 3** (traced 2026-11-01, Q190; a bug in
+    the original): rule 30 starts no die movement for such a kind, and
+    rule 32 only runs when a die movement (`Die`, `projdie`, `firedie`,
+    `icedie`) ends. So the character is left standing in whatever pose it
+    had, dead (health 0, not solid, off the active list, its drops
+    already made) but never finished: no experience, no corpse, no `Die`
+    script, never removed. In the data this only happens when a thrown
+    rock (kind 4, `ranged-weapons.md` 8c) kills a character. **Do not
+    reproduce:** treat any kind other than 1–3 as Normal (`Die`, then rule
+    32 with `Die Normal`).
 33. **A first-kill tip** (traced): the first time any character dies
     whose type is not `bat`, `chicken` or `checken2` (sic: so `chicken2`
     does count), Connor gets a one-off cue 1.5 s later (a help tip; not
@@ -608,39 +632,81 @@ scripted fall, not the ordinary `die`:
    off; the skeleton says 2000.msg noun 16 verb 12 condition 22 (the
    scream, sequence 1) and plays **`teeter`** (`skcmrcfl.kqs`).
 2. `teeter` ends: the camera cuts to a spot **2,000 behind it and
-   5,000 below**, looking at the point 0.9 of the way there (a view from
-   below); **Cue 50** is sent to it 2.18 s later; it plays **`die`**.
-   (Cue 50's first time says the scream's sequence 2, section 7a above.)
-3. `die` ends: the camera cuts to a spot 3,000 to its side and 2,000 up
-   from the ground point 2,000 behind it, looking at that ground point;
-   the skeleton is moved (position only) 600 back, high above that
-   point (the height as read: about 5,000 above the ground; not sure);
-   it plays **`die2`** (`skcmdiex.kqs`).
-4. `die2` ends: it is put on the ground 1,400 behind where it was
-   (position only), **drops what it carries** (the chain mail, so the
-   item is in the world from here), and plays **`fallend`**.
-5. `fallend` ends: one switch on the object changes and the near/far
-   lists are worked out again (effect not traced); **Cue 50** is sent
-   to it 3 s later. That second Cue 50 brings the camera back behind
-   Connor with the controls on (above) and then **finishes the death**
-   the ordinary way (experience to Connor, its script's `Die`, removed;
-   rule 32's finish and corpse) and gives the dropped item
-   `chainmal.cs`.
-   (Camera and move offsets are as read and in its own frame, with
-   "behind" = its +Y; not checked in play.)
+   5,000 below** (its own axes), looking at the point 0.9 of the way
+   from it to that spot (a view from below); **Cue 50** is sent to it
+   2.18 s later; it plays **`die`**. (Cue 50's first time says the
+   scream's sequence 2, "Cues" below.)
+3. `die` ends (corrected 2026-11-01, Q196): G = the point 2,000 behind
+   it, put on the surface (z −2). The camera cuts to G + (3,000 to its
+   side, 0, 2,000 up) in its own axes, looking at G. The skeleton is
+   moved (position only, heading kept) to the point **600 behind** where
+   it stands, at height **camera spot + 3,000** (with it upright: **5,000
+   above G**). It plays **`fallend`** (`skcmdie` from phase 0.887, the
+   last part of the fall) from up there.
+4. `fallend` ends: it is put (position only) on the surface at the point
+   **1,400 behind and 5,000 below** where it was (the height from the
+   ground lookup, z −2), **drops what it carries** (the chain mail, so
+   the item is in the world from here), and plays **`die2`**
+   (`skcmdiex.kqs`, the body flying apart) there on the ground.
+5. `die2` ends: it is **hidden** (not drawn, not solid; the near / far
+   lists are worked out again); **Cue 50** is sent to it 3 s later. That
+   second Cue 50 brings the camera back behind Connor with the controls
+   on ("Cues" below) and then **finishes the death** the ordinary way
+   (experience to Connor, its script's `Die`, removed; rule 32's finish
+   and corpse) and gives the dropped item `chainmal.cs`.
+   **Correction 2026-11-01 (Q196):** the order is `teeter`, `die`,
+   **`fallend`, `die2`**; the first version of this list had the last
+   two the other way round, which put the shattering in mid-air. All
+   offsets are in its own axes ("behind" = its +Y), from its position at
+   the moment the movement ends; steps 2 and 3 use the same reference.
+   Not checked in play.
 - **Do not reproduce:** a hurt line it would say when hit (keys it
   doesn't have, so never in the data) and the odd steering point above.
 
-- It hears Connor's state changes (`towSklTp.cs` asks for them):
-  - the **first time Connor starts climbing a rope**: a greeting scene,
-    controls off, camera on the skeleton, line 2000.msg noun 16 verb 0
-    condition 18; when it ends the camera goes back and the music
-    `mtower.aud` starts;
-  - Connor **readies a ranged weapon**: line 2000/16/0/102.
-- Its movement cues: **Cue 50** says 2000/16/12/22 the first time; the
-  second time the camera goes behind Connor (0, −5,000, +1,000 from
-  him) and the fight starts. **Cue 201** sets its alarm radius to
-  `realAlarm` (data 5,000).
+- It hears Connor's state changes (`towSklTp.cs` puts it on Connor's
+  state-change list with `KQMonster::stateChangeNotify`):
+  - the **first time Connor starts climbing a rope** (and never again:
+    `bGreetedConnor`, saved): **the greeting** (traced 2026-11-01, Q195
+    c): Connor is forced into third person, the controls go off, the
+    skeleton plays `Stop`; the camera's place is remembered; the camera
+    **cuts** to the skeleton's position + (0, −500, +1,200) in the
+    skeleton's own axes, looking at the skeleton; it says 2000.msg noun
+    16 verb 0 condition 18. **It waits for the line's end**: then the
+    camera **flies** back to the remembered place (a `flyToCamLoc` with
+    no time, `camera.md` rule 13: distance ÷ 5,000 per second), looking
+    at the skeleton, and the music `mtower.aud` is started 0.2 s later;
+  - Connor **readies a ranged weapon** (his weapon change toward the
+    bow mode): line 2000/16/0/102.
+- **Cue 201** (traced 2026-11-01, Q195 a): **the end of any camera
+  flight** sends Cue 201 to Connor, and Connor (unless he is in a
+  `Tile` state, `tile-puzzle.md`) passes it on to every object on his
+  state-change list, so here to the skeleton. So the first Cue 201 is
+  the end of the greeting's flight back. The skeleton acts on it only
+  once the greeting has happened: the camera follows Connor again, the
+  controls come back on, first person is allowed again, and its alarm
+  radius becomes `realAlarm` (data 5,000), so the fight can start. If
+  Connor is **invisible** (the potion) at that moment it also says
+  2000/16/0/98 (Q195 d: that is when this line is used; the `Surprise…`
+  keys of `skeltowr.kq` are the same numbers for its hurt line, rule
+  "Do not reproduce" below). A later flight ending while it is on the
+  list does the same again (harmless).
+- **Cue 50** (traced 2026-11-01, Q195 b): only the dying state sends it
+  (steps 2 and 5); nothing else does. The first one says the scream's
+  sequence 2 (2000/16/12/22). The second: the camera cuts to Connor's
+  position + (0, −5,000, +1,000) in Connor's own axes, looking at him,
+  follows him again, the controls come on, first person is allowed, the
+  music system is told about `mtower.aud` again 0.2 s later (inferred:
+  to stop it, as `towskltp.cs` `Off` pops it), and the death is
+  finished (step 5).
+- **`Unborn` from `towskltp.cs` `Off`** (traced, Q195 e): Connor leaving
+  the tower: the script moves it back to (185,481, 124,053, 9,814) and
+  sets `Unborn`, the ordinary hidden state (`character-movement.md`
+  rule 21's "back underground"): not drawn, not solid, off the active
+  list, target forgotten. It wakes as usual when it is not active, sees
+  Connor and he is within its alarm radius. Its alarm radius and the
+  greeting are **not** reset: after the greeting it stays at
+  `realAlarm`; before the greeting it is 0 and it never wakes until a
+  Cue 201 after a greeting.
 - The chain mail it drops when killed gets the script `chainmal.cs`.
 
 ### 8. Ranged characters (`doMode=1`)

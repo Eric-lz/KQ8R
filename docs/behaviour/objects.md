@@ -108,6 +108,38 @@ All traced in `Mask.exe` unless marked otherwise.
    jump. Likely not (it is a jump, the same call that `animPos` uses);
    draw it without them, as you do now.
 
+3. **`shapeName` of an animated object** (traced 2026-11-01, Q189 a):
+   for a `KQAnimObject` (and the classes built on it) the file named by
+   `shapeName` is **never loaded**: when it enters the world it loads
+   its movements' `loop=` models instead and is drawn from the current
+   movement's model. So a missing `shapeName` file changes nothing.
+   Dead City's three scales (`scale.kqs`, `sclldsh.kqs`, `sclrdsh.kqs`,
+   in no file) must be made as usual. **Do not skip** such an object.
+4. **Its collision box** (traced, Q189 b): made when it enters the
+   world, and only if its `colliderType` or `colliderMask` is not 0. The
+   `BOUNDS.KQ` lookup uses first the **current movement's `loop=`
+   model file** (not `shapeName`), then the object's **own name**. A
+   `collider=` key (the scales have `collider=collider` with a
+   `KQCollider` section) is read by nothing. Scales: `sclf.kqs`,
+   `sclfldsh.kqs`, `sclfrdsh.kqs` (their `stop` models) are not in the
+   table, so the boxes are the object-name entries `scale`
+   (−1,420, −130, −2,645)..(1,400, 170, 125), `scalelt`
+   (−2,750, −590, −2,175)..(−1,725, 570, −2,005) and `scalert`
+   (1,725, −590, −2,125)..(2,750, 570, −1,955), in their own axes from
+   `loc` (`locZ` 5,310), so the dish boxes are thin plates at world
+   heights of about 3,135–3,355. Note that `connor-physics.md`'s "shape name
+   first" holds for plain objects; for animated ones read "first movement
+   model".
+5. **The box moves with the object, not with its model** (traced,
+   Q189 c): the box sits at the object's position (and is tested from
+   there every move). A movement whose frames carry whole-object steps
+   (rule "Loops that move the whole object") moves the object, so the
+   box goes with it; a movement that only bends the model's parts does
+   not move the box. The dish movements are of the first kind (their
+   reverse movements carry `KQMoveEvent` corrections, e.g.
+   `unleftonly`'s `KQMoveEvent 3 0 0 31.244512 …`), so the dish boxes
+   go up and down with the dishes' steps. The box is never rebuilt
+   from a later movement's model.
 ### Loops that move the whole object (Q51, 2026-10-13)
 
 1. **The steps are added up.** Every update, after an animated object's
@@ -580,3 +612,35 @@ program does it all.
    (`connor-physics.md`, "Collision shape"); only its click and reach
    matter for play.
 5. How to check: log the item swap and the experience (once per box).
+6. **Details** (traced 2026-11-01, Q193):
+   - **(e) How many**: four files, but `newworld.cs` loads only three
+     (`rivercn2`–`4`); `rivercon.kq` is never loaded (data). Each box is
+     its own `BBMin` / `BBMax` from its file.
+   - **(g) The reach**: the key `stretchDist` (default **1,300**, no file
+     sets it), measured from Connor to the **nearest point of the box**
+     (the same distance as for item clicks). 1,300 or more: too far.
+   - **(a) The facing point**: (Connor's x, Connor's y ± 1,300, his z):
+     1,300 along the **y axis only**, toward the side where the box's
+     own position (`locY`) lies (minus when the box's y is at or below
+     his). Not the box's nearest point and not its facing. He turns to
+     it with the ordinary turn.
+   - **(b) The camera**: a **cut** (a move of the camera with no
+     flight) to his position + (200, 3,700, 1,400) in **world** axes,
+     with a fixed view: tilt −0.2, roll 0, heading 3.0, the same for
+     every box and side. Nothing moves it back: when the dip ends only
+     the controls come back; the camera's usual following takes over
+     from where it is.
+   - **(c) Timing**: the `Special` starts 0.5 s after the **end of line
+     part 1**; part 2 is said 3 s after **that** (3.5 s after the line's
+     end), while the dip may still play.
+   - **(d) `away` and `out`**: the `Special` list is
+     `AnimList=river.anm, away, AnimListOn, dipShield, AnimListOff, out`
+     (or `dipLock`): `away` and `out` come from Connor's **own current
+     movement list** (with a weapon out, that weapon's list), only the
+     dip from `river.anm`. The `Special` state only plays movements; his
+     weapon mode is not changed (inferred from what `Special` does,
+     `anim-scripts.md`).
+   - **(f) "The first time"**: one switch per box, the key `rustedOne`
+     (with `lock`, which item it took), saved with the world like any
+     object's keys, so it holds across saved games and world changes.
+     The first dip at each box gives +2,000.

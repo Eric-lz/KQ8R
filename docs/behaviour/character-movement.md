@@ -294,6 +294,38 @@ Words used here:
     moving character switches to Wait. **With an alarm radius of 0 this
     always happens**: chickens and bats are back at their home point
     whenever Connor comes back after they went out of range.
+    **Re-checked 2026-11-01 (Q185, traced):** this is what the original
+    does; there is no other "off" behaviour (an off character is not
+    just frozen). Details that matter for the endless reset the user saw:
+    - "Off" is decided every frame for every object from **Connor's**
+      position (not the camera's): distance to the centre of its ball
+      minus the ball's radius, at least `visibleDistance`.
+    - The twice-the-alarm-radius test is the straight 3D distance from
+      **Connor's current position to the character's current position**
+      (where it went off, not its home).
+    - Being put home does **not** reset its walk: the point it was
+      walking to, its "closest so far" to that point (rule 11) and its
+      last sight result stay as they were. It is now in Wait and not
+      active. Nothing else holds it back: no wait, no "on its way home"
+      flag (that is cleared), no `goHome`.
+    - It is drawn and updated again as soon as it is near or far again
+      (the next frame, if home is within range). As an inactive Wait
+      character it joins the active list the next update it **can see
+      Connor** (rule 20; the last sight result counts until the next
+      once-a-second test), and then walks its points again.
+    - So a character whose points (or random wander points, rule 9)
+      lie beyond `visibleDistance` from where Connor stands, with Connor
+      visible from its home, **does go off and back home over and over
+      in the original too**; nothing in the program limits a point's
+      distance. Daventry's `gobcon1` (points 2 and 3 about 36,400 and
+      39,000 from (280,000, 210,000)) is such a case. If it can **not**
+      see Connor from home it stays there, inactive, until it can (the
+      user's "it waits until Connor comes within range" fits that case).
+    - What could still differ from our build: the sight line from its
+      home (drawn ground, plain objects and buildings block it,
+      rule 20), and `KQWorld::MaxMonsters` (6 in Daventry: with six
+      others active it cannot rejoin). See How to check.
+
 22. **No hearing** (traced): nothing in the noticing code uses sounds,
     Connor's speed or his weapon. A character notices Connor by sight
     and distance (rule 23), by being told (rule 24) or by being hit (the
@@ -652,6 +684,15 @@ Words used here:
   stuck escape and the reset to home.
 
 ## How to check
+
+- **Q185, the `gobcon1` reset (user check in the original):** start a
+  new game, stand still at Connor's start (280,000, 210,000) and watch
+  the goblin north of the house for a minute. The rules say it walks
+  toward (270,219, 245,074), vanishes after about 3.8 s and pops back
+  at (279,735, 227,945), over and over, as long as it can see Connor
+  from there. If the original's goblin instead stays put, the
+  difference is in the sight line from its home (log our
+  `canSeeConner` result there each second).
 
 **Our logs (B):** per character and second: state, active or not, target,
 position, heading, distance to Connor, can see (and what blocked the
