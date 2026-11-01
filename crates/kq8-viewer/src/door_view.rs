@@ -601,7 +601,7 @@ pub fn spawn_doors(
             } else {
                 None
             });
-            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu, &p.name));
+            object_drawn.push(spawn_body(commands, &o.player.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), crate::draw_distance::DistanceTest { animated: true, ..balls.test_shape(p, &d.shape) }, &anim_lights, p.turn_off_dyn_lighting, gpu, &p.name));
             active_objects.push(o);
             continue;
         }
@@ -1927,7 +1927,7 @@ pub fn door_step(
     colliders: Option<ResMut<ObjectColliders>>,
     mut click_at: ResMut<ClickAt>,
     shared: Res<Shared>,
-    (in_range, solid): (Res<crate::draw_distance::CharactersInRange>, Res<crate::draw_distance::CharactersSolid>),
+    (in_range, solid, frozen): (Res<crate::draw_distance::CharactersInRange>, Res<crate::draw_distance::CharactersSolid>, Res<crate::draw_distance::FrozenNow>),
     (mut command_at, mut swing_at): (ResMut<CommandAt>, ResMut<SwingAt>),
 ) {
     let Some(mut sim) = sim else { return };
@@ -1944,6 +1944,8 @@ pub fn door_step(
     sim.active.world.characters_in_range = in_range.0.clone();
     // Rule 33 (M4 4d-12-3): which have their collider on.
     sim.active.world.characters_solid = solid.0.clone();
+    // U-3 (object-lighting.md rule 37): which are frozen (no update tick).
+    sim.active.world.frozen = frozen.0.clone();
     // KQConner::JumpDir / endJump in timed cues (3m-1).
     sim.active.world.connor_jump = connor.as_ref().and_then(|c| c.jump_state());
     // talking.md rule 7: whether he can turn to a listener, and where.

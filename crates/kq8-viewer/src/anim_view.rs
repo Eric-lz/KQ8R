@@ -532,7 +532,7 @@ pub fn spawn_animated(
                     }
                     test
                 }
-                None => balls.test_at(p, *shape_index),
+                None => crate::draw_distance::DistanceTest { animated: true, ..balls.test_at(p, *shape_index) },
             };
             if let Some(c) = &a.character {
                 let l = &a.movements[player.current].1;
@@ -805,7 +805,10 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
     let mut colliders = colliders;
     for p in &mut sim.playing {
         if let Source::Own(player) = &mut p.source {
-            player.advance(1.0 / kq8_core::UPDATES_PER_SECOND as f32);
+            // U-3 (object-lighting.md rule 37): not while frozen.
+            if !doors.is_some_and(|d| d.active.world.frozen.contains(&p.name.to_ascii_lowercase())) {
+                player.advance(1.0 / kq8_core::UPDATES_PER_SECOND as f32);
+            }
         }
         let Some(player) = player(p, doors) else { continue };
         let (movement, frame) = (player.current, player.frame());

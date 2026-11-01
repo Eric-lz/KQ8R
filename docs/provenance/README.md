@@ -4053,3 +4053,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | The cuts as `move KQCamera` with a fixed view; the flight as `addCamLoc … 1` + `flyToCamLoc <its position>` | **ours** (how) | — |
 | No camera place known: controls on at the line's end | **ours** | unit test |
 | Second Cue 50: cut to Connor + (0, −5,000, 1,000) in his own axes, looking at him, then follow | 7a (Q195 b); which side: Q197 | — |
+
+## U-3 2026-11-01: far characters and animated objects frozen — viewer `draw_distance.rs` (`FrozenNow`, `TICK_BIT`, `DistanceTest::animated`), `anim_view.rs`, `door_view.rs`; core `active.rs` (`frozen`), `character_ai.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Bit 0x1 is the per-update tick; animated objects and characters get it added to their near set, not their far set; `groupsActive3DFar` 1089 keeps it when far | `object-lighting.md` rule 37 (corrected Q185) | — |
+| Far = drawn, frozen in its last pose, not solid, no updates; off = off the list and the reset home | `character-movement.md` rule 21 (Q185), the user's check in the original | Daventry `gobcon1`: frozen at update 54, moving again at 152, home at 302 (`viewer.log`, `characters.log`) |
+| Objects without a distance test are never frozen; doors and chests unchanged | **ours** | — |

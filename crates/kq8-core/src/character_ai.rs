@@ -196,7 +196,9 @@ impl WorldState {
         let check = update.is_multiple_of(SIGHT_EVERY);
         for i in 0..self.anims.len() {
             let a = &self.anims[i];
-            if a.gone || !self.characters_in_range.contains(&a.player.name.to_ascii_lowercase()) {
+            // U-3 (character-movement.md rule 21): far = frozen, no rules.
+            let lower = a.player.name.to_ascii_lowercase();
+            if a.gone || !self.characters_in_range.contains(&lower) || self.frozen.contains(&lower) {
                 continue;
             }
             let Some(c) = a.character.as_deref() else { continue };

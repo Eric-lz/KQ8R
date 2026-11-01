@@ -3801,6 +3801,15 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
   near ones are updated (animation, state, sight, mover); far ones are
   drawn in their last pose and not solid; off = the reset home as now.
   Files with `groupsActive3DFar` 1089 (0x441) keep ticking when far.
+  **Done** 2026-11-01 (logs). As built: the draw-distance pass marks
+  animated objects and characters (`DistanceTest::animated`); with the
+  tick bit 0x1 added to their near set, those without it this frame are
+  "frozen" and the core is handed their names (`WorldState::frozen`):
+  no animation, state, AI or mover step for them, in the core and in the
+  viewer's own players. Objects with no distance test are never frozen.
+  Doors and chests are left as they were (rule 37 names only animated
+  objects and characters). Off animated objects freeze too (rule 37:
+  off = `groupsAlways` only).
 - **U-4 (Q188): the spirit drain in whole numbers.** `traps.md`: loss =
   whole part of (level × damage × 10); floor = whole part of (level ×
   0.1 slightly short) = 0 for levels 1–10; then the ordinary hit (1,

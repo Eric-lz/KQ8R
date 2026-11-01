@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-01 U-3: far characters and animated objects are frozen (Q185)
+
+**Changed:** Viewer `draw_distance.rs`: `DistanceTest::animated`, the update tick bit 0x1 (added to the near set), `FrozenNow` (who has no tick this frame), a log line when one freezes or wakes; `anim_view.rs` (its own players don't advance while frozen), `door_view.rs` (scripted animated objects marked, the set handed to the core). Core `active.rs` (`frozen`: no animation, state or mover step), `character_ai.rs` (no AI step). DESIGN U-3, provenance.
+**Why:** Study A's corrected Q185 (after the user's check in the original): only near characters and animated objects are updated; far ones are drawn frozen; off ones go home.
+**Tested how:** `cargo test --workspace` (all pass). `kq8-viewer --world Daventry --sound off --frames 8000 --at 280000,210000,0 --command "move Connor 0 279000 214000 -1 0 0 0",150 --command "move Connor 0 280000 185000 -1 0 0 0",300`; `viewer.log`, `characters.log`.
+**Result:** `gobcon1` walks its points; update 54 at ball distance 23,609: "Far: frozen", not solid, no status lines; update 150 Connor 4,000 closer: "Near: updated again", it walks on to 22,092 and freezes again at 173; update 300 Connor 52,518 away: off, put back home. No more reset every 57 updates.
+**Still broken / not tested:** **Not looked at by eye.** Off animated objects now freeze too (rule 37); a far-away animation a cutscene expects to run could stop (none seen yet). Doors and chests unchanged.
+**Next:** U-4 (the spirit drain in whole numbers).
+
 ## 2026-11-01 U-2: Cue 201 at the end of camera flights; the tower skeleton's greeting camera (Q195)
 
 **Changed:** Core `active.rs`: `camera_flight_ended` (Cue 201 to Connor), Connor passes Cue 201 to his state-change list (not in a Tile state), `tower_cue201` (only after the greeting: follow Connor, controls on, `realAlarm`, the invisible line), the greeting's cut and flight back, the music 0.2 s later, the second Cue 50's cut to Connor; `run_lines`; `camera_at`. `tower_skeleton.rs` (offsets, `camera_back`, `music_due`). Viewer `game_camera.rs` (counts ended flights), `door_view.rs` (tells the core the camera's place and the ended flights). 1 new unit test, 1 changed. DESIGN U-2, provenance, QUESTIONS Q197.

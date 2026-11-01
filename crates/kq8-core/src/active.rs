@@ -883,8 +883,13 @@ pub struct WorldState {
     /// when loaded (2026-10-22, the Castle's Lucreto).
     pub dormant_monsters: Vec<Monster>,
     /// Characters near or far now (lower case), set by the caller before
-    /// each update (`characters.md` rule 11).
+    /// each update (`characters.md` rule 11): on the active list.
     pub characters_in_range: BTreeSet<String>,
+    /// U-3 (`object-lighting.md` rule 37, `character-movement.md` rule
+    /// 21): animated objects and characters with no update tick now (far
+    /// or off; lower case), set by the caller: drawn, not updated. Empty =
+    /// all updated.
+    pub frozen: BTreeSet<String>,
     /// Characters whose collider is on now (lower case): near, not far,
     /// off or hidden (`characters.md` rule 33), set by the caller before
     /// each update (M4 4d-12-2).
@@ -3990,6 +3995,7 @@ impl Active {
                 monsters: Vec::new(),
                 dormant_monsters: Vec::new(),
                 characters_in_range: BTreeSet::new(),
+                frozen: BTreeSet::new(),
                 characters_solid: BTreeSet::new(),
                 character_colliders: Vec::new(),
                 character_log: Vec::new(),
@@ -5640,6 +5646,10 @@ impl Active {
             }
         }
         for i in 0..self.world.objects.len() {
+            // U-3 (object-lighting.md rule 37): frozen far or off.
+            if self.world.frozen.contains(&self.world.objects[i].player.name.to_ascii_lowercase()) {
+                continue;
+            }
             let a = self.world.objects[i].player.advance(dt);
             let p = &self.world.objects[i].player;
             let name = p.name.clone();
@@ -5680,7 +5690,12 @@ impl Active {
             }
             // A character (M4 4d-3): its states drive the player, and only
             // while near or far (characters.md rule 11).
-            let in_range = self.world.characters_in_range.contains(&self.world.anims[i].player.name.to_ascii_lowercase());
+            // U-3: updated only with the tick (near), not when far.
+            let lower = self.world.anims[i].player.name.to_ascii_lowercase();
+            let in_range = self.world.characters_in_range.contains(&lower) && !self.world.frozen.contains(&lower);
+            if self.world.anims[i].character.is_none() && self.world.frozen.contains(&lower) {
+                continue;
+            }
             let connor_at = self.world.connor_at.map(|p| [p[0], p[1]]);
             let obj = &mut self.world.anims[i];
             let (a, notes) = match obj.character.as_deref_mut() {

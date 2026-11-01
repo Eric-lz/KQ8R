@@ -84,6 +84,10 @@ pub struct DistanceTest {
     /// A character (M4 4d-3): core is told each frame whether it is near
     /// or far (`characters.md` rule 11).
     pub character: bool,
+    /// An animated object or a character (U-3, `object-lighting.md` rule
+    /// 37): its class adds the update tick (bit 0x1) to its near set, so
+    /// it is updated only while near (or far with 0x1 in its far set).
+    pub animated: bool,
     /// Its `shadowMask` for a plain object's shadow (M4 4d-7b-4; 0 for a
     /// building, which only receives, and for a see-through object:
     /// `characters.md` rule 36). Characters cast through `anim_view`.
@@ -141,6 +145,7 @@ impl DistanceTest {
             ball_from,
             hidden: placement.hidden,
             character: false,
+            animated: false,
             shadow_mask: if placement.translucency < 256.0 { 0 } else { placement.shadow_mask },
         }
     }
@@ -223,6 +228,7 @@ impl ShapeBalls {
             }
         };
         test.character = true;
+        test.animated = true;
         test
     }
 
@@ -259,6 +265,15 @@ pub struct ActivePoint {
 #[derive(Resource, Default)]
 pub struct CharactersInRange(pub std::collections::BTreeSet<String>);
 
+/// U-3 (`object-lighting.md` rule 37, `character-movement.md` rule 21):
+/// the animated objects and characters with no update tick in the last
+/// frame (far or off; lower case): drawn frozen, not updated.
+#[derive(Resource, Default)]
+pub struct FrozenNow(pub std::collections::BTreeSet<String>);
+
+/// The per-update tick bit (rule 37).
+pub const TICK_BIT: u32 = 0x1;
+
 /// The characters whose collider bit is on in the last frame (lower case):
 /// near, not far, off or hidden (`characters.md` rule 33; M4 4d-12-3).
 #[derive(Resource, Default)]
@@ -286,6 +301,7 @@ pub fn add(app: &mut App) {
         .init_resource::<ObjectActivity>()
         .init_resource::<CharactersInRange>()
         .init_resource::<CharactersSolid>()
+        .init_resource::<FrozenNow>()
         .init_resource::<ActiveRules>()
         .init_resource::<ColliderSwitches>()
         .init_resource::<SwitchedOut>();
@@ -320,7 +336,7 @@ pub fn update_activity(
     sim: Option<Res<crate::door_view::DoorSim>>,
     mut lights_group: ResMut<crate::scene_lights::LightsGroup>,
     shared: Res<Shared>,
-    (mut characters, mut solid_characters, change, mut seen): (ResMut<CharactersInRange>, ResMut<CharactersSolid>, Res<crate::world_build::WorldChange>, Local<u64>),
+    (mut characters, mut solid_characters, change, mut seen, mut frozen, mut ticked): (ResMut<CharactersInRange>, ResMut<CharactersSolid>, Res<crate::world_build::WorldChange>, Local<u64>, ResMut<FrozenNow>, Local<HashMap<u32, bool>>),
 ) {
     // A new world's objects (M6 6e-2).
     if crate::world_build::new_world(&change, &mut seen) {
@@ -328,6 +344,7 @@ pub fn update_activity(
     }
     lights_group.0.clear();
     characters.0.clear();
+    frozen.0.clear();
     solid_characters.0.clear();
     // Rule 42: Connor unless a script asked for the camera.
     let from_connor = if rules.camera { None } else { connor.iter().next() };
@@ -378,6 +395,17 @@ pub fn update_activity(
         });
         let [always, near, far] = risen.unwrap_or(test.groups);
         let drawn = !light.haze_on || activity.groups(always, near, far) & DRAW_BITS != 0;
+        // U-3 (rule 37): animated objects and characters tick only with
+        // bit 0x1 (their class adds it to the near set).
+        if test.animated {
+            let tick = activity.groups(always, near | TICK_BIT, far) & TICK_BIT != 0;
+            if !tick {
+                frozen.0.insert(test.name.to_ascii_lowercase());
+            }
+            if ticked.insert(test.object, tick).is_some_and(|t| t != tick) {
+                changes.push(format!("draw distance: [{}] {activity:?}: {} (object-lighting.md rule 37: the update tick)", test.name, if tick { "updated again" } else { "frozen: drawn, not updated" }));
+            }
+        }
         if !drawn && !has_layer {
             commands.entity(entity).insert(Propagate(RenderLayers::layer(OFF_LAYER)));
         } else if drawn && has_layer {
