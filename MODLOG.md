@@ -3,6 +3,19 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-13 The user's visual checks of U-3, U-7, U-8a and U-8b
+
+**Changed:** `MODLOG.md` only.
+**Why:** Record the user's visual checks of the U-1 to U-9c changes in play.
+**Tested how:** Played and checked by eye by the user in Daventry and Dead City.
+**Result:**
+- **U-8a (animated objects drawn from their movements):** The trees animate as expected.
+- **U-3 (far characters and animated objects frozen):** The goblin freezes in the haze at a distance as expected.
+- **U-7 (liquid damage for Connor):** The poison in the River of Death and the River of Blood works as expected.
+- **U-8b (the `Scales` state):** The scale tips when Connor jumps onto one of the dishes, but more problems remain (not fully implemented yet; camera spots and details in Q198 still open).
+**Still broken / not tested:** The remaining problems with the scales (to be detailed by the user, plus Q198); U-1 (tower skeleton fall look), U-2 (greeting camera in play), U-9c (rock throw look in play); U-10 (river controls) and U-11 (the weeper's bolt) not built yet.
+**Next:** User's direction (U-10 and U-11, or further checks).
+
 ## 2026-11-01 Hand-over after U-1 to U-9c (STATUS, FEATURES, README, script coverage)
 
 **Changed:** `STATUS.md` (where we are, next, open questions; the applied Q175–Q183 block removed), `docs/FEATURES.md` (new section), `README.md` (one sentence), `docs/SCRIPT-COVERAGE.md` regenerated (committed separately).
