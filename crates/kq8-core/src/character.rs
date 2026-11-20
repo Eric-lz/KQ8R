@@ -150,6 +150,8 @@ pub struct Character {
     /// Special list items not handled yet, and the movement it waits for.
     special: VecDeque<String>,
     special_playing: Option<String>,
+    /// Hold in `Special` after the last item ends until `Wait` (`KQWeepBolt`, U-11).
+    pub special_hold: bool,
     rng: Rng,
     /// The point it is turning to (rule 23), if any.
     pub turn_to: Option<[f32; 2]>,
@@ -284,6 +286,7 @@ impl Character {
             random_pending: false,
             special: VecDeque::new(),
             special_playing: None,
+            special_hold: false,
             rng: Rng::new(seed),
             turn_to: None,
             mouth: 0,
@@ -880,6 +883,7 @@ impl Character {
         self.start_up_in_state(player, notes);
         self.special.clear();
         self.special_playing = None;
+        self.special_hold = false;
         let random = self.random_stop;
         let why = if random { "flags 0x10: random" } else { "no flags 0x10: from its loop= line" };
         notes.push(format!("state Wait: asks for Stop ({why}): {}", self.ask_stop(player, random)));
@@ -969,17 +973,20 @@ impl Character {
             self.wait_at = None;
             self.special = list.split(',').map(str::trim).filter(|w| !w.is_empty()).map(str::to_string).collect();
             self.special_playing = None;
+            self.special_hold = false;
             notes.push(format!("state Special, list '{list}' ({} items)", self.special.len()));
             self.start_up_in_state(player, &mut notes);
             self.special_next(player, &mut notes);
         } else if state.eq_ignore_ascii_case("Unborn") {
             self.state = State::Birth;
             self.wait_at = None;
+            self.special_hold = false;
             notes.push("state Birth (Unborn); hiding a character that was drawn is not done (none in Daventry)".into());
         } else if state.eq_ignore_ascii_case("Move") {
             // character-movement.md "Edge cases": not active, it just
             // walks straight on (`walk`, as wandering asks: our reading).
             self.walk.steer = None;
+            self.special_hold = false;
             notes.push(self.enter_move(player, now, false, "setState Move"));
         } else if state.eq_ignore_ascii_case("Die") {
             notes.push(format!("{state}: dying is the fight study; state unchanged ({:?})", self.state));
@@ -1016,8 +1023,14 @@ impl Character {
             self.special_playing = Some(item);
             return;
         }
-        notes.push("Special list used up".into());
-        self.enter_wait(player, notes);
+        notes.push(if self.special_hold {
+            "Special list used up: holds until released".into()
+        } else {
+            "Special list used up".into()
+        });
+        if !self.special_hold {
+            self.enter_wait(player, notes);
+        }
     }
 }
 

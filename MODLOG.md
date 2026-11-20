@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 U-11: Dead City's weeper draining bolt (`KQWeepBolt`, Q194)
+- **Changed:** `crates/kq8-data/src/characters.rs` (`shoot_offsets` in `CharacterKeys`/`FightSettings`, `WeepBoltKeys` and `classType=KQWeepBolt` in `ProjectileKeys`), `crates/kq8-core/src/{connor.rs,character.rs,sound.rs,portal.rs,active.rs,fight.rs}` (`special_hold`, handle-based `LoopOrder` loop sounds, `spawn_template` without mutating `$ObjectName`, `shootOffsets` fallback when `meshName` is absent, invisible `KQWeepBolt` flight, `start_weep_drain` / `weep_drains_step` / `end_weep_drain`, and unit tests), `crates/kq8-viewer/src/{load.rs,connor_view.rs,door_view.rs,sound_view.rs}` (preload `magicReact`, preload `suckFile`/`suckEnd` templates while hiding `weepbolt.kqs`, loop sound start/stop), `docs/DESIGN.md`, `docs/provenance/README.md`, `MODLOG.md`.
+- **Why:** Batch 2 step U-11 (`docs/behaviour/ranged-weapons.md` section 9, Q194): make Dead City's weepers shoot their invisible draining bolt, render the animated chain of `lifesuck.kq`/`lifesuk2.kq` pieces, loop `LIFESUCK.AUD`, hold Connor in `magicReact` and the weeper in `suck`, drain plain health (11 over 3 s, ignoring protection/flinch), and release both cleanly at the end (`suckstop` + `attackDelay` cooldown).
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; scripted Dead City run `target\release\kq8-viewer.exe --world DeadCity --sound off --at 170920,152829,0 --frames 1500` checked via `kq8-artifacts/logs/{fight.log,characters.log,connor.log,doors.log,sound.log,viewer.log}`. Not played by hand or checked by eye.
+- **Result:** All 756 workspace tests pass (751 existing + 5 new in `kq8-data` and `kq8-core`). In Dead City, `weeper14` used `INVITEM_All (0, 0, 1500)`, fired an un-drawn `Prweeper.kq` bolt that hit Connor at update 33, spawned 6 chain pieces (`weep_suck_1..6`), looped `lifesuck.wav`, held Connor in `magicReact` (playing `magicrct.aud`) and `weeper14` in `suck`, drained plain health `80 -> 69` (`-11`) over updates 36–76, stopped `lifesuck.wav`, deleted all 6 pieces, returned Connor to `Wait`/`stop` (`update 78`), played `suckstop` (`updates 77–89`), and attacked again `3 s` later (`update 122`). Not played by hand or checked by eye.
+- **Still broken:** Hand-over check: needs in-game play by the user to verify the chain pieces, `magicReact` pose, and audio by eye/ear.
+- **Next:** Regenerate `docs/SCRIPT-COVERAGE.md` and update hand-over docs (`STATUS.md`, `docs/FEATURES.md`, `README.md`).
+
 ## 2026-11-20 U-10: Dead City's river-dipping boxes (`RiverControl`, Q193)
 
 **Changed:** `crates/kq8-core/src/{talk.rs,connor_inventory.rs,weapons.rs,active.rs}`, `crates/kq8-viewer/src/{load.rs,connor_view.rs,door_view.rs,world_build.rs}`, `docs/DESIGN.md`, `docs/provenance/README.md`, `MODLOG.md`.

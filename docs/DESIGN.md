@@ -3940,6 +3940,59 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     viewer logs (`rivercn2` empty, wrong item, too far `3000.0`, full
     `BrokenShield` dip with `CORRODE.AUD` and `level 8 -> 9`, and
     `IronLock` + drawn axe using `conaxe.anm/away`).
-- **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).
+- **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9) — **Done**:
+  - Data (`kq8-data` `characters.rs`): parse `nShootOffsets` /
+    `shootOffsets0..n` (`<itemType> <x> <y> <z>`) into `CharacterKeys`
+    and copy into `FightSettings` (weep monsters have
+    `INVITEM_All 0 0 1500` and no `flsh` part in `weepfire.kqs`); add
+    `WeepBoltKeys` (`duration`, `suckFile`, `suckEnd`, `suckSound`,
+    `fireAnim`, `hurtAnim`, `doneAnim`, `shootOffset`, `hitOffset`) and
+    accept `classType=KQWeepBolt` in `ProjectileKeys`.
+  - Viewer loading (`load.rs`): keep `PRweeper.kq`'s `shapeName`
+    (`weepbolt.kqs`) for `BOUNDS.KQ` collider lookup while spawning the
+    flying `Bolt` with `shape: None` (not drawn); insert `suckFile`
+    (`lifesuck.kq`) and `suckEnd` (`lifesuk2.kq`) into `load_targets` so
+    their zero-place `.kq`s become `Template`s and `AnimSim::recipes`;
+    add `"magicReact"` to `CONNOR_MOVEMENTS` (and preload custom
+    `hurtAnim` in `special_movements`).
+  - Core & viewer (`connor.rs`, `character.rs`, `sound.rs`, `portal.rs`,
+    `active.rs`, `fight.rs`, `connor_view.rs`, `door_view.rs`,
+    `sound_view.rs`):
+    - `WorldState::shoot` falls back to `f.settings.shoot_offsets`
+      (matching `ranged_weapon` or `INVITEM_All`) when `meshName` is
+      absent.
+    - When a flying `KQWeepBolt` hits a character other than its shooter:
+      if the target is already in `Special`, the bolt vanishes;
+      otherwise `start_weep_drain` spawns `max(1, floor(len / 250) - 2)`
+      chain copies (`suckFile`, last piece `suckEnd`) from
+      `shooter + (0, 0, shootOffset)` to `target + (0, 0, hitOffset)` at
+      `250, 500, ...` units facing along the line (without overwriting
+      `$ObjectName`), starts looping `suckSound` (`LIFESUCK.AUD`) via
+      `WorldState::loop_sounds` -> `SoundSim`, puts the shooter in
+      `Special` (`suck`, held), and puts the target in `Special`
+      (`magicReact`) with `special_hold = true` so a one-shot animation
+      holds until released (cleared on `Wait`/`Unborn`/`Move`/another
+      `Special`/death).
+    - Every update (`weep_drains_step`), if `elapsed < duration` and
+      both remain alive, `dt` accumulates in a counter; whenever
+      `counter > 0.25 s`, it resets to `0` and subtracts `1` health
+      (plain change: no roll, no protection, no flinch, no ouch;
+      respects `god_mode`; health `< 0` kills via `ConnorDies` /
+      `character_dies` without returning the corpse to `Wait`). At end
+      (`duration` elapsed, or shooter/target dead or gone): stops
+      `suckSound`, deletes the chain pieces, puts a living shooter in
+      `Wait` then `Special([doneAnim])` (`suckstop`) with
+      `attack_at = now + attack_delay`, and puts a living target in
+      `Wait` (`Request::ConnorWait` / `Character::set_state("Wait")`).
+  - Verified by `cargo test --workspace` (756 passed) and a scripted
+    Dead City viewer run (`--at 170920,152829,0 --frames 1500`:
+    `weeper14` fires `Prweeper.kq` using `INVITEM_All (0, 0, 1500)`,
+    no bolt mesh spawned, hits at update 33, spawns 6 chain pieces
+    `weep_suck_1..6`, loops `LIFESUCK.AUD`, holds Connor in `magicReact`
+    and `weeper14` in `suck`, drains plain health `80 -> 69` (`-11`)
+    across updates 36..76, stops sound and deletes chain at update 77,
+    returns Connor to `Wait` -> `stop` at update 78, plays `suckstop` on
+    `weeper14` until update 89, and fires again `3 s` later at update
+    122); **not played by hand or checked by eye**.
 - Q184 and Q187 confirm what is built (no change), except where U-x
   finds otherwise.

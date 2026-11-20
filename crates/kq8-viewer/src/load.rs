@@ -286,7 +286,7 @@ pub fn load_model(
 /// connor-movement.md "Starting and stopping") and wading (2h, water.md).
 /// Transitions to or via a movement not listed here are skipped. M4 4e-7
 /// adds his gestures; M5 5c-4 his flinch and deaths from a hit.
-pub const CONNOR_MOVEMENTS: [&str; 60] = [
+pub const CONNOR_MOVEMENTS: [&str; 61] = [
     "stop",
     "walk",
     "run",
@@ -336,6 +336,7 @@ pub const CONNOR_MOVEMENTS: [&str; 60] = [
     "gestureh",
     // Hit (M5 5c-4, fighting.md rule 29): the flinch, the deaths.
     "react",
+    "magicReact",
     "die",
     "dropweapon",
     "firedie",
@@ -2708,8 +2709,16 @@ impl Placer<'_> {
                 Some(mut k) => {
                     let table = self.game.find("GAME/patch/BOUNDS.KQ").and_then(|p| std::fs::read(p).ok()).map(|b| kq8_data::bounds::BoundingBoxes::parse(&b).0);
                     k.bounds = k.shape.as_ref().and_then(|s| table.as_ref()?.lookup(&s.to_ascii_lowercase())).map(|e| (e.min, e.max));
+                    if let Some(w) = &k.weep {
+                        if let Some(f) = &w.suck_file {
+                            self.load_targets.insert(f.to_ascii_lowercase());
+                        }
+                        if let Some(f) = &w.suck_end {
+                            self.load_targets.insert(f.to_ascii_lowercase());
+                        }
+                    }
                     self.character_lines.push(format!(
-                        "[{who}]: shoots {file}: shape {:?} (box {:?}), speed {}, range {}, mask 0x{:X}, weaponType {:?}, part {:?} (ranged-weapons.md rule 26){}",
+                        "[{who}]: shoots {file}: shape {:?} (box {:?}), speed {}, range {}, mask 0x{:X}, weaponType {:?}, part {:?} (ranged-weapons.md rule 26){}{}",
                         k.shape,
                         k.bounds,
                         k.speed,
@@ -2717,14 +2726,15 @@ impl Placer<'_> {
                         k.collider_mask,
                         k.weapon_type,
                         k.mesh_name,
-                        if k.hammer { format!("; KQHammer: modifier {}, minDamage {}, maxDamage {} (azriel-hammer.md rule 6)", k.modifier, k.min_damage, k.max_damage) } else { String::new() }
+                        if k.hammer { format!("; KQHammer: modifier {}, minDamage {}, maxDamage {} (azriel-hammer.md rule 6)", k.modifier, k.min_damage, k.max_damage) } else { String::new() },
+                        k.weep.as_ref().map_or(String::new(), |w| format!("; KQWeepBolt: duration {}s, suck {:?}/{:?}, sound {:?}, anims {:?}/{:?}/{:?}, offsets {}/{}", w.duration, w.suck_file, w.suck_end, w.suck_sound, w.fire_anim, w.hurt_anim, w.done_anim, w.shoot_offset, w.hit_offset))
                     ));
                     self.projectiles.insert(key.clone(), k);
                 }
-                None => self.character_lines.push(format!("[{who}]: projectile file {file} not found or not a KQProjectile / KQHammer")),
+                None => self.character_lines.push(format!("[{who}]: projectile file {file} not found or not a KQProjectile / KQHammer / KQWeepBolt")),
             }
         }
-        self.projectiles.get(&key).and_then(|k| k.shape.clone())
+        self.projectiles.get(&key).filter(|k| k.weep.is_none()).and_then(|k| k.shape.clone())
     }
 
     /// Connor (M2 steps 2a, 2b; docs/DESIGN.md): the world script loads
@@ -3773,6 +3783,14 @@ impl Placer<'_> {
         if self.world.load("river.anm").is_some() {
             for m in ["dipLock", "dipShield"] {
                 wanted.insert((Some("river.anm".to_string()), m.to_string()));
+            }
+        }
+        // ranged-weapons.md 9 (U-11): any `KQWeepBolt::hurtAnim` not already
+        // in CONNOR_MOVEMENTS.
+        for (_, _, bytes) in self.world.entries_ending(".kq") {
+            let Ok(bytes) = bytes else { continue };
+            if let Some(hurt) = kq_text::parse(&bytes).first().and_then(kq8_data::characters::ProjectileKeys::from_section).and_then(|k| k.weep).and_then(|w| w.hurt_anim) {
+                wanted.insert((None, hurt));
             }
         }
         // fighting.md rules 39-40 (M5 5c-5): the swings of each hand

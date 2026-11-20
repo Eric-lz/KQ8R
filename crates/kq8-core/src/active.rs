@@ -142,8 +142,9 @@ pub enum Request {
     /// back to the distance test.
     MakeActive { name: String, on: bool, at: String },
     /// `KQMonster::setState Connor special <list>` (`anim-scripts.md`
-    /// rule 16): the comma-separated items as written.
-    ConnorSpecial { items: String, at: String },
+    /// rule 16): the comma-separated items as written. `hold`: stay in
+    /// `Special` holding the last frame until `ConnorWait` (U-11).
+    ConnorSpecial { items: String, hold: bool, at: String },
     /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): the caller
     /// sets `hazeDistance` n and `visibleDistance` 1.5 n at once.
     SetHaze { haze: f32, at: String },
@@ -1066,6 +1067,12 @@ pub struct WorldState {
     /// Dead City's `RiverControl` click boxes and any dip under way (U-10).
     pub river_controls: Vec<RiverControl>,
     river_dip: Option<RiverDip>,
+    /// U-11 (`KQWeepBolt`): handle-based loop sound orders, active drains,
+    /// and unique ids for loop sounds and chain pieces.
+    pub loop_sounds: Vec<crate::sound::LoopOrder>,
+    loop_sound_id: u64,
+    pub weep_drains: Vec<crate::fight::WeeperDrain>,
+    weep_piece_seq: u64,
 }
 
 /// A placed `KQMonster` (M4 4a-2): monsters don't move or fight yet (M5);
@@ -1553,6 +1560,16 @@ impl WorldState {
     /// Names of `RiverControl` boxes whose `rustedOne` switch is set (U-10).
     pub fn rusted_rivers(&self) -> Vec<String> {
         self.river_controls.iter().filter(|r| r.rusted_one).map(|r| r.name.clone()).collect()
+    }
+
+    pub(crate) fn next_loop_sound_id(&mut self) -> u64 {
+        self.loop_sound_id += 1;
+        self.loop_sound_id
+    }
+
+    pub(crate) fn next_weep_piece_name(&mut self) -> String {
+        self.weep_piece_seq += 1;
+        format!("weep_suck_{}", self.weep_piece_seq)
     }
 
     fn make_world_item(&mut self, kind: &str, quantity: i64, mut position: [f32; 3], angles: [f32; 3], at: &str) -> Result<String, String> {
@@ -2459,6 +2476,21 @@ impl WorldState {
             }
             _ => t.placement,
         };
+        self.spawn_prepared_copy(key, t, &name, placement, at, true);
+        "0".into()
+    }
+
+    /// Spawns a copy of prepared template `file` named `name` at `placement`
+    /// (`false` if no such template exists; U-11 chain pieces also call this).
+    pub(crate) fn spawn_template(&mut self, file: &str, name: &str, placement: Placement, at: &str) -> bool {
+        let key = file.to_ascii_lowercase();
+        let Some(t) = self.templates.get(&key).cloned() else { return false };
+        self.spawn_prepared_copy(&key, t, name, placement, at, false);
+        true
+    }
+
+    fn spawn_prepared_copy(&mut self, key: &str, t: Template, name: &str, placement: Placement, at: &str, set_object_name: bool) {
+        let lower = name.to_ascii_lowercase();
         self.deleted.remove(&lower);
         // objects.md "Dithered objects" rule 8 (Q165): every class applies
         // its file's `dithered=` when it is added to the world.
@@ -2472,33 +2504,38 @@ impl WorldState {
         let what = match &t.kind {
             TemplateKind::Anim(p) => {
                 let mut player = (**p).clone();
-                player.name = name.clone();
+                player.name = name.to_string();
                 player.base = placement;
                 self.anims.push(AnimObject { player, script: t.script.clone(), gone: false, character: None, translucency: None });
                 "animated"
             }
             TemplateKind::Still { bounds: Some((min, max)), collision_type } => {
-                let mut c = Clickable::plain(&name, &t.class, *min, *max, placement, *collision_type);
+                let mut c = Clickable::plain(name, &t.class, *min, *max, placement, *collision_type);
                 c.script = t.script.clone();
                 self.clickables.push(c);
                 "still, with its box"
             }
             TemplateKind::Still { bounds: None, .. } => "still, no box",
         };
-        self.vars_out.push(("ObjectName".into(), name.clone()));
-        let p = placement.position;
-        self.note(format!(
-            "{at}: loadKQ {key}: a new copy {name} ({what}) at ({:.0}, {:.0}, {:.0}); $ObjectName = {name}{} (objects.md rules 2, 6)",
-            p[0],
-            p[1],
-            p[2],
-            if t.script.is_some() { "; its script gets Init now" } else { "; no script" }
-        ));
-        self.requests.push(Request::Spawn { file: key.to_string(), name: name.clone(), placement, at: at.to_string() });
-        if let Some(script) = t.script {
-            self.calls_out.push((script, vec![name, "Init".into()]));
+        if set_object_name {
+            self.vars_out.push(("ObjectName".into(), name.to_string()));
         }
-        "0".into()
+        let p = placement.position;
+        if set_object_name {
+            self.note(format!(
+                "{at}: loadKQ {key}: a new copy {name} ({what}) at ({:.0}, {:.0}, {:.0}); $ObjectName = {name}{} (objects.md rules 2, 6)",
+                p[0],
+                p[1],
+                p[2],
+                if t.script.is_some() { "; its script gets Init now" } else { "; no script" }
+            ));
+        } else {
+            self.note(format!("{at}: spawn_template {key}: a new copy {name} ({what}) at ({:.0}, {:.0}, {:.0})", p[0], p[1], p[2]));
+        }
+        self.requests.push(Request::Spawn { file: key.to_ascii_lowercase(), name: name.to_string(), placement, at: at.to_string() });
+        if let Some(script) = t.script {
+            self.calls_out.push((script, vec![name.to_string(), "Init".into()]));
+        }
     }
 
     /// `goldCoinPersists 0|1` (`inventory.md` rule 12, M4 4c-4): while on,
@@ -3005,7 +3042,7 @@ impl WorldState {
                 // One word in the data; several are joined as more items.
                 let items = items.join(",");
                 self.note(format!("{at}: KQMonster::setState Connor special {items}: handed to Connor (rule 16)"));
-                self.requests.push(Request::ConnorSpecial { items, at: at.to_string() });
+                self.requests.push(Request::ConnorSpecial { items, hold: false, at: at.to_string() });
             }
             [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Wait") => {
                 self.note(format!("{at}: KQMonster::setState Connor Wait: handed to Connor (characters.md rule 22)"));
@@ -3285,7 +3322,7 @@ impl WorldState {
 
     /// Deletes one object; `false` if there is no such object (or it was
     /// already deleted).
-    fn delete_one(&mut self, name: &str, at: &str) -> bool {
+    pub(crate) fn delete_one(&mut self, name: &str, at: &str) -> bool {
         let key = name.to_ascii_lowercase();
         if self.deleted.contains(&key) {
             return false;
@@ -4199,6 +4236,10 @@ impl Active {
                 connor_gestures: Vec::new(),
                 river_controls: Vec::new(),
                 river_dip: None,
+                loop_sounds: Vec::new(),
+                loop_sound_id: 0,
+                weep_drains: Vec::new(),
+                weep_piece_seq: 0,
             },
         }
     }
@@ -5583,7 +5624,7 @@ impl Active {
                 let at = format!("RiverControl {river} +0.5s");
                 let items = format!("AnimList=river.anm,away,AnimListOn,{mv},AnimListOff,out");
                 self.world.note(format!("{at}: setState Connor Special {items} (objects.md rules 3, 6c-d)"));
-                self.world.requests.push(Request::ConnorSpecial { items, at });
+                self.world.requests.push(Request::ConnorSpecial { items, hold: false, at });
             }
         }
         if let Some(RiverStage::WaitingPart2 { part2_at }) = self.world.river_dip.as_ref().map(|d| d.stage.clone()) {
@@ -9607,6 +9648,158 @@ deleteObject waterfall2
         let log = a.world.fight_log.join("\n");
         assert!(log.contains("object statue at") && log.contains("a hit of 0, no ProjImmune"), "{log}");
         assert!(a.world.immune_calls.is_empty() && a.world.hammer_calls.is_empty());
+    }
+
+    /// `PRweeper.kq` (`KQWeepBolt`, U-11) with `weepbolt.kqs`'s `BOUNDS.KQ` box (data).
+    fn prweeper() -> kq8_data::characters::ProjectileKeys {
+        let mut p = kq8_data::characters::ProjectileKeys::from_section(
+            &kq8_data::kq_text::parse(
+                b"[WeeperBolt]\nclassType=KQWeepBolt\ncolliderMask=13\nshapeName=weepbolt.kqs\nvelocity=8000\nmaxDistance=10000\nduration=3\nsuckFile=lifesuck.kq\nsuckEnd=lifesuk2.kq\nsuckSound=lifesuck.wav\nmeshName=flsh\nmustReact=1\nfireAnim=suck\nhurtAnim=magicReact\ndoneAnim=suckstop\nshootOffset=1400\nhitOffset=1000\n",
+            )[0],
+        )
+        .unwrap();
+        p.bounds = Some(([-40.0, 0.0, 0.0], [40.0, 240.0, 50.0]));
+        p
+    }
+
+    fn setup_weeper_world(connor_health: i64, connor_protection: i64) -> Active {
+        let mut a = fighter();
+        let o = &mut a.world.anims[0];
+        o.player.movements.push(crate::named_anim::tests::movement("suck", 0.0, 1.0, false, true, vec![]));
+        o.player.movements.push(crate::named_anim::tests::movement("suckstop", 0.0, 1.0, false, false, vec![]));
+        o.player.start("attack");
+        o.player.phase = 0.6;
+        let c = o.character.as_mut().unwrap();
+        c.ai.as_mut().unwrap().alarmed = true;
+        let f = c.fight.as_mut().unwrap();
+        f.settings.ranged_weapon = Some("INVITEM_WeeperEyes".into());
+        f.settings.projectile = Some("prweeper.kq".into());
+        f.settings.shoot_offsets = vec![("INVITEM_All".into(), [0.0, 0.0, 1500.0])];
+        a.world.projectiles.insert("prweeper.kq".into(), prweeper());
+        let suck1 = crate::named_anim::tests::still_then_open("lifesuck");
+        let suck2 = crate::named_anim::tests::still_then_open("lifesuc2");
+        a.world.set_templates([
+            ("lifesuck.kq".to_string(), Template { name: "lifesuck".into(), script: None, placement: Placement::at([0.0; 3]), kind: TemplateKind::Anim(Box::new(suck1)), dithered: 0, class: "KQAnimObject".into() }),
+            ("lifesuk2.kq".to_string(), Template { name: "lifesuc2".into(), script: None, placement: Placement::at([0.0; 3]), kind: TemplateKind::Anim(Box::new(suck2)), dithered: 0, class: "KQAnimObject".into() }),
+        ]);
+        a.world.connor_at = Some([0.0, -2500.0, 100.0]);
+        a.set_connor_stats(ConnorStats { stats: Stats([connor_health, 10, 5, connor_protection, 0]), level: 3 });
+        a
+    }
+
+    #[test]
+    fn weep_bolt_drains_connor_bypasses_protection_and_ends_cleanly() {
+        // ranged-weapons.md 9 (U-11, Q194): invisible collider, shootOffsets fallback,
+        // Special check, chain pieces, loop sound, 11 plain damage over 3s, release to Wait.
+        let mut a = setup_weeper_world(20, 100);
+        a.world.character_do(0);
+        assert_eq!(a.world.bolts.len(), 1);
+        assert!(a.world.bolts[0].shape.is_none(), "KQWeepBolt is never drawn");
+        assert_eq!(a.world.bolts[0].position, [0.0, 0.0, 1600.0], "used INVITEM_All shootOffsets (0, 0, 1500)");
+
+        // Fly until the bolt hits Connor (~4 updates over ~2500 units at 8000/15 per update).
+        while !a.world.bolts.is_empty() {
+            a.world.updates += 1;
+            a.world.bolts_step(&FlatGround, &[], &[]);
+        }
+        assert_eq!(a.world.weep_drains.len(), 1);
+        let pieces = a.world.weep_drains[0].pieces.clone();
+        assert_eq!(pieces.len(), crate::fight::weep_chain_count((2500f32 * 2500.0 + 400.0 * 400.0).sqrt()));
+        assert_eq!(pieces.len(), 8);
+        assert!(matches!(a.world.loop_sounds.as_slice(), [crate::sound::LoopOrder::Start { start, .. }] if start.name == "lifesuck.wav" && start.looping));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorSpecial { items, hold: true, .. } if items == "magicReact")));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::Spawn { file, name, .. } if file == "lifesuck.kq" && name == &pieces[0])));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::Spawn { file, name, .. } if file == "lifesuk2.kq" && name == pieces.last().unwrap())));
+        let shooter_char = a.world.anims[0].character.as_deref().unwrap();
+        assert_eq!(shooter_char.state, crate::character::State::Special);
+        assert!(shooter_char.special_hold);
+        assert_eq!(a.world.anims[0].player.movement_name(), "suck");
+
+        // Second bolt while Connor is already in Special / being drained vanishes cleanly.
+        a.world.requests.clear();
+        a.world.loop_sounds.clear();
+        a.world.connor_state = Some(crate::character::state_number::SPECIAL);
+        a.world.launch_bolt("gob", "prweeper.kq", &prweeper(), [0.0, 0.0, 1600.0], [0.0, -2500.0, 1075.0], 0, "second");
+        for _ in 0..8 {
+            if a.world.bolts.is_empty() {
+                break;
+            }
+            a.world.updates += 1;
+            a.world.bolts_step(&FlatGround, &[], &[]);
+        }
+        assert!(a.world.bolts.is_empty());
+        assert_eq!(a.world.weep_drains.len(), 1, "no second drain while target is in Special");
+        assert!(a.world.loop_sounds.is_empty());
+
+        // Advance the rest of the 3.0s duration (~45 total drain updates).
+        let mut safety = 0;
+        while !a.world.weep_drains.is_empty() && safety < 60 {
+            a.world.updates += 1;
+            a.world.bolts_step(&FlatGround, &[], &[]);
+            safety += 1;
+        }
+        assert!(a.world.weep_drains.is_empty());
+        // 11 ticks (updates 4, 8, ..., 44): protection=100 bypassed, no flinch/ouch requests.
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[0], 9);
+        assert!(!a.world.requests.iter().any(|r| matches!(r, Request::ConnorHurt { .. })));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorWait { .. })));
+        assert!(matches!(a.world.loop_sounds.as_slice(), [crate::sound::LoopOrder::Stop { .. }]));
+        for p in &pieces {
+            assert!(a.world.deleted.contains(&p.to_ascii_lowercase()), "chain piece {p} should be deleted");
+        }
+        let shooter_char = a.world.anims[0].character.as_deref().unwrap();
+        assert_eq!((shooter_char.state, shooter_char.special_hold), (crate::character::State::Special, false));
+        assert_eq!(a.world.anims[0].player.movement_name(), "suckstop");
+        let expected_next = a.world.now() + f64::from(shooter_char.fight.as_ref().unwrap().settings.attack_delay);
+        assert!((shooter_char.fight.as_ref().unwrap().attack_time - expected_next).abs() < 1e-6);
+    }
+
+    #[test]
+    fn weep_drain_ends_when_shooter_dies_and_kills_connor_below_zero() {
+        // Subcase A: shooter dies mid-drain -> chain, loop sound, ConnorWait end cleanly.
+        let mut a = setup_weeper_world(20, 0);
+        a.world.character_do(0);
+        while !a.world.bolts.is_empty() {
+            a.world.updates += 1;
+            a.world.bolts_step(&FlatGround, &[], &[]);
+        }
+        assert_eq!(a.world.weep_drains.len(), 1);
+        let pieces = a.world.weep_drains[0].pieces.clone();
+        a.world.requests.clear();
+        a.world.loop_sounds.clear();
+        a.world.character_dies(0, crate::fight::HitKind::Normal, false);
+        a.world.updates += 1;
+        a.world.bolts_step(&FlatGround, &[], &[]);
+        assert!(a.world.weep_drains.is_empty());
+        assert!(matches!(a.world.loop_sounds.as_slice(), [crate::sound::LoopOrder::Stop { .. }]));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorWait { .. })));
+        for p in &pieces {
+            assert!(a.world.deleted.contains(&p.to_ascii_lowercase()));
+        }
+
+        // Subcase B: drain taking Connor below 0 emits ConnorDies and not ConnorWait.
+        let mut b = setup_weeper_world(2, 0);
+        b.world.character_do(0);
+        while !b.world.bolts.is_empty() {
+            b.world.updates += 1;
+            b.world.bolts_step(&FlatGround, &[], &[]);
+        }
+        b.world.requests.clear();
+        b.world.loop_sounds.clear();
+        for _ in 0..20 {
+            if b.world.weep_drains.is_empty() {
+                break;
+            }
+            b.world.updates += 1;
+            b.world.bolts_step(&FlatGround, &[], &[]);
+        }
+        assert!(b.world.weep_drains.is_empty());
+        assert!(b.world.connor_dying);
+        assert_eq!(b.world.connor_stats.unwrap().stats.0[0], -1);
+        assert!(b.world.requests.iter().any(|r| matches!(r, Request::ConnorDies { .. })));
+        assert!(!b.world.requests.iter().any(|r| matches!(r, Request::ConnorWait { .. })), "dead Connor must not return to Wait");
+        assert!(matches!(b.world.loop_sounds.as_slice(), [crate::sound::LoopOrder::Stop { .. }]));
+        assert_eq!(b.world.anims[0].player.movement_name(), "suckstop");
     }
 
     #[test]

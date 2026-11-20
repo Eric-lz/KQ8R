@@ -338,6 +338,32 @@ pub struct Bolt {
     pub hammer: Option<HammerFlight>,
     /// A thrown rock (`ranged-weapons.md` 8c, U-9b): its arc.
     pub rock: Option<RockFlight>,
+    /// Dead City's weeper draining bolt (`KQWeepBolt`, `ranged-weapons.md` 9, U-11).
+    pub weep: Option<kq8_data::characters::WeepBoltKeys>,
+}
+
+/// Who a weeper drain is draining (U-11).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WeepTarget {
+    Connor,
+    Character(String),
+}
+
+/// An active `KQWeepBolt` drain between a shooter and target (`ranged-weapons.md` 9, U-11).
+#[derive(Debug, Clone)]
+pub struct WeeperDrain {
+    pub shooter: String,
+    pub target: WeepTarget,
+    pub weep: kq8_data::characters::WeepBoltKeys,
+    pub pieces: Vec<String>,
+    pub sound_id: Option<u64>,
+    pub elapsed: f64,
+    pub tick: f64,
+}
+
+/// `ranged-weapons.md` 9 (Q194 e): number of chain pieces between shooter and target.
+pub fn weep_chain_count(length: f32) -> usize {
+    ((length / 250.0).floor() as isize - 2).max(1) as usize
 }
 
 /// Azriel's Hammer in flight (`azriel-hammer.md` rules 6–9).
@@ -997,6 +1023,7 @@ impl crate::active::WorldState {
         let a = &mut self.anims[j];
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };
+        c.special_hold = false;
         let Some(f) = c.fight.as_mut() else { return };
         if f.dying.is_some() {
             return;
@@ -1063,6 +1090,7 @@ impl crate::active::WorldState {
         let a = &mut self.anims[j];
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };
+        c.special_hold = false;
         let Some(f) = c.fight.as_mut() else { return };
         if f.dying.is_some() {
             return;
@@ -1502,7 +1530,13 @@ impl crate::active::WorldState {
                 let place = a.player.movement().and_then(|m| m.frame_parts.get(frame)).and_then(|parts| parts.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part))).map(|(_, p)| p.p);
                 match place {
                     Some(o) => (o, Some(o), format!("its part '{part}' in frame {frame} of '{}' (kept from now on)", a.player.movement_name())),
-                    None => ([0.0; 3], None, format!("no part '{part}' in frame {frame} of '{}': its shootOffsets (none read, none in Daventry: 0, 0, 0)", a.player.movement_name())),
+                    None => {
+                        let offset_entry = f.settings.ranged_weapon.as_deref().and_then(|w| f.settings.shoot_offsets.iter().find(|(k, _)| k.eq_ignore_ascii_case(w))).or_else(|| f.settings.shoot_offsets.iter().find(|(k, _)| k.eq_ignore_ascii_case("INVITEM_All")));
+                        match offset_entry {
+                            Some((tag, o)) => (*o, Some(*o), format!("no part '{part}' in frame {frame} of '{}': using shootOffsets ({tag}) ({:.0}, {:.0}, {:.0})", a.player.movement_name(), o[0], o[1], o[2])),
+                            None => ([0.0; 3], None, format!("no part '{part}' in frame {frame} of '{}': no shootOffsets match (0, 0, 0)", a.player.movement_name())),
+                        }
+                    }
                 }
             }
         };
@@ -1546,7 +1580,7 @@ impl crate::active::WorldState {
         let bolt = Bolt {
             name: format!("{}{}", if hammer.is_some() { "hammer" } else { "bolt" }, self.bolts_shot),
             shooter: shooter.to_string(),
-            shape: p.shape.clone(),
+            shape: if p.weep.is_some() { None } else { p.shape.clone() },
             position: from,
             direction,
             heading,
@@ -1562,6 +1596,7 @@ impl crate::active::WorldState {
             updates: 0,
             hammer,
             rock: None,
+            weep: p.weep.clone(),
         };
         let shape = match &bolt.balls {
             Some(b) => format!("box {:?} as {} ball(s) of radius {:.0} at {:?} above it (Q140 a)", p.bounds.unwrap_or_default(), b.heights.len(), b.radius, b.heights),
@@ -1712,12 +1747,27 @@ impl crate::active::WorldState {
             self.bolt_hits(&b, what, &at);
         }
         self.bolts.extend(kept);
+        self.weep_drains_step();
     }
 
     /// Rule 30: what a bolt's touch does. `at`: the log line, with `{}`
     /// for what it touched.
     fn bolt_hits(&mut self, b: &Bolt, what: Touched, at: &str) {
         let shooter = b.shooter.clone();
+        if let Some(weep) = &b.weep {
+            match what {
+                Touched::Connor => self.start_weep_drain(&shooter, WeepTarget::Connor, weep.clone(), at),
+                Touched::Character(j) => {
+                    let target_name = self.anims[j].player.name.clone();
+                    if !target_name.eq_ignore_ascii_case(&shooter) {
+                        self.start_weep_drain(&shooter, WeepTarget::Character(target_name), weep.clone(), at);
+                    }
+                }
+                Touched::Building(n) => self.fight_note(&shooter, at.replace("{}", &format!("building {n}")) + ": weep bolt vanishes (not a character)"),
+                Touched::Object(n, _) => self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + ": weep bolt vanishes (not a character)"),
+            }
+            return;
+        }
         match what {
             Touched::Building(n) => self.fight_note(&shooter, at.replace("{}", &format!("building {n}")) + ": no damage"),
             Touched::Connor => {
@@ -1793,7 +1843,227 @@ impl crate::active::WorldState {
             updates: 0,
             hammer: None,
             rock: Some(rock),
+            weep: None,
         });
+    }
+
+    /// `ranged-weapons.md` 9 (U-11, Q194): `KQWeepBolt` hit a character: start
+    /// the chain, sound, animations and drain unless the target is in `Special`.
+    fn start_weep_drain(&mut self, shooter: &str, target: WeepTarget, weep: kq8_data::characters::WeepBoltKeys, at: &str) {
+        let now = self.now();
+        let target_label = match &target {
+            WeepTarget::Connor => crate::talk::CONNOR.to_string(),
+            WeepTarget::Character(n) => n.clone(),
+        };
+        let Some(si) = self.character_index(shooter).filter(|&i| !self.anims[i].gone && self.anims[i].character.as_deref().is_some_and(|c| c.state != crate::character::State::Die && c.fight.as_ref().is_none_or(|f| f.dying.is_none()))) else {
+            self.fight_note(shooter, at.replace("{}", &target_label) + ": shooter dead or gone; weep bolt ignored");
+            return;
+        };
+        let (target_special, target_dead, target_pos) = match &target {
+            WeepTarget::Connor => (
+                self.connor_state == Some(crate::character::state_number::SPECIAL) || self.weep_drains.iter().any(|d| matches!(d.target, WeepTarget::Connor)),
+                self.connor_dying || self.connor_at.is_none(),
+                self.connor_at.unwrap_or([0.0; 3]),
+            ),
+            WeepTarget::Character(n) => {
+                let Some(ti) = self.character_index(n).filter(|&i| !self.anims[i].gone) else {
+                    self.fight_note(shooter, at.replace("{}", n) + ": target gone; weep bolt ignored");
+                    return;
+                };
+                let c = self.anims[ti].character.as_deref().unwrap();
+                (
+                    c.state == crate::character::State::Special,
+                    c.state == crate::character::State::Die || c.fight.as_ref().is_some_and(|f| f.dying.is_some()),
+                    self.anims[ti].player.base.position,
+                )
+            }
+        };
+        if target_dead || target_special {
+            let why = if target_dead { "already dying" } else { "already in Special (ranged-weapons.md 9)" };
+            self.fight_note(shooter, at.replace("{}", &target_label) + &format!(": {why}: weep bolt vanishes"));
+            return;
+        }
+        let shooter_pos = self.anims[si].player.base.position;
+        let from = [shooter_pos[0], shooter_pos[1], shooter_pos[2] + weep.shoot_offset];
+        let to = [target_pos[0], target_pos[1], target_pos[2] + weep.hit_offset];
+        let (dir, heading, pitch) = aim_direction(from, to).unwrap_or(([0.0, -1.0, 0.0], 0.0, 0.0));
+        let len = ((to[0] - from[0]).powi(2) + (to[1] - from[1]).powi(2) + (to[2] - from[2]).powi(2)).sqrt();
+        let n = weep_chain_count(len);
+        let rot = kq8_data::objects::rotation([pitch, 0.0, heading + std::f32::consts::PI]);
+        let mut pieces = Vec::with_capacity(n);
+        let why_at = format!("KQWeepBolt {shooter}->{target_label}");
+        for k in 0..n {
+            let pos = std::array::from_fn(|ax| from[ax] + dir[ax] * (250.0 * (k + 1) as f32));
+            let file = if k + 1 == n { weep.suck_end.as_deref().or(weep.suck_file.as_deref()) } else { weep.suck_file.as_deref() };
+            if let Some(file) = file {
+                let name = self.next_weep_piece_name();
+                if self.spawn_template(file, &name, crate::collide::Placement { rotation: rot, position: pos }, &why_at) {
+                    pieces.push(name);
+                } else {
+                    self.fight_note(shooter, format!("{why_at}: chain template {file} not loaded for {name}"));
+                }
+            }
+        }
+        let sound_id = weep.suck_sound.as_ref().map(|s| {
+            let id = self.next_loop_sound_id();
+            let start = crate::sound::Start::placed_loop(s, from, format!("KQWeepBolt {shooter}->{target_label}"));
+            self.loop_sounds.push(crate::sound::LoopOrder::Start { id, start });
+            id
+        });
+        if let Some(fire) = &weep.fire_anim {
+            let a = &mut self.anims[si];
+            let mut c = a.character.take().unwrap();
+            let line = c.set_state(&mut a.player, "Special", std::slice::from_ref(fire), now);
+            c.special_hold = true;
+            a.character = Some(c);
+            self.character_log.push(format!("update {}: {shooter}: KQWeepBolt fireAnim (held): {line}", self.updates));
+        }
+        if let Some(hurt) = &weep.hurt_anim {
+            match &target {
+                WeepTarget::Connor => {
+                    self.requests.push(crate::active::Request::ConnorSpecial { items: hurt.clone(), hold: true, at: why_at.clone() });
+                }
+                WeepTarget::Character(n) => {
+                    if let Some(ti) = self.character_index(n) {
+                        let a = &mut self.anims[ti];
+                        let mut c = a.character.take().unwrap();
+                        let line = c.set_state(&mut a.player, "Special", std::slice::from_ref(hurt), now);
+                        c.special_hold = true;
+                        a.character = Some(c);
+                        self.character_log.push(format!("update {}: {n}: KQWeepBolt hurtAnim (held): {line}", self.updates));
+                    }
+                }
+            }
+        }
+        self.fight_note(
+            shooter,
+            at.replace("{}", &target_label) + &format!(": drain starts ({n} piece(s) over length {len:.0}, {} spawned, sound {:?}, duration {} s, ranged-weapons.md 9)", pieces.len(), weep.suck_sound, weep.duration),
+        );
+        self.weep_drains.push(WeeperDrain { shooter: shooter.to_string(), target, weep, pieces, sound_id, elapsed: 0.0, tick: 0.0 });
+    }
+
+    fn weep_drains_step(&mut self) {
+        if self.weep_drains.is_empty() {
+            return;
+        }
+        let dt = 1.0 / crate::UPDATES_PER_SECOND as f64;
+        let drains = std::mem::take(&mut self.weep_drains);
+        let mut kept = Vec::new();
+        for mut d in drains {
+            let shooter_dead = self.character_index(&d.shooter).is_none_or(|i| {
+                self.anims[i].gone || self.anims[i].character.as_deref().is_none_or(|c| c.state == crate::character::State::Die || c.fight.as_ref().is_some_and(|f| f.dying.is_some()))
+            });
+            let target_dead = match &d.target {
+                WeepTarget::Connor => self.connor_dying || self.connor_at.is_none(),
+                WeepTarget::Character(n) => self.character_index(n).is_none_or(|i| {
+                    self.anims[i].gone || self.anims[i].character.as_deref().is_none_or(|c| c.state == crate::character::State::Die || c.fight.as_ref().is_some_and(|f| f.dying.is_some()))
+                }),
+            };
+            if shooter_dead || target_dead {
+                self.end_weep_drain(d, target_dead, if shooter_dead { "shooter dead or gone" } else { "target dead or gone" });
+                continue;
+            }
+            d.elapsed += dt;
+            d.tick += dt;
+            let mut died_now = false;
+            if d.tick > 0.25 {
+                d.tick = 0.0;
+                match &d.target {
+                    WeepTarget::Connor => {
+                        if self.god_mode {
+                            self.fight_note("Connor", format!("weep drain ({}): god mode skips -1 health", d.shooter));
+                        } else if let Some(mut c) = self.connor_stats {
+                            let before = c.stats.0[0];
+                            c.stats.0[0] = before - 1;
+                            let after = c.stats.0[0];
+                            self.connor_stats = Some(c);
+                            self.connor_stats_events += 1;
+                            self.fight_note("Connor", format!("weep drain ({}): plain health {before} -> {after} (t={:.2}/{:.2}s)", d.shooter, d.elapsed, d.weep.duration));
+                            if after < 0 {
+                                died_now = true;
+                                self.connor_dying = true;
+                                self.requests.push(crate::active::Request::ConnorDies { kind: HitKind::Normal, at: format!("weep drain ({})", d.shooter) });
+                            }
+                        }
+                    }
+                    WeepTarget::Character(n) => {
+                        let name = n.clone();
+                        if let Some(ti) = self.character_index(&name) {
+                            let (before, after) = {
+                                let c = self.anims[ti].character.as_deref_mut().unwrap();
+                                let f = c.fight.as_mut().unwrap();
+                                let b = f.stats.0[0];
+                                f.stats.0[0] = b - 1;
+                                (b, f.stats.0[0])
+                            };
+                            self.fight_note(&name, format!("weep drain ({}): plain health {before} -> {after} (t={:.2}/{:.2}s)", d.shooter, d.elapsed, d.weep.duration));
+                            if after < 0 {
+                                died_now = true;
+                                self.character_dies(ti, HitKind::Normal, false);
+                            }
+                        }
+                    }
+                }
+            }
+            if died_now {
+                self.end_weep_drain(d, true, "target health dropped below 0");
+            } else if d.elapsed + 1e-9 >= f64::from(d.weep.duration) {
+                self.end_weep_drain(d, false, "duration finished");
+            } else {
+                kept.push(d);
+            }
+        }
+        self.weep_drains.extend(kept);
+    }
+
+    fn end_weep_drain(&mut self, d: WeeperDrain, target_dead: bool, why: &str) {
+        let now = self.now();
+        let target_label = match &d.target {
+            WeepTarget::Connor => crate::talk::CONNOR.to_string(),
+            WeepTarget::Character(n) => n.clone(),
+        };
+        let at = format!("KQWeepBolt end ({}->{target_label})", d.shooter);
+        if let Some(id) = d.sound_id {
+            self.loop_sounds.push(crate::sound::LoopOrder::Stop { id, why: format!("{at}: {why}") });
+        }
+        for piece in &d.pieces {
+            self.delete_one(piece, &at);
+        }
+        if let Some(si) = self.character_index(&d.shooter).filter(|&i| !self.anims[i].gone && self.anims[i].character.as_deref().is_some_and(|c| c.state != crate::character::State::Die && c.fight.as_ref().is_none_or(|f| f.dying.is_none()))) {
+            let delay;
+            {
+                let a = &mut self.anims[si];
+                let mut c = a.character.take().unwrap();
+                let w_line = c.set_state(&mut a.player, "Wait", &[], now);
+                let d_line = d.weep.done_anim.as_ref().map(|done| c.set_state(&mut a.player, "Special", std::slice::from_ref(done), now));
+                delay = c.fight.as_mut().map(|f| {
+                    f.attack_time = now + f64::from(f.settings.attack_delay);
+                    f.attack_time
+                });
+                a.character = Some(c);
+                self.character_log.push(format!("update {}: {}: weep drain end ({why}): {w_line}; doneAnim {:?}; next attack at {delay:?}", self.updates, d.shooter, d_line));
+            }
+        }
+        if !target_dead {
+            match &d.target {
+                WeepTarget::Connor => {
+                    self.requests.push(crate::active::Request::ConnorWait { at: at.clone() });
+                }
+                WeepTarget::Character(n) => {
+                    if let Some(ti) = self.character_index(n).filter(|&i| !self.anims[i].gone) {
+                        let a = &mut self.anims[ti];
+                        let mut c = a.character.take().unwrap();
+                        c.special_hold = false;
+                        if c.state != crate::character::State::Die {
+                            let line = c.set_state(&mut a.player, "Wait", &[], now);
+                            self.character_log.push(format!("update {}: {n}: weep drain end ({why}): {line}", self.updates));
+                        }
+                        a.character = Some(c);
+                    }
+                }
+            }
+        }
+        self.fight_note(&d.shooter, format!("{at}: ended ({why}); deleted {} piece(s)", d.pieces.len()));
     }
 
     /// 8c: the rock's first touch on the way `from` → `to`: (distance,
@@ -2090,6 +2360,7 @@ pub(crate) mod tests {
             special_react_percent: None,
             likely_to_flee: None,
             must_flee: false,
+            shoot_offsets: Vec::new(),
             from: "test".into(),
         }
     }
@@ -2193,5 +2464,14 @@ pub(crate) mod tests {
         assert!(f.due(0.0), "rule 6: the attack time starts at 0");
         assert!(is_attack("attack") && is_attack("ATTACK2") && is_attack("idle:attack"));
         assert!(!is_attack("attackb") && !is_attack("react"));
+    }
+
+    #[test]
+    fn weep_chain_count_matches_length_formula() {
+        assert_eq!(weep_chain_count(200.0), 1);
+        assert_eq!(weep_chain_count(749.0), 1);
+        assert_eq!(weep_chain_count(750.0), 1);
+        assert_eq!(weep_chain_count(1000.0), 2);
+        assert_eq!(weep_chain_count(3000.0), 10);
     }
 }

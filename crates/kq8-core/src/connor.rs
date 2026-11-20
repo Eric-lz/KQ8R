@@ -531,6 +531,9 @@ pub struct Walker {
     /// The Special state's list and the item playing now (rule 16).
     pub special: Vec<SpecialStep>,
     pub special_at: usize,
+    /// Hold the last frame of `Special` when finished until `enter_wait`
+    /// releases it (U-11, `KQWeepBolt` `magicReact` while draining).
+    pub special_hold: bool,
     /// `Inv <item>` items reached (rule 16, Q167; C-3): the item as
     /// written and the movement whose last frame he shows (the one
     /// before it), for the caller to lay.
@@ -626,6 +629,7 @@ impl Walker {
             lean_allowed: false,
             special: Vec::new(),
             special_at: 0,
+            special_hold: false,
             inv_laid: Vec::new(),
             push_counter: 0,
             hand_mode: EMPTY_HANDS,
@@ -845,6 +849,7 @@ impl Walker {
         self.choice = "stop";
         self.special.clear();
         self.special_at = 0;
+        self.special_hold = false;
         self.blocked_forward = false;
         self.blocked_back = false;
         self.bank = 0.0;
@@ -910,10 +915,17 @@ impl Walker {
     /// state; the first movement starts at once (it plays from the next
     /// update). Returns the log lines for the items handled before it.
     pub fn start_special(&mut self, steps: Vec<SpecialStep>) -> Vec<String> {
+        self.start_special_hold(steps, false)
+    }
+
+    /// Like [`Walker::start_special`], optionally holding the final frame
+    /// in `Special` until released by `enter_wait` (U-11 `magicReact`).
+    pub fn start_special_hold(&mut self, steps: Vec<SpecialStep>, hold: bool) -> Vec<String> {
         self.clear_transitions();
         self.mode = Mode::Special;
         self.special = steps;
         self.special_at = 0;
+        self.special_hold = hold;
         let mut notes = Vec::new();
         self.special_items(&mut notes);
         notes
@@ -1027,6 +1039,7 @@ impl Walker {
         if mode == self.mode {
             return;
         }
+        self.special_hold = false;
         self.clear_transitions();
         if mode == Mode::Free {
             self.movement = "stop";
@@ -1131,6 +1144,7 @@ impl Walker {
                 return notes;
             }
             Mode::Special => {
+                self.special_hold = false;
                 notes.push(format!("in Special with no words left: Wait at once ('{}' cut), asks for stop", self.movement));
                 self.special.clear();
                 self.special_at = 0;
@@ -1279,7 +1293,7 @@ impl Walker {
             }
         }
         // Rule 16: the Special movement playing has ended: the next item.
-        if self.mode == Mode::Special && self.phase >= 1.0 {
+        if self.mode == Mode::Special && self.phase >= 1.0 && !(self.special_hold && self.special_at + 1 >= self.special.len()) {
             self.special_at += 1;
             self.special_items(&mut notes);
             if self.mode != Mode::Special {
@@ -2673,5 +2687,22 @@ mod tests {
         // Backing up isn't a pushing movement.
         w.update(intent(-1, 0, false), &loops);
         assert!(!w.push_ability().movement_ok);
+    }
+
+    #[test]
+    fn special_hold_keeps_last_frame_until_enter_wait() {
+        let list = [("stop", MovementLoop { step_sum: [0.0; 3], ..walk(1.0) }), ("magicReact", once())];
+        let loops = lookup(&list);
+        let mut w = Walker::new(0.0);
+        w.update(intent(0, 0, false), &loops);
+        w.start_special_hold(vec![SpecialStep::Play("magicReact", "magicReact".into())], true);
+        assert_eq!(w.mode, Mode::Special);
+        for _ in 0..20 {
+            w.update(intent(1, 1, true), &loops);
+            assert_eq!((w.mode, w.movement), (Mode::Special, "magicReact"));
+        }
+        assert!(w.phase >= 1.0 - 1e-6);
+        w.enter_wait(&loops);
+        assert_eq!((w.mode, w.special_hold), (Mode::Free, false));
     }
 }

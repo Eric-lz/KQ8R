@@ -1872,7 +1872,7 @@ impl ConnorSim {
     /// rule 16): the items worked out against the movements loaded (his
     /// own and the Special lists'), then the Special state. Returns a
     /// line for the script logs.
-    pub fn start_special(&mut self, items: &str, at: &str) -> String {
+    pub fn start_special(&mut self, items: &str, hold: bool, at: &str) -> String {
         let movements = &self.movements;
         let weapon_set = self.weapon_set.as_deref();
         let resolve = |list: Option<&str>, word: &str| -> Option<&'static str> {
@@ -1888,9 +1888,10 @@ impl ConnorSim {
         };
         let steps = kq8_core::connor::special_steps(items, &resolve);
         let plays: Vec<&str> = steps.iter().filter_map(|s| if let kq8_core::connor::SpecialStep::Play(n, _) = s { Some(*n) } else { None }).collect();
-        let line = format!("special {items}: plays {plays:?}");
-        let notes = self.walker.start_special(steps);
-        self.log.detail(format!("connor update {}: KQMonster::setState Connor special {items} ({at}): {}", self.updates, notes.join("; ")));
+        let suffix = if hold { " (holds until released)" } else { "" };
+        let line = format!("special {items}: plays {plays:?}{suffix}");
+        let notes = self.walker.start_special_hold(steps, hold);
+        self.log.detail(format!("connor update {}: KQMonster::setState Connor special {items} ({at}){suffix}: {}", self.updates, notes.join("; ")));
         line
     }
 

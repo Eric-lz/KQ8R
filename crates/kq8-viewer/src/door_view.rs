@@ -1073,7 +1073,7 @@ pub fn trap_step(
     if let Some((items, _)) = special_at.0.take_if(|(_, n)| sim.active.world.updates >= *n) {
         let at = "test --special".to_string();
         sim.active.world.log.push(format!("update {}: {at}: KQMonster::setState Connor special {items}", sim.active.world.updates));
-        sim.active.world.requests.push(Request::ConnorSpecial { items, at });
+        sim.active.world.requests.push(Request::ConnorSpecial { items, hold: false, at });
     }
     // What his trap touches ask counts as asked inside his update (rule
     // 30 of anim-scripts.md: a trap's script runs inside his move; 3m-1),
@@ -1365,8 +1365,8 @@ pub fn trap_step(
                 }
                 format!("{at}: applied: [{name}] {}", if on { "always near" } else { "back to the distance test" })
             }
-            Request::ConnorSpecial { items, at } => {
-                let line = connor.start_special(&items, &at);
+            Request::ConnorSpecial { items, hold, at } => {
+                let line = connor.start_special(&items, hold, &at);
                 format!("{at}: applied{again}: Connor {line}")
             }
             Request::ConnorAnim { movement, at } => {

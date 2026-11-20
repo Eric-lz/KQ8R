@@ -198,6 +198,17 @@ impl Start {
         }
     }
 
+    /// A placed looping effect in group 0 (`KQWeepBolt::suckSound`, U-11).
+    pub fn placed_loop(name: &str, position: [f32; 3], why: String) -> Self {
+        Start {
+            name: name.to_string(),
+            placed: Some(Placed { position, min: ONE_SHOT_MIN, max: ONE_SHOT_MAX }),
+            looping: true,
+            group: GROUP_EFFECTS,
+            why,
+        }
+    }
+
     /// A plain one-shot in group 0 (rules 40, 42).
     pub fn plain_one_shot(name: &str, why: String) -> Self {
         Start { name: name.to_string(), placed: None, looping: false, group: GROUP_EFFECTS, why }
@@ -235,6 +246,13 @@ pub enum Order {
     Pause { id: u64 },
     Resume { id: u64 },
     Stop { id: u64 },
+}
+
+/// Core's handle-based loop sound orders taken by `SoundSim` (U-11).
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoopOrder {
+    Start { id: u64, start: Start },
+    Stop { id: u64, why: String },
 }
 
 /// Where Connor and the camera are this frame.

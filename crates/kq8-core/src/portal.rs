@@ -147,7 +147,7 @@ impl crate::active::Active {
                 Some(anim) => {
                     let own = state.keys.enter_anm_file.as_deref().is_none_or(|l| l.eq_ignore_ascii_case("conner.anm"));
                     let items = if own { anim.clone() } else { format!("AnimList={},AnimListOn,{anim}", state.keys.enter_anm_file.clone().unwrap_or_default()) };
-                    self.world.requests.push(crate::active::Request::ConnorSpecial { items: items.clone(), at: "portal Yes".into() });
+                    self.world.requests.push(crate::active::Request::ConnorSpecial { items: items.clone(), hold: false, at: "portal Yes".into() });
                     lines.push(format!("Yes: enterAnim: special {items}; the hand-over waits for its end"));
                     Phase::Entering
                 }

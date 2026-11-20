@@ -626,6 +626,10 @@ pub struct CharacterKeys {
     /// from Cue 201 on) and `stunPause` (rule 23).
     pub real_alarm: Option<f32>,
     pub stun_pause: Option<f32>,
+    /// `nShootOffsets` / `shootOffsets<n>` (U-11, `ranged-weapons.md`
+    /// rule 24): fallback start offset `(itemType, [x, y, z])` when the
+    /// projectile's `meshName` is absent (`weeper.kq`).
+    pub shoot_offsets: Vec<(String, [f32; 3])>,
 }
 
 /// A character's own collision type and mask when its file sets none
@@ -681,6 +685,14 @@ impl CharacterKeys {
             react_pause: number("reactPause").map(|v| v as f32),
             real_alarm: number("realAlarm").map(|v| v as f32),
             stun_pause: number("stunPause").map(|v| v as f32),
+            shoot_offsets: (0..number("nShootOffsets").unwrap_or(0.0).max(0.0) as usize)
+                .filter_map(|n| {
+                    let v = s.get(&format!("shootOffsets{n}"))?;
+                    let w: Vec<&str> = v.split_whitespace().collect();
+                    let f = |k: usize| w.get(k).and_then(|x| x.parse::<f32>().ok());
+                    Some((w.first()?.to_string(), [f(1)?, f(2)?, f(3)?]))
+                })
+                .collect(),
         })
     }
 
@@ -921,6 +933,7 @@ pub struct FightSettings {
     pub special_react_percent: Option<f32>,
     pub likely_to_flee: Option<f32>,
     pub must_flee: bool,
+    pub shoot_offsets: Vec<(String, [f32; 3])>,
     /// How the stats were made, for the log (held items, missing ones).
     pub from: String,
 }
@@ -980,6 +993,7 @@ impl FightSettings {
             special_react_percent: keys.special_react_percent,
             likely_to_flee: keys.likely_to_flee,
             must_flee: keys.must_flee,
+            shoot_offsets: keys.shoot_offsets.clone(),
             from: format!(
                 "type {} {:?} + extra {:?}; holds {}",
                 kind.name,
@@ -1050,6 +1064,23 @@ pub struct ProjectileKeys {
     pub up_velocity: Option<f32>,
     /// `script=` (its `Die` call: `rockHit.cs`).
     pub script: Option<String>,
+    /// `classType=KQWeepBolt` (U-11, `ranged-weapons.md` 9): Dead City's
+    /// weeper draining bolt (`PRweeper.kq`).
+    pub weep: Option<WeepBoltKeys>,
+}
+
+/// Keys specific to `classType=KQWeepBolt` (`ranged-weapons.md` 9, Q194).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WeepBoltKeys {
+    pub duration: f32,
+    pub suck_file: Option<String>,
+    pub suck_end: Option<String>,
+    pub suck_sound: Option<String>,
+    pub fire_anim: Option<String>,
+    pub hurt_anim: Option<String>,
+    pub done_anim: Option<String>,
+    pub shoot_offset: f32,
+    pub hit_offset: f32,
 }
 
 /// `ranged-weapons.md` rule 26: the defaults of a projectile file's keys.
@@ -1063,22 +1094,34 @@ pub const HAMMER_MASK: u32 = 0x221F;
 pub const PROJECTILE_TYPE: u32 = 1;
 
 impl ProjectileKeys {
-    /// `None` when the section is not a `KQProjectile` or a `KQHammer`
-    /// (`azriel-hammer.md` rule 6: the same keys and defaults, plus its
-    /// damage keys).
+    /// `None` when the section is not a `KQProjectile`, `KQHammer` or
+    /// `KQWeepBolt`.
     pub fn from_section(s: &Section) -> Option<Self> {
         let class = s.get("classType")?.trim();
         let hammer = class.eq_ignore_ascii_case("KQHammer");
-        if !hammer && !class.eq_ignore_ascii_case("KQProjectile") {
+        let weep_bolt = class.eq_ignore_ascii_case("KQWeepBolt");
+        if !hammer && !weep_bolt && !class.eq_ignore_ascii_case("KQProjectile") {
             return None;
         }
         let number = |k: &str| s.number(k).and_then(Result::ok);
         let whole = |k: &str| number(k).map_or(0, |v| v as i64);
+        let text = |k: &str| s.get(k).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+        let weep = weep_bolt.then(|| WeepBoltKeys {
+            duration: number("duration").map_or(3.0, |v| v as f32),
+            suck_file: text("suckFile"),
+            suck_end: text("suckEnd"),
+            suck_sound: text("suckSound"),
+            fire_anim: text("fireAnim"),
+            hurt_anim: text("hurtAnim"),
+            done_anim: text("doneAnim"),
+            shoot_offset: number("shootOffset").map_or(0.0, |v| v as f32),
+            hit_offset: number("hitOffset").map_or(0.0, |v| v as f32),
+        });
         Some(ProjectileKeys {
-            shape: s.get("shapeName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+            shape: text("shapeName"),
             speed: number("velocity").map_or(PROJECTILE_SPEED, |v| v as f32),
             max_distance: number("maxDistance").map_or(PROJECTILE_RANGE, |v| v as f32),
-            mesh_name: s.get("meshName").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+            mesh_name: text("meshName"),
             collider_mask: number("colliderMask").map_or(if hammer { HAMMER_MASK } else { PROJECTILE_MASK }, |v| v as u32),
             weapon_type: number("weaponType").map(|v| v as i64),
             bounds: None,
@@ -1089,7 +1132,8 @@ impl ProjectileKeys {
             parabola: number("parabola").is_some_and(|v| v != 0.0),
             peak_height_offset: number("peakHeightOffset").map_or(0.0, |v| v as f32),
             up_velocity: number("upVelocity").map(|v| v as f32),
-            script: s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+            script: text("script"),
+            weep,
         })
     }
 }
@@ -1464,5 +1508,27 @@ useDynamicLighting 1
         assert_eq!((c.movement, c.fell_back), (0, true));
         let c = list.current(Some("dance")).unwrap();
         assert_eq!((c.movement, c.fell_back), (0, true));
+    }
+
+    #[test]
+    fn shoot_offsets_and_weep_bolt_keys_are_read() {
+        let ch = kq_text::parse(b"[Weeper]\nclassType=KQMonster\nnShootOffsets=1\nshootOffsets0=INVITEM_All 0 0 1500\n");
+        let ck = CharacterKeys::from_section(&ch[0]).unwrap();
+        assert_eq!(ck.shoot_offsets, vec![("INVITEM_All".to_string(), [0.0, 0.0, 1500.0])]);
+
+        let bolt = kq_text::parse(
+            b"[WeeperBolt]\nclassType=KQWeepBolt\ncolliderMask=13\nshapeName=weepbolt.kqs\nvelocity=8000\nmaxDistance=10000\nduration=3\nsuckFile=lifesuck.kq\nsuckEnd=lifesuk2.kq\nsuckSound=lifesuck.wav\nmeshName=flsh\nmustReact=1\nfireAnim=suck\nhurtAnim=magicReact\ndoneAnim=suckstop\nshootOffset=1400\nhitOffset=1000\n",
+        );
+        let pk = ProjectileKeys::from_section(&bolt[0]).unwrap();
+        assert_eq!((pk.speed, pk.max_distance, pk.collider_mask, pk.shape.as_deref()), (8000.0, 10000.0, 13, Some("weepbolt.kqs")));
+        let w = pk.weep.unwrap();
+        assert_eq!((w.duration, w.shoot_offset, w.hit_offset), (3.0, 1400.0, 1000.0));
+        assert_eq!(
+            (w.suck_file.as_deref(), w.suck_end.as_deref(), w.suck_sound.as_deref(), w.fire_anim.as_deref(), w.hurt_anim.as_deref(), w.done_anim.as_deref()),
+            (Some("lifesuck.kq"), Some("lifesuk2.kq"), Some("lifesuck.wav"), Some("suck"), Some("magicReact"), Some("suckstop"))
+        );
+
+        let plain = kq_text::parse(b"[Arrow]\nclassType=KQProjectile\n");
+        assert!(ProjectileKeys::from_section(&plain[0]).unwrap().weep.is_none());
     }
 }
