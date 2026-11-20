@@ -1127,7 +1127,7 @@ pub fn shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut connor_shadow: Local<Option<crate::shadow_view::ShadowSlot>>,
     mut frames: Local<u64>,
-    (buildings, activity, mut spent, balls, change, mut seen, sources): (
+    (buildings, activity, mut spent, balls, change, mut seen, sources, shadow_world, mut prev_allow): (
         Option<Res<crate::shadow_view::BuildingShadows>>,
         Option<Res<crate::draw_distance::ObjectActivity>>,
         Local<std::time::Duration>,
@@ -1135,6 +1135,8 @@ pub fn shadow_draw(
         Res<crate::world_build::WorldChange>,
         Local<u64>,
         Option<Res<crate::shadow_view::FrameSources>>,
+        Option<Res<crate::shadow_view::ShadowWorld>>,
+        Local<Option<bool>>,
     ),
 ) {
     use kq8_core::shadow;
@@ -1145,6 +1147,7 @@ pub fn shadow_draw(
         *connor_shadow = None;
         *frames = 0;
         *spent = std::time::Duration::ZERO;
+        *prev_allow = None;
     }
     let (Some(mut sim), Some(ground)) = (sim, ground) else { return };
     let started = std::time::Instant::now();
@@ -1153,6 +1156,26 @@ pub fn shadow_draw(
     let report = (*frames).is_multiple_of(60);
     let dir = shadow::direction(light.as_ref().and_then(|l| l.lights.suns.first()).map(|s| s.aim));
     let material = material.get_or_insert_with(|| crate::shadow_view::shadow_material(&mut materials)).clone();
+    let allow_shadows = shadow_world.as_ref().is_none_or(|w| w.allow);
+    if prev_allow.is_some_and(|was| was != allow_shadows) {
+        if let Some(log) = sim.characters.as_mut() {
+            log.detail(format!("update {}: allowShadows {} -> {} (rule 36)", sim.updates, u8::from(!allow_shadows), u8::from(allow_shadows)));
+        }
+    }
+    *prev_allow = Some(allow_shadows);
+    if !allow_shadows {
+        crate::shadow_view::show_shadow(&[], &mut connor_shadow, &mut commands, &mut meshes, &material);
+        for p in sim.playing.iter_mut().filter(|p| p.casts) {
+            crate::shadow_view::show_shadow(&[], &mut p.shadow, &mut commands, &mut meshes, &material);
+        }
+        *spent += started.elapsed();
+        if report {
+            if let Some(log) = sim.characters.as_mut() {
+                log.detail(format!("update {}: shadows of Connor and the characters: off (allowShadows 0; rule 36)", sim.updates));
+            }
+        }
+        return;
+    }
     // Rule 37 (2): the near and far buildings receive too (M4 4d-7b-3).
     let active = buildings.as_deref().map(|b| b.active(activity.as_deref())).unwrap_or_default();
     let mut lines = Vec::new();

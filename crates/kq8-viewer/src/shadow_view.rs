@@ -31,9 +31,12 @@ use crate::draw_distance::{DistanceTest, ObjectActivity};
 use crate::log::Log;
 use crate::object_light::ObjectLight;
 
-/// The world's shadow mask (`characters.md` rule 36).
+/// The world's shadow mask and live `allowShadows` flag (`characters.md` rule 36).
 #[derive(Resource)]
-pub struct ShadowWorld(pub u32);
+pub struct ShadowWorld {
+    pub mask: u32,
+    pub allow: bool,
+}
 
 /// The ball stored in a model's `.kqs` file (`characters.md` rule 37 (2),
 /// Q135; M4 4d-7b-5b): radius and centre in the model's own space, game
@@ -340,13 +343,14 @@ pub fn object_shadow_draw(
     mut material: Local<Option<Handle<StandardMaterial>>>,
     mut shadows: Local<HashMap<Entity, ObjectShadow>>,
     mut log: Local<ShadowLog>,
-    (buildings, activity, balls, change, mut seen, sources): (
+    (buildings, activity, balls, change, mut seen, sources, mut prev_allow): (
         Option<Res<BuildingShadows>>,
         Option<Res<ObjectActivity>>,
         Query<(&GlobalTransform, &ModelBall)>,
         Res<crate::world_build::WorldChange>,
         Local<u64>,
         Option<Res<FrameSources>>,
+        Local<Option<bool>>,
     ),
 ) {
     let no_sources = FrameSources::default();
@@ -355,6 +359,7 @@ pub fn object_shadow_draw(
     if crate::world_build::new_world(&change, &mut seen) {
         shadows.clear();
         *log = ShadowLog::default();
+        *prev_allow = None;
     }
     let (Some(world), Some(ground)) = (world, ground) else { return };
     let active = buildings.as_deref().map(|b| b.active(activity.as_deref())).unwrap_or_default();
@@ -364,16 +369,17 @@ pub fn object_shadow_draw(
     let material = material.get_or_insert_with(|| shadow_material(&mut materials)).clone();
     if log.log.is_none() && log.frames == 0 {
         log.log = Log::create("shadows").ok();
-        let casting = roots.iter().filter(|(_, t, _, _)| !t.character && kq8_data::characters::casts_shadow(world.0, t.shadow_mask, true, 256.0)).count();
+        let casting = roots.iter().filter(|(_, t, _, _)| !t.character && kq8_data::characters::casts_shadow(world.mask, t.shadow_mask, world.allow, 256.0)).count();
         let line = format!(
-            "plain objects' shadows (characters.md rule 37, M4 4d-7b-4): world mask {}, {casting} of {} objects cast (shadowMask, default 8; not buildings, see-through objects or characters); sun direction ({:.3}, {:.3}, {:.3})",
-            world.0,
+            "plain objects' shadows (characters.md rule 37, M4 4d-7b-4): world mask {}, allowShadows {}, {casting} of {} objects cast (shadowMask, default 8; not buildings, see-through objects or characters); sun direction ({:.3}, {:.3}, {:.3})",
+            world.mask,
+            u8::from(world.allow),
             roots.iter().count(),
             dir[0],
             dir[1],
             dir[2]
         );
-        let mut names: Vec<&str> = roots.iter().filter(|(_, t, _, _)| !t.character && kq8_data::characters::casts_shadow(world.0, t.shadow_mask, true, 256.0)).map(|(_, t, _, _)| t.name.as_str()).collect();
+        let mut names: Vec<&str> = roots.iter().filter(|(_, t, _, _)| !t.character && kq8_data::characters::casts_shadow(world.mask, t.shadow_mask, world.allow, 256.0)).map(|(_, t, _, _)| t.name.as_str()).collect();
         names.sort_unstable();
         names.dedup();
         if let Some(l) = log.log.as_mut() {
@@ -381,16 +387,33 @@ pub fn object_shadow_draw(
             l.detail(format!("casting: {}", names.join(", ")));
         }
     }
+    if prev_allow.is_some_and(|was| was != world.allow) {
+        let next_frame = log.frames + 1;
+        if let Some(l) = log.log.as_mut() {
+            l.detail(format!("frame {next_frame}: allowShadows {} -> {} (rule 36)", u8::from(!world.allow), u8::from(world.allow)));
+        }
+    }
+    *prev_allow = Some(world.allow);
     log.frames += 1;
     let mut shown = 0;
     let mut pieces = 0;
     let mut on_buildings = (0, 0);
     let mut fallbacks = 0;
     for (root, test, at, off) in &roots {
-        if test.character || !kq8_data::characters::casts_shadow(world.0, test.shadow_mask, true, 256.0) {
+        if test.character || !kq8_data::characters::casts_shadow(world.mask, test.shadow_mask, true, 256.0) {
             continue;
         }
         let entry = shadows.entry(root).or_default();
+        if !world.allow {
+            if entry.pieces > 0 || entry.key.is_some() {
+                show_shadow(&[], &mut entry.slot, &mut commands, &mut meshes, &material);
+                entry.pieces = 0;
+                entry.on_buildings = 0;
+                entry.fallback = false;
+                entry.key = None;
+            }
+            continue;
+        }
         let mut meshes_shown = Vec::new();
         let drawn = !off && visibility.get(root).is_ok_and(|v| *v != Visibility::Hidden);
         if drawn {

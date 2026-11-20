@@ -72,6 +72,7 @@ pub struct Journey {
     pub kill_tip: bool,
     pub god_mode: bool,
     pub ai_off: bool,
+    pub allow_shadows: bool,
     /// The game-wide script variables (rule 13): name, value.
     pub vars: Vec<(String, String)>,
 }
@@ -114,6 +115,7 @@ impl Journey {
             kill_tip: w.kill_tip,
             god_mode: w.god_mode,
             ai_off: w.ai_off,
+            allow_shadows: w.allow_shadows,
             vars: vars.iter().filter(|(n, _)| !belongs_to_world(n, from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
         }
     }
@@ -173,6 +175,9 @@ impl Journey {
         w.kill_tip = self.kill_tip;
         w.god_mode = self.god_mode;
         w.ai_off = self.ai_off;
+        if !w.allow_shadows_from_world {
+            w.allow_shadows = self.allow_shadows;
+        }
         let mut set = 0;
         for (n, v) in &self.vars {
             if vars.get(n).is_none() {
@@ -273,10 +278,12 @@ numItems=2
         a.world.potions.push(Running { next_tick: 110, left: 42, place: Some(2), ..Running::new("NoName0", "INVITEM_Mushroom", 60, 95) });
         a.scripts.vars.set("Daventry::girlhut::FirstTime", "0".into());
         a.scripts.vars.set("KQGame::Something", "7".into());
+        a.world.allow_shadows = false;
         let j = Journey::take(&a.world, &a.scripts.vars, "Daventry");
         assert_eq!(j.items.len(), 1, "only Connor's items");
         assert_eq!(j.potions[0].1, 10, "10 updates to the next second");
         assert_eq!(j.vars, vec![("KQGame::Something".to_string(), "7".to_string())], "Daventry's own variables stay");
+        assert!(!j.allow_shadows);
 
         // A new world: its own start item for Connor, a clock at 3.
         let mut b = world();
@@ -284,6 +291,13 @@ numItems=2
         b.world.updates = 3;
         b.scripts.vars.set("KQGame::Something", "9".into());
         let lines = j.give(&mut b.world, &mut b.scripts.vars);
+        assert!(!b.world.allow_shadows, "carried allow_shadows applies when new world.cs didn't set it");
+
+        let mut c = world();
+        c.world.allow_shadows = true;
+        c.world.allow_shadows_from_world = true;
+        j.give(&mut c.world, &mut c.scripts.vars);
+        assert!(c.world.allow_shadows, "world.cs explicit allowShadows keeps its setting on arrival");
         assert!(lines[0].contains("1 items carried in"), "{lines:?}");
         assert_eq!(b.world.potions[0].next_tick, 13, "the same 10 updates on the new clock");
         assert_eq!(b.world.status_icons[2], Some(StatusIcon::Potion("NoName0".into())));

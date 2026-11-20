@@ -1434,6 +1434,26 @@ fn world_palette_name(world: &World, setting: &str) -> Option<String> {
     })
 }
 
+/// `allowShadows 0|1` from the world's `world.cs` (`characters.md` rule 36),
+/// scanning its `Init` section (taking the last explicit line).
+fn world_allow_shadows(world: &World) -> Option<bool> {
+    let (_, bytes) = world.load("world.cs")?.ok()?;
+    let text: String = bytes.iter().map(|&b| b as char).collect();
+    let mut found = None;
+    for raw in text.lines() {
+        let line = raw.split('#').next().unwrap_or("");
+        for stmt in line.split(';') {
+            let mut w = stmt.split_whitespace();
+            if w.next().is_some_and(|c| c.eq_ignore_ascii_case("allowShadows")) {
+                if let Some(v) = w.next().and_then(|v| v.parse::<f64>().ok()) {
+                    found = Some(v != 0.0);
+                }
+            }
+        }
+    }
+    found
+}
+
 /// The game-play screen's palette (bars, caption strip, fonts): the
 /// paths to try, best first, and a line for the log (`interface.md`
 /// rules 1c, 1e, 1f, Q118). The file is the world's
@@ -1480,6 +1500,10 @@ pub struct Objects {
     /// The world's shadow mask (`setShadowMask` in `Options.cs`, else the
     /// built-in 1; `characters.md` rule 36).
     pub shadow_world_mask: u32,
+    /// `allowShadows 0|1` from `world.cs` (default `true` if absent; `characters.md` rule 36).
+    pub allow_shadows: bool,
+    /// `Some(allow)` if `world.cs` explicitly ran `allowShadows`, else `None`.
+    pub allow_shadows_explicit: Option<bool>,
     /// (shape name as first written, model in model space).
     pub shapes: Vec<(String, Model)>,
     /// A placement, the index of its model in `shapes`, and whether it is
@@ -1963,6 +1987,13 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         fallback
     });
     log.summary(format!("objects: palette {palette_name} (KQWorld::objectPalette)"));
+    let allow_shadows_explicit = world_allow_shadows(world);
+    let allow_shadows = allow_shadows_explicit.unwrap_or(true);
+    log.summary(format!(
+        "shadows: allowShadows {} ({})",
+        u8::from(allow_shadows),
+        if allow_shadows_explicit.is_some() { "world.cs" } else { "not in world.cs: default 1" }
+    ));
     let all_scripts: Vec<(String, String)> = world
         .entries_ending(".cs")
         .into_iter()
@@ -2088,6 +2119,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         list_files: Default::default(),
         character_lines: Vec::new(),
         shadow_world_mask: None,
+        allow_shadows,
     };
 
     // M6 6e-6c: the portal files in GAME/Kq, for a script's loadKQ.
@@ -2266,6 +2298,8 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     objects.ground = Some(terrain.clone());
     objects.max_monsters = world_palette_name(world, "MaxMonsters").and_then(|v| v.parse().ok());
     objects.damage_timers = ["PoisonTime", "FastPoisonTime", "SwampTime"].iter().filter_map(|t| world_palette_name(world, t).map(|v| (format!("KQWorld::{t}"), v))).collect();
+    objects.allow_shadows = allow_shadows;
+    objects.allow_shadows_explicit = allow_shadows_explicit;
     objects
 }
 
@@ -2447,6 +2481,8 @@ struct Placer<'a> {
     /// The world's shadow mask (`setShadowMask` in `Options.cs`, else
     /// 1), read when first needed (characters.md rule 36).
     shadow_world_mask: Option<u32>,
+    /// World `allowShadows` state read from `world.cs`.
+    allow_shadows: bool,
 }
 
 /// A monster-list line being placed (characters.md rule 4): the line, and
@@ -3527,10 +3563,11 @@ impl Placer<'_> {
                 });
                 let casts = kq8_data::characters::casts_shadow(world_mask, c.keys.shadow_mask, true, p.translucency);
                 c.casts_shadow = casts;
+                let allow_word = if self.allow_shadows { "on" } else { "off" };
                 self.character_lines.push(format!(
-                    "shadow [{}]: {} (world mask {world_mask} AND shadowMask {} = {}; translucency {}; allowShadows on) (rule 36; drawn on the terrain, 4d-7b-2)",
+                    "shadow [{}]: {} (world mask {world_mask} AND shadowMask {} = {}; translucency {}; allowShadows {allow_word}) (rule 36; drawn on the terrain, 4d-7b-2)",
                     p.name,
-                    if casts { "CASTS a shadow" } else { "no shadow" },
+                    if casts && self.allow_shadows { "CASTS a shadow" } else if casts { "CASTS when allowShadows on (currently off)" } else { "no shadow" },
                     c.keys.shadow_mask,
                     world_mask & c.keys.shadow_mask,
                     p.translucency
@@ -5122,6 +5159,8 @@ impl Placer<'_> {
         Objects {
             map: self.map,
             shadow_world_mask,
+            allow_shadows: self.allow_shadows,
+            allow_shadows_explicit: None,
             shapes: self.shapes,
             placed: self.placed,
             markers: self.markers,

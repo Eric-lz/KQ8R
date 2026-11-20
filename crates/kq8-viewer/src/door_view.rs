@@ -1000,6 +1000,8 @@ pub fn spawn_doors(
     main_log.summary(format!("talk: {} conversation info object(s): {:?}", active.world.conv_infos.len(), active.world.conv_infos.iter().map(|i| i.name.as_str()).collect::<Vec<_>>()));
     // Rule 22: each door's script gets Init as the door enters the world;
     // then each trap's (traps.md rule 13).
+    active.world.allow_shadows = objects.allow_shadows;
+    active.world.allow_shadows_from_world = objects.allow_shadows_explicit.is_some();
     active.start();
     let mut sim = DoorSim { active, spawns: Vec::new(), char_spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok(), rope_clicks: Vec::new(), rope_asked: None, rock_clicks: Vec::new() };
     for line in sim.active.take_log() {
@@ -1064,7 +1066,7 @@ pub fn trap_step(
     lookup: Option<Res<crate::terrain_view::GroundLookup>>,
     buildings: Option<Res<Buildings>>,
     order: Option<Res<crate::terrain_view::ColliderOrder>>,
-    (buttons, right_at, mut set_haze, mut ground_asks): (Res<ButtonInput<MouseButton>>, Res<RightAt>, ResMut<crate::object_light::SetHaze>, ResMut<crate::ground_anim_view::GroundAsks>),
+    (buttons, right_at, mut set_haze, mut ground_asks, mut shadow_world): (Res<ButtonInput<MouseButton>>, Res<RightAt>, ResMut<crate::object_light::SetHaze>, ResMut<crate::ground_anim_view::GroundAsks>, Option<ResMut<crate::shadow_view::ShadowWorld>>),
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -1686,6 +1688,12 @@ pub fn trap_step(
                 }
                 deleted.0.push(name.clone());
                 format!("{at}: applied: {name} deleted: {off} collider(s) switched off, {view_dropped} view box(es) dropped, hidden")
+            }
+            Request::AllowShadows { allow, at } => {
+                if let Some(w) = shadow_world.as_deref_mut() {
+                    w.allow = allow;
+                }
+                format!("{at}: applied: allowShadows {} (world shadows {})", u8::from(allow), if allow { "on" } else { "off" })
             }
         };
         let line = format!("update {}: {line}", sim.active.world.updates);

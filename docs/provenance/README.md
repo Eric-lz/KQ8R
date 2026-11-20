@@ -4179,4 +4179,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `inc <var>` (C `atoi` prefix / non-numeric -> `1`); `setcat` (no separator, 2 words `""`, 512-byte cap); `alias` (case-sensitive word-0, max 20 expansions, `;` in body, single quotes block expansion; `newWorld.cs` definitions passed to `Scripts::aliases`) | `script-commands.md` rules 7–9 | unit tests `inc_setcat_and_alias_follow_batch1_rules`, `world_script::follows_scripts_in_order` |
 | `getConnorFlag` case-insensitive across the 7 `CONNOR_FLAGS` -> `"1"`/`"0"` (error + `"0"` on unknown); `mouseAction` hides Top panel for `y > 60` without moving OS pointer; `KQGame::selectScreen` `0..=8`; 14 loading/cache/world-start hints return `"0"` | `script-commands.md` rules 10, 12, 13; `interface.md` rule 3a | unit test `get_connor_flag_mouse_action_select_screen_and_loading_hints`; Daventry `doors.log`, `viewer.log`, `gui.log` |
 
+## B1-3 2026-11-20: `allowShadows 0|1` world load and live toggle — core `active.rs`, `journey.rs`; viewer `load.rs`, `terrain_view.rs`, `shadow_view.rs`, `anim_view.rs`, `door_view.rs`, `world_build.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `world.cs` sets initial `allowShadows 0\|1` per world (`0` in CastleD, Gnome, Temple1–4; `1` else); explicit `world.cs` setting takes precedence over `Journey` carry | `characters.md` rule 36; `MASK/*/kq/world.cs` | unit test `taken_and_given_back_unchanged`; `CastleD` `viewer.log` (`allowShadows 0 (world.cs)`) |
+| Live `allowShadows 0\|1` toggles plain-object, Connor, and character shadows cleanly off and back on | `characters.md` rules 36–37 | unit test `allow_shadows_toggles_state_and_queues_request`; `DeadCity` `doors.log`, `shadows.log`, `characters.log` |
+
+
 

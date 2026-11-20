@@ -235,12 +235,14 @@ pub enum Request {
     CamFly { aim: [f32; 3], seconds: Option<f32>, end_roll: Option<f32>, at: String },
     /// `KQCamera::cutToCamLoc x y z [roll]` (rule 3).
     CamCut { aim: [f32; 3], roll: f32, at: String },
-    /// The turn after a click (`clicking.md` rules 25–33, M4 4a-8): after
+    /// `Clicking` turn (`clicking.md` rules 25–33, M4 4a-8): after
     /// a `ConnorAction` call Connor turns to face `target` (the clicked
     /// object's position) with the automatic turn, if his state allows it
     /// (rule 28). Queued after the script's own requests, so the caller
     /// looks at his state after those (rule 27).
     ClickTurn { name: String, target: [f32; 2], at: String },
+    /// `allowShadows 0|1` (`characters.md` rule 36): world-wide shadow toggle.
+    AllowShadows { allow: bool, at: String },
 }
 
 /// A panel command of a script (`interface.md` rule 15, M4 4c-2).
@@ -959,6 +961,10 @@ pub struct WorldState {
     pub active_list: Vec<String>,
     /// `KQWorld::MaxMonsters` (rule 20), set by the caller.
     pub max_monsters: usize,
+    /// `allowShadows 0|1` (`characters.md` rule 36): whether terrain/building shadows are drawn.
+    pub allow_shadows: bool,
+    /// Whether `world.cs` explicitly set `allowShadows` on load (so `Journey` preserves world settings).
+    pub allow_shadows_from_world: bool,
     /// Connor's forward or back key is held now (`character-movement.md`
     /// rule 25, Q133 b; a scripted walk sends no key), set by the caller.
     pub connor_move_key: bool,
@@ -2693,6 +2699,23 @@ impl WorldState {
         "0".into()
     }
 
+    /// `allowShadows <0|1>` (`characters.md` rule 36): world-wide shadow toggle.
+    fn allow_shadows_cmd(&mut self, words: &[String], at: &str) -> String {
+        let Some(v) = words.get(1).filter(|w| looks_like_number(w)) else {
+            self.note(format!("{at}: usage: allowShadows <0|1>; nothing"));
+            return "0".into();
+        };
+        let allow = number_value(v) != 0.0;
+        self.allow_shadows = allow;
+        self.note(format!(
+            "{at}: allowShadows {}: world shadows {} (characters.md rule 36)",
+            u8::from(allow),
+            if allow { "on" } else { "off" }
+        ));
+        self.requests.push(Request::AllowShadows { allow, at: at.to_string() });
+        "0".into()
+    }
+
     fn gold_coin_persists(&mut self, words: &[String], at: &str) -> String {
         let Some(v) = words.get(1).filter(|v| looks_like_number(v)) else {
             self.note(format!("{at}: usage: goldCoinPersists 0|1; nothing"));
@@ -4126,6 +4149,7 @@ impl ScriptHost for WorldState {
             "KQObject::setDontLook" | "KQObject::setHidden" => Some(self.item_change(words, at)),
             "mouseAction" => Some(self.mouse_action(words, at)),
             "KQGame::selectScreen" => Some(self.select_screen(words, at)),
+            "allowShadows" => Some(self.allow_shadows_cmd(words, at)),
             "preloadShape"
             | "preloadResource"
             | "KQObject::preloadResources"
@@ -4288,6 +4312,8 @@ impl Active {
                 fight_log: Vec::new(),
                 active_list: Vec::new(),
                 max_monsters: crate::character_ai::DEFAULT_MAX_MONSTERS,
+                allow_shadows: true,
+                allow_shadows_from_world: false,
                 connor_move_key: false,
                 connor_back_key: false,
                 connor_fight: None,
@@ -10608,5 +10634,26 @@ mod talk_tests {
         ] {
             assert_eq!(w.world_command(&words(cmd), "t"), Some("0".into()), "{cmd}");
         }
+    }
+
+    #[test]
+    fn allow_shadows_toggles_state_and_queues_request() {
+        let mut a = active("", &[]);
+        let w = &mut a.world;
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        assert!(w.allow_shadows);
+
+        assert_eq!(w.world_command(&words("allowShadows 0"), "t"), Some("0".into()));
+        assert!(!w.allow_shadows);
+        assert!(matches!(w.requests.pop(), Some(Request::AllowShadows { allow: false, .. })));
+
+        assert_eq!(w.world_command(&words("allowShadows 1"), "t"), Some("0".into()));
+        assert!(w.allow_shadows);
+        assert!(matches!(w.requests.pop(), Some(Request::AllowShadows { allow: true, .. })));
+
+        // Usage without number leaves setting untouched and emits no request.
+        assert_eq!(w.world_command(&words("allowShadows"), "t"), Some("0".into()));
+        assert!(w.allow_shadows);
+        assert!(w.requests.is_empty());
     }
 }

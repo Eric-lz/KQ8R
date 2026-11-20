@@ -818,7 +818,11 @@ fn give_journey(world: &mut World, journey: Option<&Journey>, to: &str, log: &st
     };
     let active = &mut sim.active;
     let lines = j.give(&mut active.world, &mut active.scripts.vars);
+    let allow_shadows = active.world.allow_shadows;
     let arrived = connor_summary(&active.world);
+    if let Some(mut sw) = world.get_resource_mut::<crate::shadow_view::ShadowWorld>() {
+        sw.allow = allow_shadows;
+    }
     let after = Counts::of(world);
     let mut log = log.lock().unwrap();
     for line in &lines {
