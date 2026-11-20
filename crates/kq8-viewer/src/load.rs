@@ -1628,6 +1628,8 @@ pub struct Objects {
     /// U-7 (`water.md` "Liquid damage" rule 2): the terrain damage timers
     /// `world.cs` sets in its `Init` (name, value).
     pub damage_timers: Vec<(String, String)>,
+    /// U-10 (`objects.md` "River controls"): Dead City's river-dipping boxes.
+    pub river_controls: Vec<kq8_core::active::RiverControl>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -1831,6 +1833,8 @@ pub struct Arrival {
     /// The kept maps by map index (rule 16): this world's own, when it was
     /// visited before, replaces its shipped file.
     pub kept_maps: BTreeMap<usize, (String, kq8_data::magic_map::MapKeys, String)>,
+    /// River controls whose `rustedOne` switch is already set (U-10, rule 6f).
+    pub rusted_rivers: Vec<String>,
 }
 
 /// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
@@ -1900,6 +1904,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         kept_states: arrival.as_ref().map(|a| a.states.clone()).unwrap_or_default(),
         kept_applied: Vec::new(),
         portal_movements,
+        rusted_rivers: arrival.as_ref().map(|a| a.rusted_rivers.clone()).unwrap_or_default(),
         skip_con_start: arrival.is_some(),
         progress,
         map: None,
@@ -1936,6 +1941,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         emitters: Vec::new(),
         catchers: Vec::new(),
         traps: Vec::new(),
+        river_controls: Vec::new(),
         conv_infos: Vec::new(),
         audibles: Vec::new(),
         music: None,
@@ -2257,6 +2263,8 @@ struct Placer<'a> {
     emitters: Vec<EmitterAssets>,
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     traps: Vec<kq8_core::trap::TrapSettings>,
+    river_controls: Vec<kq8_core::active::RiverControl>,
+    rusted_rivers: Vec<String>,
     conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     audibles: Vec<kq8_core::sound::Audible>,
     /// Files named by `loadKQ <file>` in the world's scripts, lower case
@@ -3226,6 +3234,37 @@ impl Placer<'_> {
             self.place_trap(&label, s, p);
             return;
         }
+        // U-10 (`objects.md` "River controls", Q193): invisible river-dipping
+        // click boxes kept at their exact coordinates (no `keepOnGround`).
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(kq8_core::active::RIVER_CONTROL_CLASS)) {
+            let num = |key: &str| s.number(key).and_then(Result::ok).map(|v| v as f32);
+            let min = [num("BBMinX").unwrap_or(0.0), num("BBMinY").unwrap_or(0.0), num("BBMinZ").unwrap_or(0.0)];
+            let max = [num("BBMaxX").unwrap_or(0.0), num("BBMaxY").unwrap_or(0.0), num("BBMaxZ").unwrap_or(0.0)];
+            let stretch_dist = num("stretchDist").unwrap_or(kq8_core::active::RIVER_REACH);
+            let accepts_inventory = s.get("acceptsInventory").map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+            let rusted_one = self.rusted_rivers.iter().any(|n| n.eq_ignore_ascii_case(&p.name));
+            self.log.detail(format!(
+                "river {label}[{}] at ({:.0}, {:.0}, {:.0}): box {:?}..{:?}, stretchDist {stretch_dist:.0}, accepts {:?}, rustedOne {rusted_one}",
+                p.name, p.position[0], p.position[1], p.position[2], min, max, accepts_inventory
+            ));
+            self.river_controls.push(kq8_core::active::RiverControl {
+                name: p.name.clone(),
+                placement: kq8_core::collide::Placement { rotation: kq8_data::objects::rotation(p.angles), position: p.position },
+                min,
+                max,
+                stretch_dist,
+                accepts_inventory,
+                rusted_one,
+                gone: false,
+            });
+            self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
+            self.markers.push(Marker { name: p.name.clone(), class: kq8_core::active::RIVER_CONTROL_CLASS.into(), position: p.position, anm: false });
+            if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
+                l.drawn = Drawn::Marker(self.markers.len() - 1);
+            }
+            *self.by_class.entry("RiverControl (river dip, U-10)".into()).or_default() += 1;
+            return;
+        }
         // A conversation info object (M4 4e-3, conversation.md rule 3): no
         // model, no place of its own; its spot, areas and cameras.
         if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(kq8_data::conv_info::CLASS)) {
@@ -3726,6 +3765,14 @@ impl Placer<'_> {
         if scales {
             for m in crate::connor_view::SCALES_MOVEMENTS {
                 wanted.insert((Some(crate::connor_view::SCALES_LIST.to_string()), m.to_string()));
+            }
+        }
+        // objects.md "River controls" (U-10, Q193): `RiverControl` plays
+        // `dipLock` / `dipShield` from `river.anm`; preload whenever present
+        // because `place_connor` runs before `rivercon*.kq`.
+        if self.world.load("river.anm").is_some() {
+            for m in ["dipLock", "dipShield"] {
+                wanted.insert((Some("river.anm".to_string()), m.to_string()));
             }
         }
         // fighting.md rules 39-40 (M5 5c-5): the swings of each hand
@@ -4523,6 +4570,12 @@ impl Placer<'_> {
     /// model, and the lines for `items.log`.
     fn item_models(&mut self, script: &kq8_data::world_script::ScriptRun) -> (BTreeMap<String, usize>, Vec<String>) {
         let mut named: Vec<String> = self.items.objects.iter().map(|o| o.kind.clone()).collect();
+        // U-10 (`objects.md` "River controls"): rusted items created when
+        // Connor dips his BrokenShield or IronLock.
+        if !self.river_controls.is_empty() {
+            named.push("INVITEM_RustedBrokenShield".into());
+            named.push("INVITEM_RustedLock".into());
+        }
         // fighting.md rule 31 (M5 5c-8): what the fighters drop.
         named.extend(self.drop_kinds.iter().cloned());
         for (_, text) in &self.all_scripts {
@@ -4856,6 +4909,12 @@ impl Placer<'_> {
                 t.position = l.position;
             }
         }
+        let mut river_controls = self.river_controls;
+        for r in &mut river_controls {
+            if let Some(l) = self.located.get(&r.name.to_ascii_lowercase()) {
+                r.placement = kq8_core::collide::Placement { rotation: kq8_data::objects::rotation(l.angles), position: l.position };
+            }
+        }
         // Monsters where the start-up scripts' `move` left them.
         let mut monsters = self.monsters;
         for m in &mut monsters {
@@ -4931,6 +4990,7 @@ impl Placer<'_> {
             ground: None,
             max_monsters: None,
             damage_timers: Vec::new(),
+            river_controls,
         }
     }
 }

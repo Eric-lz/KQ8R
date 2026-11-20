@@ -105,7 +105,7 @@ fn category(w: &WorldState, kind: &str) -> String {
 
 /// Connor's stats changed by `d` (`interface.md` rule 24: one stats
 /// event); logged with before and after.
-fn connor_add(w: &mut WorldState, d: Stats, why: &str) -> String {
+pub(crate) fn connor_add(w: &mut WorldState, d: Stats, why: &str) -> String {
     let Some(c) = w.connor_stats.as_mut() else { return "Connor's stats unknown".into() };
     let before = *c;
     let level = c.change(d);

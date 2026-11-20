@@ -3901,7 +3901,45 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     plates (`colliderType=0`) are never picked by the click line, so a
     click on one throws at the ground point under the pointer (lands on
     the plate).
-- **U-10 (Q193): river controls** (`objects.md` "River controls").
+- **U-10 (Q193): river controls** (`objects.md` "River controls") — **Done**
+  (logs and unit tests, **not played by hand**):
+  - Dead City's `newWorld.cs` lines 312–315 load all four
+    `RiverControl` files (`rivercon.kq`, `rivercn2.kq`, `rivercn3.kq`,
+    `rivercn4.kq`), so all four become live river-dipping boxes (our
+    loader follows `newWorld.cs`, whereas `objects.md` rule 6e notes
+    only `rivercn2`–`4`). Each is placed at its file's exact position
+    (no `keepOnGround`, `Marker` only, no `DistanceTest`), with its
+    `BBMin`/`BBMax` box, `stretchDist` (default `1,300`), and
+    `acceptsInventory` (`INVITEM_BrokenShield,INVITEM_IronLock`), and
+    restores any prior `rusted_one` state across world changes
+    (`KeptWorld` / `Arrival`). `load.rs` also preloads `dipLock` and
+    `dipShield` from `river.anm` whenever `river.anm` exists (since
+    `place_connor` runs before `rivercon*.kq`), and includes
+    `INVITEM_RustedBrokenShield` and `INVITEM_RustedLock` in item
+    models.
+  - Clicking runs no script (`kq8-core` `active.rs` + `weapons.rs`
+    `box_hits`): empty-handed queues `2000/(13,14,0,1)`; an unaccepted
+    item is ignored (`ClickResult::Refused`, kept in hand); an
+    accepted item at distance `>= stretchDist` (`1,300`, to nearest box
+    point) queues `0/(0,0,14,1)` (`NOT_CLOSE_ENOUGH`: `"I am not close
+    enough."`, kept in hand); an accepted item within reach empties the
+    hand (`ClickResult::RiverDip`) and queues `2000/(8,7,16,1)`.
+  - On `TalkComplete` of `2000/(8,7,16,1)`: Connor turns (`ConnorAuto`
+    `Point`) to `(cx, cy ± 1,300)` (`-1,300` if the box's `locY <= cy`),
+    controls lock (`HandsOff 1`), and `Request::Move { who: "KQCamera",
+    flags: 0 }` cuts directly to Connor's position + `(200, 3,700,
+    1,400)` with view `(-0.2, 0, 3.0)` (keeping `following = true` so
+    usual following resumes from there). At +0.5 s `Request::ConnorSpecial`
+    plays `AnimList=river.anm,away,AnimListOn,dipShield|dipLock,AnimListOff,out`
+    (`ConnorSim::start_special` is fixed so bare names check Connor's
+    active weapon set first before falling back to `Conner.anm`). At
+    +3.5 s Connor says `2000/(8,7,16,2)`, swaps `BrokenShield` ->
+    `RustedBrokenShield` or `IronLock` -> `RustedLock`, and receives
+    `+2,000` experience once per box (`rusted_one`). When `out` ends,
+    `HandsOff 0` restores controls. Verified by unit test and Dead City
+    viewer logs (`rivercn2` empty, wrong item, too far `3000.0`, full
+    `BrokenShield` dip with `CORRODE.AUD` and `level 8 -> 9`, and
+    `IronLock` + drawn axe using `conaxe.anm/away`).
 - **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9).
 - Q184 and Q187 confirm what is built (no change), except where U-x
   finds otherwise.

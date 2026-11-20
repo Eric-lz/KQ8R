@@ -413,6 +413,15 @@ impl WorldState {
                 hits.push((c.name.clone(), t, c.collision_type));
             }
         }
+        // U-10 (objects.md "River controls"): invisible river-dipping boxes
+        // are clickable by their BBMin/BBMax box (0x20).
+        if mask & crate::click::CLICKABLE != 0 {
+            for r in self.river_controls.iter().filter(|r| !r.gone && !off(&r.name)) {
+                if let Some(t) = ray_box(origin, dir, &r.placement, r.min, r.max) {
+                    hits.push((r.name.clone(), t, crate::click::CLICKABLE));
+                }
+            }
+        }
         // World items (items.md rule 6): by their type's box, as clickable
         // things (0x21); hidden ones can't be clicked.
         const ITEM_TYPE: u32 = 0x21;

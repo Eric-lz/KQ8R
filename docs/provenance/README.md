@@ -4144,3 +4144,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | On entry: weapon mode remembered, `away`, empty hands, `throw`; `do` (0.7778) launches; after: the old mode back, `out`, Stop, Wait | 8b | `connor.log` updates 41–78 (empty hands), 81–139 (the crossbow out) |
 | Its state number 512 in `StateChange` | `characters.md` rule 16 | — |
 | The turn before the throw; a script's ThrowRock with no click: 2,000 ahead; the old mode asked back through `setDoMode` | **ours** | `fight.log` update 138 |
+
+## U-10 2026-11-20: Dead City's river-dipping boxes (`RiverControl`) — core `active.rs`, `talk.rs`, `connor_inventory.rs`, `weapons.rs`; viewer `load.rs`, `door_view.rs`, `connor_view.rs`, `world_build.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Four `RiverControl` files loaded per `newWorld.cs` lines 312–315 (`rivercon`, `rivercn2`–`4`); exact position, no `keepOnGround`; `acceptsInventory=INVITEM_BrokenShield,INVITEM_IronLock`, `stretchDist` default `1,300` | `objects.md` "River controls" rules 1, 6e, 6g (data: `newWorld.cs` loads `rivercon` too) | Dead City `viewer.log` (`4 RiverControl boxes`) |
+| Click: empty -> `2000/13/14/0/1`; other item -> nothing (stays in hand); distance >= 1,300 -> `0/0/0/14/1`; accepted within reach -> `2000/8/7/16/1` and hand emptied | `objects.md` rules 2, 6g; `0.MSG` | unit test; Dead City `doors.log`, `talk.log`, `items.log` |
+| End of `2000/8/7/16/1`: turn toward `(cx, cy ± 1,300)` (`-` when `locY <= cy`), `handsOff 1`, camera cut to Connor + `(200, 3,700, 1,400)` tilt `-0.2` roll `0` heading `3.0`, following resumes | `objects.md` rules 3, 6a, 6b | unit test; Dead City `doors.log` update 27, `camera.log` update 27 |
+| +0.5 s: `Special` `AnimList=river.anm,away,AnimListOn,dipShield|dipLock,AnimListOff,out` (`away`/`out` from active weapon list when weapon out); `corrode` cue; +3.5 s: `2000/8/7/16/2`, item swap to `RustedBrokenShield`/`RustedLock`, +2,000 XP once per box (`rustedOne`, kept across world changes); `handsOff 0` on `out` end | `objects.md` rules 3, 6c, 6d, 6f; `river.anm` | unit test; Dead City `connor.log` updates 35–98, `items.log` update 80, `sound.log` (`CORRODE.AUD`, `STATS.AUD`, `LEVEL.AUD`) |
+

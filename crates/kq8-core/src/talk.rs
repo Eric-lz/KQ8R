@@ -67,6 +67,9 @@ pub const CONNOR: &str = "Connor";
 pub const TOO_FAR: Tuple = Tuple { file: 0, noun: 0, verb: 0, case: 1, seq: 1 };
 /// Rule 19: "This will not work." (an item something doesn't take).
 pub const WONT_WORK: Tuple = Tuple { file: 0, noun: 0, verb: 0, case: 4, seq: 1 };
+/// `RiverControl` too-far remark (`objects.md` rule 2: `0.MSG` file 0,
+/// condition 14: "I am not close enough.").
+pub const NOT_CLOSE_ENOUGH: Tuple = Tuple { file: 0, noun: 0, verb: 0, case: 14, seq: 1 };
 
 /// A line's voice file, found by the caller.
 #[derive(Debug, Clone, PartialEq)]

@@ -153,6 +153,8 @@ pub struct KeptWorld {
     pub came_in: Vec<String>,
     /// Animated and scripted objects whose state changed (DESIGN K-2).
     pub states: Vec<kq8_core::active::KeptState>,
+    /// River controls whose `rustedOne` switch is set (U-10).
+    pub rusted_rivers: Vec<String>,
 }
 
 impl WorldChange {
@@ -616,6 +618,7 @@ pub fn world_change_step(world: &mut World) {
                 gone: sim.active.world.gone_names().into_iter().collect(),
                 came_in: sim.active.world.came_in_files(),
                 states: sim.active.world.kept_states(),
+                rusted_rivers: sim.active.world.rusted_rivers(),
             });
             if let Some(k) = kept {
                 log.lock().unwrap().summary(format!(
@@ -700,6 +703,7 @@ pub fn world_change_step(world: &mut World) {
                 came_in: kept.came_in.clone(),
                 states: kept.states.iter().map(|s| (s.name.to_ascii_lowercase(), s.clone())).collect(),
                 kept_maps: j.other_maps.clone(),
+                rusted_rivers: kept.rusted_rivers.clone(),
             });
             let percent = Arc::new(AtomicU32::new(0));
             let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());

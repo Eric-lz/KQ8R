@@ -3,6 +3,15 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 U-10: Dead City's river-dipping boxes (`RiverControl`, Q193)
+
+**Changed:** `crates/kq8-core/src/{talk.rs,connor_inventory.rs,weapons.rs,active.rs}`, `crates/kq8-viewer/src/{load.rs,connor_view.rs,door_view.rs,world_build.rs}`, `docs/DESIGN.md`, `docs/provenance/README.md`, `MODLOG.md`.
+**Why:** Make Dead City's four `RiverControl` click boxes (`rivercon`, `rivercn2`–`rivercn4`) clickable to rust `INVITEM_BrokenShield` and `INVITEM_IronLock` (`docs/behaviour/objects.md` "River controls").
+**Tested how:** `cargo test --workspace` (all 751 tests including new `river_control_handles_empty_wrong_far_and_full_dip_on_both_sides`); scripted `kq8-viewer` runs in `DeadCity` (`--sound off --no-ai`) at `160000,192000` (too far), `160000,194200` (empty, wrong item, full `INVITEM_BrokenShield` dip to `1800` frames, and `INVITEM_IronLock` with Small Ax drawn).
+**Result:** Empty-handed click plays `2000/13/14/0/1`; unaccepted item stays in hand with no speech; distance >= `1,300` (`3000.0`) plays `0/0/0/14/1` (`"I am not close enough."`) and keeps item in hand; accepted item within reach empties hand, plays `2000/8/7/16/1`, turns Connor toward `(160000, 195500)`, sets `handsOff 1`, cuts camera to `(160200, 197900, 2239)` (`-0.2`, `0`, `3.0`) with following kept, starts `Special` (`away` from active weapon list when armed / `river.anm/dipShield` / `out`) 0.5 s later, triggers `CORRODE.AUD`, swaps to `INVITEM_RustedBrokenShield` with `+2,000` XP (`level 8 -> 9`, `STATS.AUD`, `LEVEL.AUD`) and `2000/8/7/16/2` at +3.5 s, and restores `handsOff 0` when `out` ends.
+**Still broken / not tested:** Not played by hand or checked by eye in the window (camera angle and dip animation in motion); only `rivercn2` and `Shield` end-to-end checked in the viewer (`Lock` tested through `dipLock` start; `rustedOne` world-change persistence and second-dip 0-XP rule tested in unit test).
+**Next:** Implement U-11 (`KQWeepBolt`: Dead City's weeper draining bolt).
+
 ## 2026-11-13 The user's visual checks of U-3, U-7, U-8a and U-8b
 
 **Changed:** `MODLOG.md` only.

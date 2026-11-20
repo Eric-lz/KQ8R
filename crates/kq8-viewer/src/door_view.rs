@@ -780,6 +780,9 @@ pub fn spawn_doors(
     active.add_chests(active_chests);
     main_log.summary(format!("objects: {} scripted clickable objects", active_objects.len()));
     active.add_objects(active_objects);
+    let river_controls = std::mem::take(&mut objects.river_controls);
+    main_log.summary(format!("river controls: {} RiverControl boxes", river_controls.len()));
+    active.add_river_controls(river_controls);
     // fighting.md rule 3 (M5 5c-10): the combat level, before the
     // characters enter the world.
     if let Some(level) = combat {
@@ -2275,7 +2278,7 @@ pub fn door_step(
                 if let Some(h) = &held {
                     let accepted = match &result {
                         kq8_core::active::ClickResult::Script(args) => args.get(2) == Some(&h.object),
-                        kq8_core::active::ClickResult::Swallowed => true,
+                        kq8_core::active::ClickResult::Swallowed | kq8_core::active::ClickResult::RiverDip => true,
                         _ => false,
                     };
                     kq8_core::connor_inventory::after_world_click(&mut sim.active.world, &h.object, accepted);
