@@ -1193,10 +1193,10 @@ impl ConnorSim {
         if self.tile.is_some() {
             return TILE;
         }
-        // U-8b: the Scales state's number is not in the notes (Q198 e);
-        // stand-in: Tile's.
+        // tile-puzzle.md "The scales", characters.md rule 16 (Q198):
+        // Scales is 131,072 and falling / landing is 262,144.
         if self.scales.is_some() {
-            return TILE;
+            return SCALES;
         }
         if self.rock.is_some() {
             return THROW_ROCK;
@@ -1204,7 +1204,8 @@ impl ConnorSim {
         match self.walker.mode {
             Mode::Free if self.walker.moving() => MOVE,
             Mode::Free | Mode::Crash => WAIT,
-            Mode::Fall | Mode::Land | Mode::Jump => JUMP,
+            Mode::Fall | Mode::Land => FALL,
+            Mode::Jump => JUMP,
             Mode::Dying | Mode::Dead => DIE,
             Mode::Special => SPECIAL,
             Mode::Push => PUSH,

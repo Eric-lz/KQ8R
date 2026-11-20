@@ -1,17 +1,15 @@
 //! Connor's `Scales` state: Dead City's Scales of Justice
-//! (`docs/behaviour/tile-puzzle.md` rules 23-26a; DESIGN U-8b). Built
+//! (`docs/behaviour/tile-puzzle.md` rules 23-26a, Q198; DESIGN U-8b). Built
 //! like the `Tile` state: run by [`ConnorSim::scales_step`] before his
 //! update; the steps onto and off a dish are his `conscale.anm`
-//! movements as one-item Special lists, whose own steps carry him.
-//!
-//! Not built (Q198 a): the camera's spots and views of rules 25-26; the
-//! camera keeps following him.
+//! movements as one-item Special lists, whose own steps carry him, and the
+//! six instant camera cuts go through `tile_calls`.
 
 use kq8_core::connor::{Intent, Mode, SpecialStep};
 use kq8_core::connor_auto::{AutoKind, AutoMove};
 use kq8_core::weapons::WeaponMode;
 
-use super::ConnorSim;
+use super::{ConnorSim, TileCall};
 
 /// Rule 23: his movement list gains this file.
 pub const LIST: &str = "conscale.anm";
@@ -24,8 +22,8 @@ pub const DISH_X: f32 = 219_000.0;
 /// Rule 25: the three headings on the floor: step away, the two dishes.
 pub const AWAY: f32 = -1.57;
 pub const DISHES: [f32; 2] = [2.207, 0.933];
-/// Rule 25: stepping away, he walks to this point.
-pub const WAY_OUT: [f32; 2] = [209_500.0, 49_065.0];
+/// Rule 25: stepping away, he walks to this point (Q198).
+pub const WAY_OUT: [f32; 2] = [209_500.0, 49_034.0];
 /// Rule 26: off a dish: with y above this he turns to `OFF_NORTH`, below
 /// it to `OFF_SOUTH`; exactly on it nothing happens.
 pub const DISH_Y: f32 = 50_000.0;
@@ -33,6 +31,12 @@ pub const OFF_NORTH: f32 = -0.933;
 pub const OFF_SOUTH: f32 = -2.207;
 /// Rule 26a: after `onscale2` he is turned 180° and raised 200.
 pub const ON_RAISE: f32 = 200.0;
+/// Rules 25-26 (Q198): instant camera cuts `(position, [rx, ry, rz])`.
+pub const CAM_AWAY: ([f32; 3], [f32; 3]) = ([216_360.0, 52_250.0, 7_260.0], [-0.716, 0.0, 2.644]);
+pub const CAM_NORTH: ([f32; 3], [f32; 3]) = ([216_115.0, 53_490.0, 5_560.0], [-0.38, 0.0, -2.449]);
+pub const CAM_SOUTH: ([f32; 3], [f32; 3]) = ([216_115.0, 44_790.0, 5_560.0], [-0.38, 0.0, -0.692]);
+pub const CAM_DISH: ([f32; 3], [f32; 3]) = ([216_500.0, 49_140.0, 4_500.0], [-0.1, 0.0, -1.57]);
+pub const CAM_FLOOR: ([f32; 3], [f32; 3]) = ([214_420.0, 49_340.0, 4_190.0], [-0.2, 0.0, -1.64]);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Stage {
@@ -109,6 +113,14 @@ impl ConnorSim {
         }
     }
 
+    /// Queues an instant camera cut onto `tile_calls`.
+    fn scales_cut(&mut self, (p, r): ([f32; 3], [f32; 3])) {
+        self.tile_calls.push(TileCall::Line(format!(
+            "move KQCamera 0 {:.0} {:.0} {:.0} {:.3} {:.3} {:.3}",
+            p[0], p[1], p[2], r[0], r[1], r[2]
+        )));
+    }
+
     /// Out of the state (rule 25: stepping away).
     fn leave_scales(&mut self) {
         if self.scales.take().is_some_and(|s| matches!(s.stage, Stage::On1 | Stage::Off1)) {
@@ -142,27 +154,40 @@ impl ConnorSim {
                 if x < DISH_X {
                     let to = nearest(heading, &[AWAY, DISHES[0], DISHES[1]]);
                     if to == AWAY {
-                        // Rule 25: the only way out: the start spot facing
-                        // away, then a walk (ours: the state is left first,
-                        // Q198 c).
+                        // Rule 25 (Q198): the only way out: the start spot facing
+                        // away, camera cut, handsOff 1, then walk to WAY_OUT.
                         self.put(START, AWAY);
                         self.leave_scales();
+                        self.hands_off = true;
                         self.walker.auto = Some(AutoMove::new(AutoKind::Walk { run: false }, WAY_OUT, None));
-                        lines.push(format!("Scales: forward on the floor, heading {heading:.3} -> {AWAY}: steps away: put on the start spot, leaves the state, walks to ({:.0}, {:.0}) (rule 25; the camera's spot: not built, Q198)", WAY_OUT[0], WAY_OUT[1]));
+                        self.tile_calls.push(TileCall::Line("KQCamera::follow none".into()));
+                        self.scales_cut(CAM_AWAY);
+                        self.tile_calls.push(TileCall::Line("handsOff 1".into()));
+                        lines.push(format!(
+                            "Scales: forward on the floor, heading {heading:.3} -> {AWAY}: steps away: put on start spot, leaves state, camera cuts to {:?}, handsOff 1, walks to ({:.0}, {:.0}) (rule 25, Q198)",
+                            CAM_AWAY.0, WAY_OUT[0], WAY_OUT[1]
+                        ));
                     } else {
-                        // Rules 25, 26a: onto a dish.
+                        // Rules 25, 26a (Q198): onto a dish.
                         self.put(START, to);
                         self.mover.start_tile_jump();
+                        self.tile_calls.push(TileCall::Line("KQCamera::follow none".into()));
+                        let cam = if to == DISHES[0] { CAM_NORTH } else { CAM_SOUTH };
+                        self.scales_cut(cam);
                         let play = self.scales_play("onscale1");
                         self.scales.as_mut().unwrap().stage = Stage::On1;
-                        lines.push(format!("Scales: forward on the floor, heading {heading:.3} -> {to}: onto a dish: put on the start spot, gravity and keep-on-ground off; {play} (rules 25, 26a; the camera's spot: not built, Q198)"));
+                        lines.push(format!(
+                            "Scales: forward on the floor, heading {heading:.3} -> {to}: onto {} dish: start spot, camera cuts to {:?}, gravity and keep-on-ground off; {play} (rules 25, 26a, Q198)",
+                            if to == DISHES[0] { "north" } else { "south" },
+                            cam.0
+                        ));
                     }
                 } else {
-                    // Rule 26: off a dish.
-                    let to = if y > DISH_Y {
-                        OFF_NORTH
+                    // Rule 26 (Q198): off a dish.
+                    let (to, cam, side) = if y > DISH_Y {
+                        (OFF_NORTH, CAM_NORTH, "north")
                     } else if y < DISH_Y {
-                        OFF_SOUTH
+                        (OFF_SOUTH, CAM_SOUTH, "south")
                     } else {
                         lines.push("Scales: forward on a dish at y 50,000 exactly: nothing (rule 26)".to_string());
                         return lines;
@@ -170,9 +195,10 @@ impl ConnorSim {
                     let p = self.mover.position;
                     self.put(p, to);
                     self.mover.start_tile_jump();
+                    self.scales_cut(cam);
                     let play = self.scales_play("offscale1");
                     self.scales.as_mut().unwrap().stage = Stage::Off1;
-                    lines.push(format!("Scales: forward on a dish (y {y:.0}): turns to {to} (at once: ours, Q198 d), gravity and keep-on-ground off; {play} (rules 26, 26a)"));
+                    lines.push(format!("Scales: forward on the {side} dish (y {y:.0}): turns to {to} (at once: ours, Q198 d), camera cuts to {:?}, gravity and keep-on-ground off; {play} (rules 26, 26a, Q198)", cam.0));
                 }
             }
             Stage::On1 | Stage::Off1 => {
@@ -196,15 +222,23 @@ impl ConnorSim {
                     self.walker.stand_now();
                     let p = self.mover.position;
                     let what = if stage == Stage::On2 {
-                        // Rule 26a: turned 180° and raised 200.
+                        // Rule 26a: turned 180° and raised 200; camera cuts to CAM_DISH.
                         let heading = self.walker.heading + std::f32::consts::PI;
                         self.put([p[0], p[1], p[2] + ON_RAISE], heading);
-                        format!("onscale2 ended at ({:.0}, {:.0}, {:.0}): turned 180° to {heading:.3} and raised {ON_RAISE} (rule 26a)", p[0], p[1], p[2])
+                        self.scales_cut(CAM_DISH);
+                        format!("onscale2 ended at ({:.0}, {:.0}, {:.0}): turned 180° to {heading:.3}, raised {ON_RAISE}, camera cuts to {:?} (rules 25, 26a, Q198)", p[0], p[1], p[2], CAM_DISH.0)
                     } else {
-                        format!("offscale2 ended at ({:.0}, {:.0}, {:.0}) (rule 26)", p[0], p[1], p[2])
+                        // Rule 26 (Q198): camera cuts to CAM_FLOOR and resumes follow Connor.
+                        self.scales_cut(CAM_FLOOR);
+                        self.tile_calls.push(TileCall::Line("KQCamera::follow Connor".into()));
+                        format!("offscale2 ended at ({:.0}, {:.0}, {:.0}): camera cuts to {:?} and follows Connor (rule 26, Q198)", p[0], p[1], p[2], CAM_FLOOR.0)
                     };
-                    self.scales.as_mut().unwrap().stage = Stage::Keys;
-                    lines.push(format!("Scales: {what}; keys"));
+                    // Q198 b: clear both busy stage and remembered forward key
+                    // so holding forward immediately starts the next step.
+                    let s = self.scales.as_mut().unwrap();
+                    s.stage = Stage::Keys;
+                    s.remembered = 0;
+                    lines.push(format!("Scales: {what}; keys (forward cleared)"));
                 }
             }
         }
@@ -225,5 +259,15 @@ mod tests {
         assert_eq!(nearest(-1.0, &[AWAY, DISHES[0], DISHES[1]]), AWAY);
         // Wrapped: 4.0 is -2.28, nearer -1.57 than 2.207.
         assert_eq!(nearest(4.0, &[AWAY, DISHES[0], DISHES[1]]), AWAY);
+    }
+
+    #[test]
+    fn scales_constants_match_q198() {
+        assert_eq!(WAY_OUT, [209_500.0, 49_034.0]);
+        assert_eq!(CAM_AWAY.0, [216_360.0, 52_250.0, 7_260.0]);
+        assert_eq!(CAM_NORTH.0, [216_115.0, 53_490.0, 5_560.0]);
+        assert_eq!(CAM_SOUTH.0, [216_115.0, 44_790.0, 5_560.0]);
+        assert_eq!(CAM_DISH.0, [216_500.0, 49_140.0, 4_500.0]);
+        assert_eq!(CAM_FLOOR.0, [214_420.0, 49_340.0, 4_190.0]);
     }
 }

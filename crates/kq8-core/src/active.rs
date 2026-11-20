@@ -4713,15 +4713,22 @@ impl Active {
         let lines: Vec<String> = if first {
             vec![format!("KQMonster::speak {name} {name} 2000 16 12 22 2 2")]
         } else {
-            // Q195 b: a cut to Connor + (0, -5,000, 1,000) in his own axes,
-            // looking at him; then the camera follows him.
+            // Q195 b, Q197: a cut to Connor + (0, -5,000, 1,000) in his own axes,
+            // looking at him; then the camera follows him; controls on, first
+            // person allowed, and `KQMusic::pop mtower.aud` queued 0.2 s later.
             let (h, c) = (self.world.connor_heading, self.world.connor_at.unwrap_or([0.0; 3]));
             let (o, up) = (crate::tower_skeleton::BACK_TO_CONNOR[1], crate::tower_skeleton::BACK_TO_CONNOR[2]);
             let cam = [c[0] - o * h.sin(), c[1] + o * h.cos(), c[2] + up];
             let (tilt, heading) = crate::tower_skeleton::look_angles(cam, c);
-            vec![format!("move KQCamera 0 {:.0} {:.0} {:.0} {tilt:.4} 0 {heading:.4}", cam[0], cam[1], cam[2]), "KQCamera::follow Connor".to_string(), "handsOff 0".to_string(), "setThirdPerson".to_string()]
+            vec![
+                format!("move KQCamera 0 {:.0} {:.0} {:.0} {tilt:.4} 0 {heading:.4}", cam[0], cam[1], cam[2]),
+                "KQCamera::follow Connor".to_string(),
+                "handsOff 0".to_string(),
+                "setThirdPerson".to_string(),
+                format!("KQMusic::pop {}", crate::tower_skeleton::MUSIC),
+            ]
         };
-        self.world.fight_note(&name, format!("{at}: {}", if first { "the scream's second part (fighting.md 7a step 2)" } else { "the camera cut to Connor + (0, -5,000, 1,000) in his axes, then follows him; controls on, first person allowed; its death finishes (7a step 5, rule 32; the music's second notice: not built)" }));
+        self.world.fight_note(&name, format!("{at}: {}", if first { "the scream's second part (fighting.md 7a step 2)" } else { "the camera cut to Connor + (0, -5,000, 1,000) in his axes, then follows him; controls on, first person allowed; KQMusic::pop mtower.aud queued 0.2 s later; its death finishes (7a step 5, rule 32, Q197)" }));
         for line in lines {
             let words: Vec<String> = line.split_whitespace().map(str::to_string).collect();
             self.world.note(format!("{at}: {line}"));
@@ -8520,6 +8527,46 @@ endif
         let log = a.world.fight_log.join("\n");
         assert!(log.contains("after its greeting: the camera follows Connor, controls on") && log.contains("-> 5000 (realAlarm)"), "{log}");
         assert_eq!(a.world.anims[0].character.as_ref().unwrap().ai.as_ref().unwrap().settings.alarm_radius, 5000.0);
+    }
+
+    #[test]
+    fn tower_cue50_second_cuts_to_connor_follows_and_pops_music_after_death() {
+        // fighting.md 7a (Q197): Cue 50 #2 cuts in front of Connor (-Y),
+        // follows him, finishes death, and queues KQMusic::pop 0.2 s later.
+        use crate::character::state_number::*;
+        assert_eq!((TILE2, TILE3, SCALES, FALL), (16_384, 65_536, 131_072, 262_144));
+
+        let mut a = fighter();
+        let name = a.world.anims[0].player.name.clone();
+        a.world.anims[0].character.as_mut().unwrap().tower = Some(crate::tower_skeleton::TowerSkeleton::new(Some(5000.0), None, None, 0.0));
+        a.world.anims[0].character.as_mut().unwrap().tower.as_mut().unwrap().fall = Some(crate::tower_skeleton::FallStage::Waiting);
+        a.world.connor_at = Some([1000.0, 2000.0, 500.0]);
+        a.world.connor_heading = 0.0; // faces -Y
+
+        // Cue 50 #1: scream part 2 only.
+        let now = a.world.now();
+        a.world.queue.send(now, 0.0, &name, "KQCueEvent", &["50".into(), "0".into()], "test");
+        a.update();
+        assert!(a.world.music.is_empty());
+
+        // Cue 50 #2: cut to (1000, -3000, 1500), follow Connor, death finishes.
+        a.world.requests.clear();
+        let now = a.world.now();
+        a.world.queue.send(now, 0.0, &name, "KQCueEvent", &["50".into(), "0".into()], "test");
+        a.update();
+        assert!(a.world.anims[0].gone, "death_ended marks skeleton gone on Cue 50 #2");
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::Move { who, position, .. } if who == "KQCamera" && (position[0] - 1000.0).abs() < 1.0 && (position[1] + 3000.0).abs() < 1.0 && (position[2] - 1500.0).abs() < 1.0)), "{:?}", a.world.requests);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::CameraFollow { connor: true, .. })));
+        assert!(a.world.music.is_empty(), "KQMusic::pop waits 0.2 s");
+
+        // +0.2 s in game time (3 updates at 15 Hz) -> MusicRequest::Pop("mtower.aud")
+        // even though the skeleton is marked gone.
+        for _ in 0..2 {
+            a.update();
+        }
+        assert!(a.world.music.is_empty(), "not before 0.2 s");
+        a.update();
+        assert_eq!(a.world.music, [MusicRequest::Pop(crate::tower_skeleton::MUSIC.into())], "{:?}", a.world.music);
     }
 
     #[test]

@@ -4014,3 +4014,18 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
   - **Single-point hidden objects** (no `BBMin*`/`BBMax*`, or all 3 extents `<= 1e-3`, such as sound/music/light/emitter/hazer markers and unmodeled `.anm` objects): keep the 1 m cube resting on the point (green, or orange for `.anm`).
   - All marker entities keep `Visibility::Hidden` and `ShownWithH` so `H` toggles them together and world changes despawn them cleanly (`WorldEntity`).
 - **Verified:** `cargo test --workspace` (760 passed, including `load::marker_tests::trap_classification_matches_script_purpose_and_priority` and the 3 `terrain_view` tests) and 30-frame viewer runs in Dead City (`113` boxed: `27` damage, `16` rope, `14` portal, `1` walk/run, `12` music, `39` generic, `4` click box + `21` point cubes), Daventry (`54` boxed: `4` damage, `8` rope, `2` portal, `18` walk/run, `4` music, `18` generic + `38` point cubes), and Swamp (`31` boxed: `3` damage, `6` rope, `1` portal, `4` walk/run, `6` music, `11` generic + `64` point cubes); **not checked by eye** (markers start `Visibility::Hidden` until `H` is pressed in play).
+
+---
+
+### Dead City polish (`Q197`, `Q198`) and Batch 1 — Shared / Everywhere (2026-11-20)
+
+Work from `docs/SCRIPT-COVERAGE.md` Batch 1 ("Shared / Everywhere") plus the last two Batch 2 (Dead City) questions, implemented one step (and one commit) at a time from Session A's notes (`docs/behaviour/{script-commands,tile-puzzle,fighting,camera,object-lighting,interface,characters}.md`):
+
+1. **Step B1-1 (`Q197` & `Q198`) — Done:** Added `TILE2` (`16,384`), `TILE3` (`65,536`), `SCALES` (`131,072`), and `FALL` (`262,144`) state numbers; added Dead City Scales' six instant camera cuts, `WAY_OUT` `(209,500, 49,034)`, `handsOff 1` on walk-away, and clearing `remembered` after `onscale2`/`offscale2` (`connor_scales.rs`); queued `KQMusic::pop mtower.aud` (`0.2 s` delay) on the tower skeleton's second `Cue 50` (`active.rs`) and snapped frame 0 after same-tick cut + `KQCamera::follow Connor` (`game_camera.rs`). Verified by `cargo test --workspace` (762 passed) and scripted `DeadCity` viewer runs; **not checked by eye**.
+2. **Step B1-2 — Planned:** Split `;` statement separators cleanly in start-up script loading and `script-coverage` (fixing `Snowexit/worldinv.cs`'s 11 mushrooms); add `inc`, `setcat`, and `alias` to `script.rs`, `getConnorFlag` + safe `mouseAction`, and loading/cache/screen hints (`preload*`, `purge*`, `lock*`, `letCatchUp`, `activatePersistMgr`, `selectScreen`, etc.) in `active.rs`.
+3. **Step B1-3 — Planned:** Implement `allowShadows 0|1` on world load (`world.cs`) and via live scripts, hiding all character/Connor shadow meshes when disabled.
+4. **Step B1-4 — Planned:** Implement `loadAnim` (both `.kqs`/`.dts` and `.anm` forms) spawning live `KQAnimOnce` objects with `$ObjectName`, `z == -1/-2` ground snapping, and preloading of script targets in `load.rs`.
+5. **Step B1-5 — Planned:** Implement `KQCamera::shake` in core (`camera.rs`) and viewer (`game_camera.rs`) across all camera modes.
+6. **Step B1-6 — Planned:** Implement `KQHazer` proximity haze zones (`hazer.rs`, loaded in `load.rs`, driving terrain `hazeDistance` / `1.5×` `visibleDistance`).
+7. **Step B1-7 — Planned:** Implement Help popups (`doPopup`, `notStartingHelp`, `stopHelp`, `500.MSG` key placeholder expansion, `38×7` wrapping, F1 Help Book over 24 entries, and game pause while open).
+8. **Step B1-8 — Planned:** Regenerate `docs/SCRIPT-COVERAGE.md` and update hand-over docs (`STATUS.md`, `docs/FEATURES.md`, `README.md`, `MODLOG.md`).

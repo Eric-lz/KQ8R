@@ -197,6 +197,10 @@ pub struct GameCam {
     /// U-2 (`fighting.md` 7a, Q195): flights ended since the core was last
     /// told (each sends Cue 201 to Connor).
     flights_ended: u32,
+    /// Q197 (`fighting.md` 7a): a `move KQCamera` cut occurred since the last
+    /// tick; if `KQCamera::follow Connor` runs in the same tick, frame 0
+    /// snaps straight to the followed spot instead of blending from the cut.
+    just_cut: bool,
 }
 
 impl GameCam {
@@ -474,6 +478,7 @@ impl GameCam {
     /// angles to the current view; rx = tilt, rz = heading; the camera
     /// takes that place and view at once. ry (roll) is not drawn (logged).
     pub fn move_to(&mut self, flags: u32, position: [f32; 3], turn: [f32; 3]) -> String {
+        self.just_cut = true;
         let old = self.cam.position;
         let (old_tilt, old_heading) = self.view_now();
         self.cam.position = if flags & 1 != 0 { std::array::from_fn(|k| old[k] + position[k]) } else { position };
@@ -610,6 +615,7 @@ pub fn make(
         after_flight: None,
         flights_ended: 0,
         follow_due: None,
+        just_cut: false,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt | centre_line_at_connor (height above his feet where the view's centre line passes him; his box is 1,300 tall)");
     Some(g)
@@ -682,6 +688,7 @@ pub fn camera_step(
     let g = &mut *game;
     g.updates += 1;
     g.roll_before = g.view.roll;
+    let snap_follow = std::mem::take(&mut g.just_cut) && g.glide_from.is_none() && g.following && g.pending.contains(&"follow");
     // A gliding move since the last tick (the rope climb) is drawn from
     // where the camera was before it.
     g.previous = match g.glide_from.take() {
@@ -771,6 +778,9 @@ pub fn camera_step(
         g.cam.not_moved(base);
         causes.extend(pending.iter().map(|c| c.replace(' ', "_")));
     }
+    if snap_follow {
+        causes.push("snap_after_cut".into());
+    }
     if g.cam.turn_back {
         causes.push("turn_back".into());
     }
@@ -794,6 +804,11 @@ pub fn camera_step(
     // Check from the numbers: is the camera inside a building's solid?
     let inside: Vec<&str> = view.buildings.iter().filter(|b| b.solid_at(g.cam.position)).map(|b| b.name.as_str()).collect();
     g.current = (g.cam.position, g.cam.view_tilt, g.cam.heading);
+    if snap_follow {
+        // Q197 (`fighting.md` 7a): frame 0 sits at the pulled `follow` spot
+        // with no interpolation from the pre-pull cut position.
+        g.previous = g.current;
+    }
     let p = g.cam.position;
     let line = format!(
         "{} {:.1} {:.1} {:.1} {:.1} {} {} {:.3} {} {} {} | {} {} {} {} {} {} {} | {} | {} | {} {:.3} {:+.3} | {}",
