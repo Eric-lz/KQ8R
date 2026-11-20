@@ -887,12 +887,12 @@ Checked in the logs and unit tests only, **not played by hand**.
 - **Dead City's river-dipping boxes (`RiverControl`):** clicking a
   river box with `BrokenShield` or `IronLock` dips it with a camera
   cut, sheathing any weapon first, swaps it to `RustedBrokenShield` or
-  `RustedLock`, and gives 2,000 experience once per box (unit tests and
-  logs only).
+  `RustedLock`, and gives 2,000 experience once per box (checked in game
+  by the user 2026-11-20).
 - **Dead City's weepers (`KQWeepBolt`):** weepers fire invisible
   draining bolts that build an animated energy chain, loop their drain
   sound, hold Connor in `magicReact`, and drain plain health over 3 s
-  until release or death (unit tests and logs only).
+  until release or death (checked in game by the user 2026-11-20).
 - **Smaller:** scripted attacks on characters, the spirit drain in whole
   numbers, `dropItem`; animated objects drawn from their movements
   (trees and flames that stood still now move).

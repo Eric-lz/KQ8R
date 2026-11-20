@@ -3939,7 +3939,8 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     `HandsOff 0` restores controls. Verified by unit test and Dead City
     viewer logs (`rivercn2` empty, wrong item, too far `3000.0`, full
     `BrokenShield` dip with `CORRODE.AUD` and `level 8 -> 9`, and
-    `IronLock` + drawn axe using `conaxe.anm/away`).
+    `IronLock` + drawn axe using `conaxe.anm/away`); checked in game by
+    the user 2026-11-20.
 - **U-11 (Q194): the weeper's bolt** (`ranged-weapons.md` 9) — **Done**:
   - Data (`kq8-data` `characters.rs`): parse `nShootOffsets` /
     `shootOffsets0..n` (`<itemType> <x> <y> <z>`) into `CharacterKeys`
@@ -3993,6 +3994,6 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     across updates 36..76, stops sound and deletes chain at update 77,
     returns Connor to `Wait` -> `stop` at update 78, plays `suckstop` on
     `weeper14` until update 89, and fires again `3 s` later at update
-    122); **not played by hand or checked by eye**.
+    122); **checked in game by the user 2026-11-20**.
 - Q184 and Q187 confirm what is built (no change), except where U-x
   finds otherwise.

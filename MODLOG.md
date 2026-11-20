@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 In-game check passed: U-10 and U-11
+- **Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`, `docs/DESIGN.md`, `MODLOG.md`.
+- **Why:** Record the user's in-game confirmation of Batch 2 steps U-10 (`RiverControl`) and U-11 (`KQWeepBolt`).
+- **Tested how:** Played in game by the user in Dead City (`rivercn2` empty hand, wrong items, `BrokenShield` dip cutscene + `RustedBrokenShield` in inventory; weeper draining bolt matching original).
+- **Result:** User confirmed both U-10 and U-11 work as expected. All traced Batch 2 (Dead City) items are now complete and verified.
+- **Still broken:** None reported for U-10 or U-11. Open questions `Q197` and `Q198` still wait for a study session.
+- **Next:** Run a Study Session (A) for `Q197`–`Q198`, Batch 1 shared commands, or Batch 3 (Swamp) per `docs/SCRIPT-COVERAGE.md`.
+
 ## 2026-11-20 Hand-over docs after U-10 and U-11
 - **Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`, `MODLOG.md`.
 - **Why:** Record completed batch 2 steps U-10 (`RiverControl`) and U-11 (`KQWeepBolt`) and updated `docs/SCRIPT-COVERAGE.md` for hand-over.

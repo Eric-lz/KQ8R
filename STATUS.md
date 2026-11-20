@@ -9,8 +9,8 @@ B built Dead City's river controls (U-10) and weeper draining bolts
 ## Where we are (2026-11-20)
 
 - **2026-11-20 (B): U-10 (`RiverControl`) and U-11 (`KQWeepBolt`) built**
-  (DESIGN "U-10", "U-11"; 756 workspace unit tests and Dead City viewer
-  logs, **not played by hand or checked by eye**):
+  (DESIGN "U-10", "U-11"; 756 workspace unit tests, Dead City viewer logs,
+  and **checked in game by the user 2026-11-20**):
   - **U-10 (`RiverControl`):** Dead City's four river-dipping boxes load
     with `acceptsInventory` (`BrokenShield`, `IronLock`) and `1,300`
     reach; clicks handle empty hand, out-of-reach, wrong item, sword/axe
@@ -31,14 +31,11 @@ B built Dead City's river controls (U-10) and weeper draining bolts
     `suckstop` + `attackDelay`.
   - **Script coverage updated:** regenerated `docs/SCRIPT-COVERAGE.md`
     (`RiverControl` and `KQWeepBolt` both `named`).
-  - **Please look at:** dipping `BrokenShield` / `IronLock` at a Dead
-    City river edge (`rivercn2`–`rivercn4`), and approaching a weeper
-    (`weeper14`) to see the drain chain, `magicReact` pose and sound.
   - **Asked (for A):** `Q197` (second Cue 50 camera side) and `Q198`
     (scales cameras and edge cases) remain open.
-  - **All Q184–Q196 U-steps built;** see `docs/SCRIPT-COVERAGE.md` for
-    remaining Dead City / global script items (`KQAttackEvent` on
-    objects, `KQMonster::add`, etc.).
+  - **Batch 2 (Dead City) complete for all traced items;** ready for a
+    study session (A) next (open questions `Q197`–`Q198`, Batch 1 shared
+    commands, or Batch 3 Swamp in `docs/SCRIPT-COVERAGE.md`).
 
 - **2026-11-01 (B): session A's Q184–Q196 built, U-1 to U-9c** (DESIGN
   "U"; logs and unit tests, **not played by hand**):
