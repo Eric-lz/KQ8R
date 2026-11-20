@@ -3997,3 +3997,17 @@ commit per step; each logs its numbers to `kq8-artifacts/logs/`.
     122); **checked in game by the user 2026-11-20**.
 - Q184 and Q187 confirm what is built (no change), except where U-x
   finds otherwise.
+
+### Viewer helper: bounding boxes for hidden objects (`H` key, 2026-11-20) — **Done**
+
+- **Why:** Pressing `H` previously showed only a 1 m cube at each unmodeled object's origin (`loc`), so triggers (`KQTrap`, `KQSpiriTrap`), river boxes (`RiverControl`), and other invisible boxed objects did not show where their active volume extends.
+- **Data (`crates/kq8-viewer/src/load.rs`):** `Marker` now carries `angles: [f32; 3]`, `rotated: bool` (`false` for `KQTrap`/`KQSpiriTrap`, which are never turned per `traps.md` rule 1; `true` for `RiverControl` and other unmodeled `.kq` objects), and `bounds: Option<([f32; 3], [f32; 3])>` (populated for `KQTrap`, `KQSpiriTrap`, `RiverControl`, and any other unmodeled `.kq` object with `BBMin*`/`BBMax*` keys). `KQSpiriTrap` keeps its class name `"KQSpiriTrap"` on `Marker`, and `move_object` keeps moved markers' position (and angles if `rotated`) updated.
+- **Rendering (`crates/kq8-viewer/src/terrain_view.rs`):**
+  - **Boxed hidden objects** (at least one axis extent `> 1e-3`): drawn using shared unit wireframe (`PrimitiveTopology::LineList`, 12 edges) and, when all 3 extents `> 1e-3`, double-sided translucent fill (`AlphaMode::Blend`, `cull_mode: None`) scaled and placed to match the game box (`fog_enabled: false`):
+    - `KQTrap`: cyan wireframe + light translucent fill (alpha `0.14`)
+    - `KQSpiriTrap`: magenta-pink wireframe + light translucent fill (alpha `0.18`)
+    - `RiverControl`: yellow-gold wireframe + light translucent fill (alpha `0.18`)
+    - Other boxed unmodeled objects: green wireframe + light translucent fill (alpha `0.15`)
+  - **Single-point hidden objects** (no `BBMin*`/`BBMax*`, or all 3 extents `<= 1e-3`, such as sound/music/light/emitter/hazer markers and unmodeled `.anm` objects): keep the 1 m cube resting on the point (green, or orange for `.anm`).
+  - All marker entities keep `Visibility::Hidden` and `ShownWithH` so `H` toggles them together and world changes despawn them cleanly (`WorldEntity`).
+- **Verified:** `cargo test --workspace` (759 passed, including 3 new `terrain_view` tests covering off-center/rotated/axis-aligned box corners, point fallback, flat boxes, and the 12-edge `LineList` mesh) and 60-frame viewer runs in Dead City (`113` boxed: `105` trap, `4` spirit trap, `4` river control + `21` point cubes) and Daventry (`54` boxed traps + `38` point cubes); **not checked by eye** (markers start `Visibility::Hidden` until `H` is pressed in play).

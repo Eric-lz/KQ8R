@@ -143,7 +143,7 @@ Follows original game's default keybindings, plus extra debugging keys.
 | --- | --- |
 | F6 | Switch UI between centered (4:3) or widescreen |
 | F | Free flying camera (W/A/S/D, Q/E, right mouse to look) and back |
-| H | Show hidden and unused objects (traps, sound sources...) |
+| H | Show hidden/unused objects (real bounding boxes for traps/triggers, cubes for point markers) |
 | U | Show the ground under the water |
 | F7 | Light of the ground and objects |
 | F8 | Haze (distance fog) on / off |

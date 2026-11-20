@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 Viewer H key: real bounding boxes for boxed hidden objects (branch `neon`)
+- **Changed:** `crates/kq8-viewer/src/load.rs` (added `angles`, `rotated`, `bounds` to `Marker`, kept `KQSpiriTrap` class distinct, read `BBMin*`/`BBMax*` for traps, river controls, and generic unmodeled `.kq` objects, updated `move_object` and marker logging), `crates/kq8-viewer/src/terrain_view.rs` (`marker_box_layout`, `wireframe_cube_mesh`, color-coded `LineList` wireframe + double-sided translucent fill boxes in `setup_objects` with 1 m cube fallback for single-point / zero-extent markers, 3 unit tests), `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `MODLOG.md`.
+- **Why:** User request on branch `neon`: pressing `H` previously showed only a small 1 m cube at each hidden object's origin rather than the actual trigger/trap or river-control bounding volume, while still needing point markers to remain visible for point-only hidden objects.
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; 60-frame viewer runs in `DeadCity` (`--at 160000,194200,3.1416`) and `Daventry` checking `kq8-artifacts/logs/viewer.log`. **Not checked by eye** (markers start `Visibility::Hidden` until `H` is pressed interactively).
+- **Result:** All 759 workspace tests pass (including 3 new `terrain_view` tests covering off-center/rotated/axis-aligned box corners, point fallback, flat boxes, and `LineList` attributes). `viewer.log` confirms `113` boxed (`105` trap, `4` spirit trap, `4` river control) + `21` point cubes in Dead City (`rivercn2` `75925 x 8100 x 210` centered at `(161088, 199050, 794)`), and `54` boxed traps + `38` point cubes in Daventry, with zero warnings or errors.
+- **Still broken:** Visual appearance when pressing `H` in the window awaits user eye check.
+- **Next:** User tests `H` in game on branch `neon` and asks follow-up questions.
+
 ## 2026-11-20 In-game check passed: U-10 and U-11
 - **Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`, `docs/DESIGN.md`, `MODLOG.md`.
 - **Why:** Record the user's in-game confirmation of Batch 2 steps U-10 (`RiverControl`) and U-11 (`KQWeepBolt`).

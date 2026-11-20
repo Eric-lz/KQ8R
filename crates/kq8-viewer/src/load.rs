@@ -1800,9 +1800,25 @@ pub struct Marker {
     pub class: String,
     /// After the same ground rules as drawn objects.
     pub position: [f32; 3],
+    /// Placement angles (`dirX/Y/Z`); only applied when `rotated` is true.
+    pub angles: [f32; 3],
+    /// Traps are never turned (`traps.md` rule 1); other boxed objects follow placement angles.
+    pub rotated: bool,
+    /// Own-space `BBMinX/Y/Z`..`BBMaxX/Y/Z` when present on this hidden object.
+    pub bounds: Option<([f32; 3], [f32; 3])>,
     /// True: a character in an `.anm` file (drawn by the game, not by us
     /// yet). False: no model at all (traps, sounds, paths...).
     pub anm: bool,
+}
+
+/// Reads `BBMinX/Y/Z`..`BBMaxX/Y/Z` if any of those keys appear on `s`.
+fn section_bounds(s: &kq8_data::kq_text::Section) -> Option<([f32; 3], [f32; 3])> {
+    let keys = ["BBMinX", "BBMinY", "BBMinZ", "BBMaxX", "BBMaxY", "BBMaxZ"];
+    if !keys.iter().any(|k| s.get(k).is_some()) {
+        return None;
+    }
+    let num = |k: &str| s.get(k).and_then(|v| v.trim().parse::<f32>().ok()).unwrap_or(0.0);
+    Some(([num("BBMinX"), num("BBMinY"), num("BBMinZ")], [num("BBMaxX"), num("BBMaxY"), num("BBMaxZ")]))
 }
 
 /// Reads the objects the world's start-up scripts load, in script order,
@@ -2572,7 +2588,12 @@ impl kq8_data::world_script::Host for Placer<'_> {
                 self.placed[i].0.position = position;
                 self.placed[i].0.angles = angles;
             }
-            Drawn::Marker(i) => self.markers[i].position = position,
+            Drawn::Marker(i) => {
+                self.markers[i].position = position;
+                if self.markers[i].rotated {
+                    self.markers[i].angles = angles;
+                }
+            }
             Drawn::Door(i) => {
                 self.doors[i].placement.position = position;
                 self.doors[i].placement.angles = angles;
@@ -3268,7 +3289,15 @@ impl Placer<'_> {
                 gone: false,
             });
             self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
-            self.markers.push(Marker { name: p.name.clone(), class: kq8_core::active::RIVER_CONTROL_CLASS.into(), position: p.position, anm: false });
+            self.markers.push(Marker {
+                name: p.name.clone(),
+                class: kq8_core::active::RIVER_CONTROL_CLASS.into(),
+                position: p.position,
+                angles: p.angles,
+                rotated: true,
+                bounds: Some((min, max)),
+                anm: false,
+            });
             if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
                 l.drawn = Drawn::Marker(self.markers.len() - 1);
             }
@@ -3539,6 +3568,9 @@ impl Placer<'_> {
                     name: p.name.clone(),
                     class: p.class.clone().unwrap_or_else(|| "?".into()),
                     position: p.position,
+                    angles: p.angles,
+                    rotated: true,
+                    bounds: section_bounds(s),
                     anm: s.get("animFile").is_some(),
                 });
                 if let Some(l) = self.located.get_mut(&key) {
@@ -4110,9 +4142,18 @@ impl Placer<'_> {
             "trap {label}[{}] at ({:.0}, {:.0}, {:.0}): box {:?}..{:?}, mask {mask:#x}, trapType {trap_type}, innerPercent {:?}, lookupCall {}, spirit damage {:?}, script {:?}",
             p.name, p.position[0], p.position[1], p.position[2], settings.min, settings.max, settings.inner_percent, settings.lookup_call, settings.spirit_damage, settings.script
         ));
+        let bounds = (settings.min, settings.max);
         self.traps.push(settings);
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
-        self.markers.push(Marker { name: p.name.clone(), class: "KQTrap".into(), position: p.position, anm: false });
+        self.markers.push(Marker {
+            name: p.name.clone(),
+            class: p.class.clone().unwrap_or_else(|| "KQTrap".into()),
+            position: p.position,
+            angles: [0.0; 3],
+            rotated: false,
+            bounds: Some(bounds),
+            anm: false,
+        });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
@@ -4141,7 +4182,7 @@ impl Placer<'_> {
         ));
         self.audibles.push(kq8_core::sound::Audible::new(&p.name, &file, placed, min, max, p.position));
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: [0.0; 3], drawn: Drawn::Nothing });
-        self.markers.push(Marker { name: p.name.clone(), class: "KQAudibleObject".into(), position: p.position, anm: false });
+        self.markers.push(Marker { name: p.name.clone(), class: "KQAudibleObject".into(), position: p.position, angles: [0.0; 3], rotated: false, bounds: None, anm: false });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
@@ -4165,7 +4206,7 @@ impl Placer<'_> {
         }
         self.music = Some(kq8_core::music::Music::new(&p.name, &names));
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: [0.0; 3], drawn: Drawn::Nothing });
-        self.markers.push(Marker { name: p.name.clone(), class: "KQMusic".into(), position: p.position, anm: false });
+        self.markers.push(Marker { name: p.name.clone(), class: "KQMusic".into(), position: p.position, angles: [0.0; 3], rotated: false, bounds: None, anm: false });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
@@ -4190,7 +4231,7 @@ impl Placer<'_> {
         ));
         self.point_lights.push((p.name.clone(), light));
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: light.position, angles: [0.0; 3], drawn: Drawn::Nothing });
-        self.markers.push(Marker { name: p.name.clone(), class: "KQPointLight".into(), position: light.position, anm: false });
+        self.markers.push(Marker { name: p.name.clone(), class: "KQPointLight".into(), position: light.position, angles: [0.0; 3], rotated: false, bounds: None, anm: false });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
@@ -4810,13 +4851,15 @@ impl Placer<'_> {
             count(&|g| g < -500.0)
         ));
         log.summary(format!(
-            "  invisible objects (markers, key H): {} with no model, {} characters in .anm files",
+            "  invisible objects (markers, key H): {} with no model ({} boxed), {} characters in .anm files",
             self.markers.iter().filter(|m| !m.anm).count(),
+            self.markers.iter().filter(|m| m.bounds.is_some()).count(),
             self.markers.iter().filter(|m| m.anm).count()
         ));
         for m in &self.markers {
+            let box_info = m.bounds.map_or(String::new(), |(lo, hi)| format!(", box {lo:?}..{hi:?}{}", if m.rotated { " (rotated)" } else { "" }));
             log.detail(format!(
-                "marker [{}] class={} at ({:.0}, {:.0}, {:.0}){}",
+                "marker [{}] class={} at ({:.0}, {:.0}, {:.0}){box_info}{}",
                 m.name, m.class, m.position[0], m.position[1], m.position[2], if m.anm { " (.anm character)" } else { "" }
             ));
         }

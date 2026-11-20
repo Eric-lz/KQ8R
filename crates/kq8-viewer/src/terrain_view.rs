@@ -578,23 +578,79 @@ pub fn setup_objects(
     for (name, light) in point_lights {
         commands.spawn((Transform::from_translation(Vec3::from(to_bevy(light.position, [0.0; 3]))), crate::scene_lights::PointLightSource { name, light }));
     }
-    // Invisible objects: a 1 m cube each, hidden until H is pressed.
-    // Green = no model in the game; orange = a character whose movement
-    // list could not be read (characters are drawn since M4 4d-2).
-    let cube = meshes.add(Cuboid::from_length(100.0 / UNITS_PER_METRE));
-    let green = materials.add(StandardMaterial { base_color: Color::srgb(0.1, 1.0, 0.2), unlit: true, ..default() });
-    let orange = materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.55, 0.0), unlit: true, ..default() });
+    // Invisible objects (key H): real bounding boxes for traps, river boxes,
+    // and any other unmodeled object with BBMin/BBMax; 1 m cubes for points
+    // (or zero-extent boxes).
+    let point_cube = meshes.add(Cuboid::from_length(100.0 / UNITS_PER_METRE));
+    let unit_cube = meshes.add(Cuboid::from_length(1.0));
+    let wire_cube = meshes.add(wireframe_cube_mesh());
+    let point_green = materials.add(StandardMaterial { base_color: Color::srgb(0.1, 1.0, 0.2), unlit: true, fog_enabled: false, ..default() });
+    let point_orange = materials.add(StandardMaterial { base_color: Color::srgb(1.0, 0.55, 0.0), unlit: true, fog_enabled: false, ..default() });
+    let box_mats = |materials: &mut Assets<StandardMaterial>, r: f32, g: f32, b: f32, alpha: f32| {
+        (
+            materials.add(StandardMaterial { base_color: Color::srgb(r, g, b), unlit: true, fog_enabled: false, ..default() }),
+            materials.add(StandardMaterial {
+                base_color: Color::srgba(r, g, b, alpha),
+                alpha_mode: AlphaMode::Blend,
+                unlit: true,
+                cull_mode: None,
+                fog_enabled: false,
+                ..default()
+            }),
+        )
+    };
+    let (trap_wire, trap_fill) = box_mats(&mut materials, 0.1, 0.95, 1.0, 0.14);
+    let (spirit_wire, spirit_fill) = box_mats(&mut materials, 1.0, 0.2, 0.55, 0.18);
+    let (river_wire, river_fill) = box_mats(&mut materials, 1.0, 0.9, 0.15, 0.18);
+    let (other_wire, other_fill) = box_mats(&mut materials, 0.1, 1.0, 0.2, 0.15);
+    let (mut box_traps, mut box_spirits, mut box_rivers, mut box_other, mut point_markers) = (0usize, 0usize, 0usize, 0usize, 0usize);
     for m in &objects.markers {
-        // Cube resting on the point, so ground markers are not half buried.
-        let at = Vec3::from(to_bevy(m.position, [0.0; 3])) + Vec3::Y * 50.0 / UNITS_PER_METRE;
-        commands.spawn((
-            Mesh3d(cube.clone()),
-            MeshMaterial3d(if m.anm { orange.clone() } else { green.clone() }),
-            Transform::from_translation(at),
-            Visibility::Hidden,
-            ShownWithH,
-        ));
+        if let Some((transform, scale)) = m.bounds.and_then(|(min, max)| marker_box_layout(m.position, m.angles, m.rotated, min, max)) {
+            let (wire_mat, fill_mat) = if m.class.eq_ignore_ascii_case("KQSpiriTrap") {
+                box_spirits += 1;
+                (spirit_wire.clone(), spirit_fill.clone())
+            } else if m.class.eq_ignore_ascii_case("KQTrap") {
+                box_traps += 1;
+                (trap_wire.clone(), trap_fill.clone())
+            } else if m.class.eq_ignore_ascii_case(kq8_core::active::RIVER_CONTROL_CLASS) {
+                box_rivers += 1;
+                (river_wire.clone(), river_fill.clone())
+            } else {
+                box_other += 1;
+                (other_wire.clone(), other_fill.clone())
+            };
+            commands.spawn((Mesh3d(wire_cube.clone()), MeshMaterial3d(wire_mat), transform, Visibility::Hidden, ShownWithH));
+            if scale.x > 1e-4 && scale.y > 1e-4 && scale.z > 1e-4 {
+                commands.spawn((Mesh3d(unit_cube.clone()), MeshMaterial3d(fill_mat), transform, Visibility::Hidden, ShownWithH));
+            }
+            let center = game_position(transform.translation);
+            let ext = [scale.x * UNITS_PER_METRE, scale.z * UNITS_PER_METRE, scale.y * UNITS_PER_METRE];
+            log.detail(format!(
+                "marker box [{}] ({}) center ({:.0}, {:.0}, {:.0}), size {:.0} x {:.0} x {:.0}",
+                m.name, m.class, center[0], center[1], center[2], ext[0], ext[1], ext[2]
+            ));
+        } else {
+            point_markers += 1;
+            // Cube resting on the point, so ground markers are not half buried.
+            let at = Vec3::from(to_bevy(m.position, [0.0; 3])) + Vec3::Y * 50.0 / UNITS_PER_METRE;
+            commands.spawn((
+                Mesh3d(point_cube.clone()),
+                MeshMaterial3d(if m.anm { point_orange.clone() } else { point_green.clone() }),
+                Transform::from_translation(at),
+                Visibility::Hidden,
+                ShownWithH,
+            ));
+        }
     }
+    log.summary(format!(
+        "markers (key H): {} boxed ({} trap, {} spirit trap, {} river control, {} other), {} point cubes",
+        box_traps + box_spirits + box_rivers + box_other,
+        box_traps,
+        box_spirits,
+        box_rivers,
+        box_other,
+        point_markers
+    ));
     log.summary(format!(
         "spawned objects: {} copies ({} of them unused or hidden, shown with H) of {} models ({see_through} see-through); largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",
         objects.placed.len(),
@@ -680,6 +736,59 @@ pub fn update_camera_label(
 fn game_position(bevy: Vec3) -> [f32; 3] {
     let p = bevy * UNITS_PER_METRE;
     [p.x, -p.z, p.y]
+}
+
+/// Transform and Bevy-space extents `(x_game, z_game, y_game) / UNITS_PER_METRE`
+/// for a unit cube `[-0.5, 0.5]^3` matching an unmodeled object's `BBMin`/`BBMax`
+/// box in game space. Returns `None` when all three extents are `<= 1e-3` (point).
+pub fn marker_box_layout(position: [f32; 3], angles: [f32; 3], rotated: bool, min: [f32; 3], max: [f32; 3]) -> Option<(Transform, Vec3)> {
+    let lo: [f32; 3] = std::array::from_fn(|k| min[k].min(max[k]));
+    let hi: [f32; 3] = std::array::from_fn(|k| min[k].max(max[k]));
+    let ext: [f32; 3] = std::array::from_fn(|k| hi[k] - lo[k]);
+    if ext.iter().all(|&e| e <= 1e-3) {
+        return None;
+    }
+    let center_local: [f32; 3] = std::array::from_fn(|k| 0.5 * (lo[k] + hi[k]));
+    let r = if rotated {
+        kq8_data::objects::rotation(angles)
+    } else {
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    };
+    let center_world: [f32; 3] = std::array::from_fn(|k| position[k] + center_local[0] * r[0][k] + center_local[1] * r[1][k] + center_local[2] * r[2][k]);
+    let base = bevy_transform_from(r, center_world);
+    let scale = Vec3::new(ext[0] / UNITS_PER_METRE, ext[2] / UNITS_PER_METRE, ext[1] / UNITS_PER_METRE);
+    Some((Transform { scale, ..base }, scale))
+}
+
+/// 12-edge `LineList` wireframe of a unit cube `[-0.5, 0.5]^3`.
+pub fn wireframe_cube_mesh() -> Mesh {
+    const H: f32 = 0.5;
+    let corners = [
+        [-H, -H, -H],
+        [H, -H, -H],
+        [H, H, -H],
+        [-H, H, -H],
+        [-H, -H, H],
+        [H, -H, H],
+        [H, H, H],
+        [-H, H, H],
+    ];
+    let edges = [
+        [0, 1], [1, 2], [2, 3], [3, 0],
+        [4, 5], [5, 6], [6, 7], [7, 4],
+        [0, 4], [1, 5], [2, 6], [3, 7],
+    ];
+    let mut positions = Vec::with_capacity(edges.len() * 2);
+    for [a, b] in edges {
+        positions.push(corners[a]);
+        positions.push(corners[b]);
+    }
+    let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
+    let uvs = vec![[0.0, 0.0]; positions.len()];
+    Mesh::new(bevy::mesh::PrimitiveTopology::LineList, bevy::asset::RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
 }
 
 /// H shows or hides everything marked `ShownWithH`.
@@ -832,4 +941,74 @@ pub fn report_camera(
         fly.pitch.to_degrees(),
         below.map_or("none (outside the grid)".into(), |g| format!("{:.0} (camera {:.0} above)", g.height, game[2] - g.height))
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sorted_corners(pts: &mut [Vec3; 8]) {
+        pts.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)).then(a.z.total_cmp(&b.z)));
+    }
+
+    #[test]
+    fn marker_box_corners_match_game_space_rotated_and_axis_aligned() {
+        let cases = [
+            // Off-center RiverControl (`rivercn2`)
+            ([123_125.0, 195_000.0, 889.0], [0.0, 0.0, 0.0], true, [0.0, 0.0, -200.0], [75_925.0, 8_100.0, 10.0]),
+            // Axis-aligned trap ignores non-zero placement angles
+            ([70_248.0, 100_809.0, 1_584.0], [0.3, 0.4, 1.2], false, [-23_250.0, -28_686.0, 0.0], [24_016.0, 29_967.0, 3_000.0]),
+            // Rotated 90 deg around Z
+            ([10_000.0, 20_000.0, 500.0], [0.0, 0.0, std::f32::consts::FRAC_PI_2], true, [-100.0, -200.0, 0.0], [300.0, 600.0, 1_000.0]),
+        ];
+        for (pos, angles, rotated, min, max) in cases {
+            let (tr, scale) = marker_box_layout(pos, angles, rotated, min, max).unwrap();
+            assert!(scale.x > 0.0 && scale.y > 0.0 && scale.z > 0.0);
+            let mut got = [Vec3::ZERO; 8];
+            let mut want = [Vec3::ZERO; 8];
+            let r = if rotated {
+                kq8_data::objects::rotation(angles)
+            } else {
+                [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+            };
+            for (idx, bit) in (0..8).enumerate() {
+                let sx = if bit & 1 == 0 { -0.5 } else { 0.5 };
+                let sy = if bit & 2 == 0 { -0.5 } else { 0.5 };
+                let sz = if bit & 4 == 0 { -0.5 } else { 0.5 };
+                got[idx] = tr.transform_point(Vec3::new(sx, sy, sz));
+                let lx = if bit & 1 == 0 { min[0] } else { max[0] };
+                let ly = if bit & 2 == 0 { min[1] } else { max[1] };
+                let lz = if bit & 4 == 0 { min[2] } else { max[2] };
+                let gx = pos[0] + lx * r[0][0] + ly * r[1][0] + lz * r[2][0];
+                let gy = pos[1] + lx * r[0][1] + ly * r[1][1] + lz * r[2][1];
+                let gz = pos[2] + lx * r[0][2] + ly * r[1][2] + lz * r[2][2];
+                want[idx] = Vec3::from(to_bevy([gx, gy, gz], [0.0; 3]));
+            }
+            sorted_corners(&mut got);
+            sorted_corners(&mut want);
+            for (g, w) in got.iter().zip(want.iter()) {
+                assert!((*g - *w).length() < 1e-2, "corner mismatch: got {g:?}, want {w:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn marker_box_falls_back_on_point_and_allows_flat_box() {
+        assert!(marker_box_layout([100.0, 200.0, 300.0], [0.0; 3], false, [0.0; 3], [0.0; 3]).is_none());
+        assert!(marker_box_layout([100.0, 200.0, 300.0], [0.0; 3], false, [5.0, 5.0, 5.0], [5.0, 5.0, 5.0]).is_none());
+
+        // Reversed bounds are normalized and flat dz == 0 produces a valid 2D box outline.
+        let (tr, scale) = marker_box_layout([0.0; 3], [0.0; 3], false, [500.0, 200.0, 10.0], [-500.0, -200.0, 10.0]).unwrap();
+        assert!((scale.x - 10.0).abs() < 1e-5 && scale.y == 0.0 && (scale.z - 4.0).abs() < 1e-5);
+        assert!((tr.translation.y - 10.0 / UNITS_PER_METRE).abs() < 1e-5);
+    }
+
+    #[test]
+    fn wireframe_cube_has_twelve_edges_with_normals_and_uvs() {
+        let mesh = wireframe_cube_mesh();
+        assert_eq!(mesh.primitive_topology(), bevy::mesh::PrimitiveTopology::LineList);
+        assert_eq!(mesh.count_vertices(), 24);
+        assert!(mesh.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
+        assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+    }
 }

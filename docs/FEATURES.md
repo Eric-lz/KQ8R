@@ -899,9 +899,13 @@ Checked in the logs and unit tests only, **not played by hand**.
 
 ## Viewer helpers (not in the original)
 
-- **H:** shows things the game hides or never uses (traps, sound sources,
-  unused pictures, objects that appear later in the story; people and
-  monsters as orange cubes).
+- **H:** shows things the game hides or never uses: triggers (`KQTrap` in
+  cyan, `KQSpiriTrap` in magenta), `RiverControl` click boxes (yellow),
+  and any other unmodeled object with `BBMin`/`BBMax` (green) appear as
+  translucent bounding boxes with wireframe outlines matching their real
+  volumes; single-point objects (sound sources, emitters, point lights,
+  hazers, music, or unmodeled `.anm` characters) appear as 1 m cubes
+  resting at their origin; unused models appear normally.
 - **U:** shows the hidden ground under the water (the "floor"): first
   press both (the visible ground see-through where the floor differs, the
   floor tinted blue where lower, red where higher), second press the
