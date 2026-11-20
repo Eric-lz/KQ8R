@@ -899,11 +899,17 @@ Checked in the logs and unit tests only, **not played by hand**.
 
 ## Viewer helpers (not in the original)
 
-- **H:** shows things the game hides or never uses: triggers (`KQTrap` in
-  cyan, `KQSpiriTrap` in magenta), `RiverControl` click boxes (yellow),
-  and any other unmodeled object with `BBMin`/`BBMax` (green) appear as
-  translucent bounding boxes with wireframe outlines matching their real
-  volumes; single-point objects (sound sources, emitters, point lights,
+- **H:** shows things the game hides or never uses: triggers and
+  invisible click boxes appear as translucent bounding boxes with
+  wireframe outlines matching their real volumes, color-coded by what
+  their script does: **red** damage/death (`KQSpiriTrap` or scripts with
+  `KQAttackEvent`, `KillConnor`, `lightOnFire`, `reduceHealth`,
+  `setRelDamage`), **orange** rope zones (`setRope`), **purple**
+  portals (`Portal`), **blue** music zones (`KQMusic`), **soft gray**
+  walk/run zones (`walk_la.cs`, `run_la.cs`, `setRun`), **cyan**
+  generic triggers (voice lines, cutscenes, plates, etc.), **yellow-gold**
+  `RiverControl` click boxes, and **green** for other boxed unmodeled
+  objects; single-point objects (sound sources, emitters, point lights,
   hazers, music, or unmodeled `.anm` characters) appear as 1 m cubes
   resting at their origin; unused models appear normally.
 - **U:** shows the hidden ground under the water (the "floor"): first

@@ -578,9 +578,9 @@ pub fn setup_objects(
     for (name, light) in point_lights {
         commands.spawn((Transform::from_translation(Vec3::from(to_bevy(light.position, [0.0; 3]))), crate::scene_lights::PointLightSource { name, light }));
     }
-    // Invisible objects (key H): real bounding boxes for traps, river boxes,
-    // and any other unmodeled object with BBMin/BBMax; 1 m cubes for points
-    // (or zero-extent boxes).
+    // Invisible objects (key H): color-coded bounding boxes for triggers and
+    // click boxes; 1 m cubes for single points (or zero-extent boxes).
+    use crate::load::MarkerKind;
     let point_cube = meshes.add(Cuboid::from_length(100.0 / UNITS_PER_METRE));
     let unit_cube = meshes.add(Cuboid::from_length(1.0));
     let wire_cube = meshes.add(wireframe_cube_mesh());
@@ -599,25 +599,51 @@ pub fn setup_objects(
             }),
         )
     };
-    let (trap_wire, trap_fill) = box_mats(&mut materials, 0.1, 0.95, 1.0, 0.14);
-    let (spirit_wire, spirit_fill) = box_mats(&mut materials, 1.0, 0.2, 0.55, 0.18);
-    let (river_wire, river_fill) = box_mats(&mut materials, 1.0, 0.9, 0.15, 0.18);
-    let (other_wire, other_fill) = box_mats(&mut materials, 0.1, 1.0, 0.2, 0.15);
-    let (mut box_traps, mut box_spirits, mut box_rivers, mut box_other, mut point_markers) = (0usize, 0usize, 0usize, 0usize, 0usize);
+    let damage_mats = box_mats(&mut materials, 1.0, 0.15, 0.15, 0.18);
+    let rope_mats = box_mats(&mut materials, 1.0, 0.55, 0.1, 0.18);
+    let portal_mats = box_mats(&mut materials, 0.75, 0.3, 1.0, 0.18);
+    let walk_mats = box_mats(&mut materials, 0.7, 0.72, 0.78, 0.06);
+    let music_mats = box_mats(&mut materials, 0.25, 0.55, 1.0, 0.14);
+    let generic_mats = box_mats(&mut materials, 0.1, 0.95, 1.0, 0.14);
+    let click_mats = box_mats(&mut materials, 1.0, 0.9, 0.15, 0.18);
+    let other_mats = box_mats(&mut materials, 0.1, 1.0, 0.2, 0.15);
+    let (mut n_damage, mut n_rope, mut n_portal, mut n_walk, mut n_music, mut n_generic, mut n_click, mut n_other, mut n_point) =
+        (0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
     for m in &objects.markers {
         if let Some((transform, scale)) = m.bounds.and_then(|(min, max)| marker_box_layout(m.position, m.angles, m.rotated, min, max)) {
-            let (wire_mat, fill_mat) = if m.class.eq_ignore_ascii_case("KQSpiriTrap") {
-                box_spirits += 1;
-                (spirit_wire.clone(), spirit_fill.clone())
-            } else if m.class.eq_ignore_ascii_case("KQTrap") {
-                box_traps += 1;
-                (trap_wire.clone(), trap_fill.clone())
-            } else if m.class.eq_ignore_ascii_case(kq8_core::active::RIVER_CONTROL_CLASS) {
-                box_rivers += 1;
-                (river_wire.clone(), river_fill.clone())
-            } else {
-                box_other += 1;
-                (other_wire.clone(), other_fill.clone())
+            let (wire_mat, fill_mat) = match m.kind {
+                MarkerKind::DamageTrap => {
+                    n_damage += 1;
+                    damage_mats.clone()
+                }
+                MarkerKind::RopeTrap => {
+                    n_rope += 1;
+                    rope_mats.clone()
+                }
+                MarkerKind::PortalTrap => {
+                    n_portal += 1;
+                    portal_mats.clone()
+                }
+                MarkerKind::WalkRunTrap => {
+                    n_walk += 1;
+                    walk_mats.clone()
+                }
+                MarkerKind::MusicTrap => {
+                    n_music += 1;
+                    music_mats.clone()
+                }
+                MarkerKind::GenericTrap => {
+                    n_generic += 1;
+                    generic_mats.clone()
+                }
+                MarkerKind::ClickBox => {
+                    n_click += 1;
+                    click_mats.clone()
+                }
+                MarkerKind::OtherBox | MarkerKind::Point => {
+                    n_other += 1;
+                    other_mats.clone()
+                }
             };
             commands.spawn((Mesh3d(wire_cube.clone()), MeshMaterial3d(wire_mat), transform, Visibility::Hidden, ShownWithH));
             if scale.x > 1e-4 && scale.y > 1e-4 && scale.z > 1e-4 {
@@ -626,11 +652,19 @@ pub fn setup_objects(
             let center = game_position(transform.translation);
             let ext = [scale.x * UNITS_PER_METRE, scale.z * UNITS_PER_METRE, scale.y * UNITS_PER_METRE];
             log.detail(format!(
-                "marker box [{}] ({}) center ({:.0}, {:.0}, {:.0}), size {:.0} x {:.0} x {:.0}",
-                m.name, m.class, center[0], center[1], center[2], ext[0], ext[1], ext[2]
+                "marker box [{}] ({}, {}) center ({:.0}, {:.0}, {:.0}), size {:.0} x {:.0} x {:.0}",
+                m.name,
+                m.class,
+                m.kind.label(),
+                center[0],
+                center[1],
+                center[2],
+                ext[0],
+                ext[1],
+                ext[2]
             ));
         } else {
-            point_markers += 1;
+            n_point += 1;
             // Cube resting on the point, so ground markers are not half buried.
             let at = Vec3::from(to_bevy(m.position, [0.0; 3])) + Vec3::Y * 50.0 / UNITS_PER_METRE;
             commands.spawn((
@@ -643,13 +677,8 @@ pub fn setup_objects(
         }
     }
     log.summary(format!(
-        "markers (key H): {} boxed ({} trap, {} spirit trap, {} river control, {} other), {} point cubes",
-        box_traps + box_spirits + box_rivers + box_other,
-        box_traps,
-        box_spirits,
-        box_rivers,
-        box_other,
-        point_markers
+        "markers (key H): {} boxed ({n_damage} damage, {n_rope} rope, {n_portal} portal, {n_walk} walk/run, {n_music} music, {n_generic} generic, {n_click} click box, {n_other} other), {n_point} point cubes",
+        n_damage + n_rope + n_portal + n_walk + n_music + n_generic + n_click + n_other
     ));
     log.summary(format!(
         "spawned objects: {} copies ({} of them unused or hidden, shown with H) of {} models ({see_through} see-through); largest difference between the game's placement rule and Bevy's transform: {worst:.3} game units",

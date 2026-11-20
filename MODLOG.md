@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 Viewer H key: color-code trap boxes by script behavior (branch `neon`)
+- **Changed:** `crates/kq8-viewer/src/load.rs` (`MarkerKind`, `classify_trap_script`, `classify_markers` inspecting world + shared `.cs` scripts, `script`/`kind` on `Marker`, updated marker logs and unit test `trap_classification_matches_script_purpose_and_priority`), `crates/kq8-viewer/src/terrain_view.rs` (render by `MarkerKind`: red damage/death, orange rope, purple portal, soft-gray walk/run, blue music, cyan generic, yellow-gold click box, green other box; per-category summary counts in `viewer.log`), `docs/DESIGN.md`, `docs/FEATURES.md`, `MODLOG.md`.
+- **Why:** User request on branch `neon`: color-code H-key trigger bounding boxes by what their scripts actually do instead of grouping all `KQTrap`s under cyan.
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; 30-frame viewer runs (`--sound off`) in `DeadCity`, `Daventry`, and `Swamp` inspecting `viewer.log`. **Not checked by eye** (markers start hidden until `H` is pressed).
+- **Result:** All 760 workspace tests pass (including the new script-classification test and 3 `terrain_view` tests). `viewer.log` classifies Dead City (`113` boxed: `27` damage, `16` rope, `14` portal, `1` walk/run, `12` music, `39` generic, `4` click box + `21` point cubes), Daventry (`54` boxed: `4` damage, `8` rope, `2` portal, `18` walk/run, `4` music, `18` generic + `38` point cubes), and Swamp (`31` boxed: `3` damage, `6` rope, `1` portal, `4` walk/run, `6` music, `11` generic + `64` point cubes). Zero warnings or errors.
+- **Still broken:** Visual look on screen awaits user check with `H`.
+- **Next:** User tests color-coded `H` boxes in game on branch `neon` and asks next question.
+
 ## 2026-11-20 Docs: add Antigravity to `CREDITS.md`, `AGENTS.md`, and `README.md`
 - **Changed:** `CREDITS.md`, `AGENTS.md`, `README.md`, `MODLOG.md`.
 - **Why:** User asked to add Antigravity to `CREDITS.md` and update the agent reference in `AGENTS.md` (along with the matching intro note in `README.md`).

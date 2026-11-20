@@ -1795,9 +1795,94 @@ fn collider_value(s: &kq8_data::kq_text::Section, key: &str, default: u32) -> (u
     }
 }
 
+/// What an H-key marker represents, used for color coding in the viewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerKind {
+    DamageTrap,
+    RopeTrap,
+    PortalTrap,
+    WalkRunTrap,
+    MusicTrap,
+    GenericTrap,
+    ClickBox,
+    OtherBox,
+    Point,
+}
+
+impl MarkerKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            MarkerKind::DamageTrap => "damage trap",
+            MarkerKind::RopeTrap => "rope trap",
+            MarkerKind::PortalTrap => "portal trap",
+            MarkerKind::WalkRunTrap => "walk/run trap",
+            MarkerKind::MusicTrap => "music trap",
+            MarkerKind::GenericTrap => "generic trap",
+            MarkerKind::ClickBox => "click box",
+            MarkerKind::OtherBox => "other box",
+            MarkerKind::Point => "point",
+        }
+    }
+}
+
+/// Classifies a trap's behavior from its `.cs` script text (ignoring `#`
+/// comments). `KQSpiriTrap` is always classified as [`MarkerKind::DamageTrap`].
+pub fn classify_trap_script(script_name: Option<&str>, script_text: Option<&str>, is_spirit: bool) -> MarkerKind {
+    if is_spirit {
+        return MarkerKind::DamageTrap;
+    }
+    let words: Vec<String> = script_text
+        .unwrap_or("")
+        .lines()
+        .flat_map(|line| line.split('#').next().unwrap_or("").split_whitespace())
+        .map(|w| w.trim_matches(['"', '\''].as_slice()).to_ascii_lowercase())
+        .filter(|w| !w.is_empty())
+        .collect();
+
+    let is_damage = words.iter().any(|w| {
+        matches!(
+            w.as_str(),
+            "kqattackevent" | "killconnor" | "kqconner::reducehealth" | "kqconner::setreldamage" | "lightonfire" | "kqobject::lightonfire"
+        ) || w.split(',').any(|part| part.trim() == "killconnor")
+    });
+    if is_damage {
+        return MarkerKind::DamageTrap;
+    }
+
+    if words.iter().any(|w| w == "kqconner::setrope") {
+        return MarkerKind::RopeTrap;
+    }
+
+    let is_portal = words.windows(3).any(|w| (w[0] == "kqmonster::setstate" || w[0] == "setstate") && w[1] == "connor" && w[2] == "portal")
+        || words.windows(4).any(|w| {
+            (w[0] == "kqmonster::setstate" || w[0] == "setstate")
+                && w[1] == "connor"
+                && w[2] == "special"
+                && w[3].split(',').any(|p| matches!(p.trim(), "portal" | "portalx"))
+        });
+    if is_portal {
+        return MarkerKind::PortalTrap;
+    }
+
+    let base_name = script_name
+        .and_then(|n| n.rsplit(['/', '\\']).next())
+        .map(str::to_ascii_lowercase);
+    if matches!(base_name.as_deref(), Some("walk_la.cs" | "run_la.cs")) || words.iter().any(|w| w == "kqconner::setrun") {
+        return MarkerKind::WalkRunTrap;
+    }
+
+    if words.iter().any(|w| matches!(w.as_str(), "kqmusic::push" | "kqmusic::pop")) {
+        return MarkerKind::MusicTrap;
+    }
+
+    MarkerKind::GenericTrap
+}
+
 pub struct Marker {
     pub name: String,
     pub class: String,
+    pub script: Option<String>,
+    pub kind: MarkerKind,
     /// After the same ground rules as drawn objects.
     pub position: [f32; 3],
     /// Placement angles (`dirX/Y/Z`); only applied when `rotated` is true.
@@ -2121,6 +2206,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         }
     }
     placer.log.summary(format!("scripts for play: {} from the world, {shared} game-wide (GAME/patch, GAME/Kq)", scripts.len() - shared));
+    classify_markers(&mut placer.markers, &scripts);
     // anim-scripts.md rule 34 (Q157): the shapes `loadObject` makes while
     // playing, ready as the corpses' are (drawn by `item_view`).
     let mut object_shapes = std::collections::BTreeSet::new();
@@ -3292,6 +3378,8 @@ impl Placer<'_> {
             self.markers.push(Marker {
                 name: p.name.clone(),
                 class: kq8_core::active::RIVER_CONTROL_CLASS.into(),
+                script: None,
+                kind: MarkerKind::ClickBox,
                 position: p.position,
                 angles: p.angles,
                 rotated: true,
@@ -3564,13 +3652,16 @@ impl Placer<'_> {
         if let Some(r) = reason {
             self.log.detail(format!("skip {label}[{}]: {r}", p.name));
             if p.shape.is_none() && !unused {
+                let bounds = section_bounds(s);
                 self.markers.push(Marker {
                     name: p.name.clone(),
                     class: p.class.clone().unwrap_or_else(|| "?".into()),
+                    script: s.get("script").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()),
+                    kind: if bounds.is_some() { MarkerKind::OtherBox } else { MarkerKind::Point },
                     position: p.position,
                     angles: p.angles,
                     rotated: true,
-                    bounds: section_bounds(s),
+                    bounds,
                     anm: s.get("animFile").is_some(),
                 });
                 if let Some(l) = self.located.get_mut(&key) {
@@ -4143,11 +4234,18 @@ impl Placer<'_> {
             p.name, p.position[0], p.position[1], p.position[2], settings.min, settings.max, settings.inner_percent, settings.lookup_call, settings.spirit_damage, settings.script
         ));
         let bounds = (settings.min, settings.max);
+        let script = settings.script.clone();
         self.traps.push(settings);
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: p.angles, drawn: Drawn::Nothing });
         self.markers.push(Marker {
             name: p.name.clone(),
             class: p.class.clone().unwrap_or_else(|| "KQTrap".into()),
+            script,
+            kind: if p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQSpiriTrap")) {
+                MarkerKind::DamageTrap
+            } else {
+                MarkerKind::GenericTrap
+            },
             position: p.position,
             angles: [0.0; 3],
             rotated: false,
@@ -4182,7 +4280,17 @@ impl Placer<'_> {
         ));
         self.audibles.push(kq8_core::sound::Audible::new(&p.name, &file, placed, min, max, p.position));
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: [0.0; 3], drawn: Drawn::Nothing });
-        self.markers.push(Marker { name: p.name.clone(), class: "KQAudibleObject".into(), position: p.position, angles: [0.0; 3], rotated: false, bounds: None, anm: false });
+        self.markers.push(Marker {
+            name: p.name.clone(),
+            class: "KQAudibleObject".into(),
+            script: None,
+            kind: MarkerKind::Point,
+            position: p.position,
+            angles: [0.0; 3],
+            rotated: false,
+            bounds: None,
+            anm: false,
+        });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
@@ -4206,7 +4314,17 @@ impl Placer<'_> {
         }
         self.music = Some(kq8_core::music::Music::new(&p.name, &names));
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: p.position, angles: [0.0; 3], drawn: Drawn::Nothing });
-        self.markers.push(Marker { name: p.name.clone(), class: "KQMusic".into(), position: p.position, angles: [0.0; 3], rotated: false, bounds: None, anm: false });
+        self.markers.push(Marker {
+            name: p.name.clone(),
+            class: "KQMusic".into(),
+            script: None,
+            kind: MarkerKind::Point,
+            position: p.position,
+            angles: [0.0; 3],
+            rotated: false,
+            bounds: None,
+            anm: false,
+        });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
@@ -4231,7 +4349,17 @@ impl Placer<'_> {
         ));
         self.point_lights.push((p.name.clone(), light));
         self.located.insert(p.name.to_ascii_lowercase(), Located { position: light.position, angles: [0.0; 3], drawn: Drawn::Nothing });
-        self.markers.push(Marker { name: p.name.clone(), class: "KQPointLight".into(), position: light.position, angles: [0.0; 3], rotated: false, bounds: None, anm: false });
+        self.markers.push(Marker {
+            name: p.name.clone(),
+            class: "KQPointLight".into(),
+            script: None,
+            kind: MarkerKind::Point,
+            position: light.position,
+            angles: [0.0; 3],
+            rotated: false,
+            bounds: None,
+            anm: false,
+        });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
             l.drawn = Drawn::Marker(self.markers.len() - 1);
         }
@@ -4859,8 +4987,8 @@ impl Placer<'_> {
         for m in &self.markers {
             let box_info = m.bounds.map_or(String::new(), |(lo, hi)| format!(", box {lo:?}..{hi:?}{}", if m.rotated { " (rotated)" } else { "" }));
             log.detail(format!(
-                "marker [{}] class={} at ({:.0}, {:.0}, {:.0}){box_info}{}",
-                m.name, m.class, m.position[0], m.position[1], m.position[2], if m.anm { " (.anm character)" } else { "" }
+                "marker [{}] class={} [{}] at ({:.0}, {:.0}, {:.0}){box_info}{}",
+                m.name, m.class, m.kind.label(), m.position[0], m.position[1], m.position[2], if m.anm { " (.anm character)" } else { "" }
             ));
         }
         // The camera object the world script loads (`cam3rd.kq`, named
@@ -5522,4 +5650,65 @@ fn building_light_maps(
         top.join(", ")
     ));
     Some(l)
+}
+
+fn classify_markers(markers: &mut [Marker], scripts: &[(String, Vec<u8>)]) {
+    for m in markers {
+        let is_spirit = m.class.eq_ignore_ascii_case("KQSpiriTrap");
+        if !is_spirit && !m.class.eq_ignore_ascii_case("KQTrap") {
+            continue;
+        }
+        let wanted = m.script.as_deref().and_then(|s| s.rsplit(['/', '\\']).next());
+        let text = wanted.and_then(|w| {
+            scripts
+                .iter()
+                .find(|(n, _)| n.rsplit(['/', '\\']).next().is_some_and(|b| b.eq_ignore_ascii_case(w)))
+                .map(|(_, bytes)| String::from_utf8_lossy(bytes).into_owned())
+        });
+        m.kind = classify_trap_script(wanted, text.as_deref(), is_spirit);
+    }
+}
+
+#[cfg(test)]
+mod marker_tests {
+    use super::{classify_trap_script, MarkerKind};
+
+    #[test]
+    fn trap_classification_matches_script_purpose_and_priority() {
+        assert_eq!(classify_trap_script(None, None, true), MarkerKind::DamageTrap);
+        assert_eq!(classify_trap_script(Some("portaltp.cs"), None, false), MarkerKind::GenericTrap);
+
+        let river = "if test $2 == On\n  sendEvent 0 Connor KQAttackEvent $1 0 5000 1\nendif";
+        assert_eq!(classify_trap_script(Some("rivrtrap.cs"), Some(river), false), MarkerKind::DamageTrap);
+
+        let roof = "KQMonster::setState Connor Special away,KillConnor";
+        assert_eq!(classify_trap_script(Some("roof.cs"), Some(roof), false), MarkerKind::DamageTrap);
+
+        let coal = "if test $2 == On\n  KQObject::lightOnFire $3 1\nendif";
+        assert_eq!(classify_trap_script(Some("coaltrap.cs"), Some(coal), false), MarkerKind::DamageTrap);
+
+        let arrow = "KQConner::setRelDamage 0.5\nKQConner::reduceHealth 5";
+        assert_eq!(classify_trap_script(Some("arw.cs"), Some(arrow), false), MarkerKind::DamageTrap);
+
+        let commented = "# sendEvent 0 Connor KQAttackEvent $1 0 5000 1\n# KQConner::setRope Bottom\necho safe";
+        assert_eq!(classify_trap_script(Some("safe.cs"), Some(commented), false), MarkerKind::GenericTrap);
+
+        let rope = "KQConner::setRope Bottom 182550 123862 4600 0 0 1.5";
+        assert_eq!(classify_trap_script(Some("ropetrap.cs"), Some(rope), false), MarkerKind::RopeTrap);
+
+        let portal1 = "KQMonster::setState Connor Portal portal $1";
+        assert_eq!(classify_trap_script(Some("portaltp.cs"), Some(portal1), false), MarkerKind::PortalTrap);
+        let portal2 = "KQMonster::setState Connor special portal\nKQMonster::setState Connor special portalx";
+        assert_eq!(classify_trap_script(Some("portrap6.cs"), Some(portal2), false), MarkerKind::PortalTrap);
+
+        let walk = "KQConner::setRun 0\nKQMusic::push minside.aud";
+        assert_eq!(classify_trap_script(Some("walk_la.cs"), Some(walk), false), MarkerKind::WalkRunTrap);
+        assert_eq!(classify_trap_script(Some("run_la.cs"), Some("KQMusic::pop minside.aud"), false), MarkerKind::WalkRunTrap);
+
+        let music = "if test $2 == On\n  KQMusic::push mwizard.aud\nelse if test $2 == Off\n  KQMusic::pop mwizard.aud\nendif";
+        assert_eq!(classify_trap_script(Some("mwiztrap.cs"), Some(music), false), MarkerKind::MusicTrap);
+
+        let generic = "if test $2 == On\n  sendEvent 0 trip1 KQCueEvent 1 0\nendif";
+        assert_eq!(classify_trap_script(Some("plate.cs"), Some(generic), false), MarkerKind::GenericTrap);
+    }
 }
