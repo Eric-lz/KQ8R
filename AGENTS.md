@@ -66,4 +66,4 @@ of the game, like controls, graphics, gameplay elements and more.
 - OS: Windows 11
 - Game A: King's Quest: Mask of Eternity, version 1.03 from GOG.com, installed at ./MASK/
 - Language and version: Rust stable with MSVC
-- Agent: Claude Code
+- Agent: Antigravity (previously Claude Code)

@@ -29,7 +29,8 @@ Everything under `crates/` and `docs/` is written for this project.
 
 ## Tools and AI
 
-- Agent and model: Claude Code (Claude Opus), which wrote the code and docs.
+- Agents and models: Claude Code (Claude Opus) and Antigravity (Google DeepMind),
+  which wrote the code and docs.
 - Human work: Eric Peracchi Pisoni sets direction, rules and priorities,
   and tests.
 

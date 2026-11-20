@@ -11,7 +11,7 @@ controls, graphics and gameplay.
 
 Unofficial fan project, not affiliated with or endorsed by the game's owners.
 
-The code is written with an AI coding agent (Claude Code);
+The code is written with AI coding agents (Claude Code and Antigravity);
 see [CREDITS.md](CREDITS.md).
 
 ## Current state

@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 Docs: add Antigravity to `CREDITS.md`, `AGENTS.md`, and `README.md`
+- **Changed:** `CREDITS.md`, `AGENTS.md`, `README.md`, `MODLOG.md`.
+- **Why:** User asked to add Antigravity to `CREDITS.md` and update the agent reference in `AGENTS.md` (along with the matching intro note in `README.md`).
+- **Tested how:** Docs-only update; inspected diff/files cleanly (not tested in a build since no code changed).
+- **Result:** All four doc files updated cleanly on branch `neon`.
+- **Still broken:** Nothing.
+- **Next:** Continue on branch `neon` with the user's remaining questions.
+
 ## 2026-11-20 Viewer H key: real bounding boxes for boxed hidden objects (branch `neon`)
 - **Changed:** `crates/kq8-viewer/src/load.rs` (added `angles`, `rotated`, `bounds` to `Marker`, kept `KQSpiriTrap` class distinct, read `BBMin*`/`BBMax*` for traps, river controls, and generic unmodeled `.kq` objects, updated `move_object` and marker logging), `crates/kq8-viewer/src/terrain_view.rs` (`marker_box_layout`, `wireframe_cube_mesh`, color-coded `LineList` wireframe + double-sided translucent fill boxes in `setup_objects` with 1 m cube fallback for single-point / zero-extent markers, 3 unit tests), `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `MODLOG.md`.
 - **Why:** User request on branch `neon`: pressing `H` previously showed only a small 1 m cube at each hidden object's origin rather than the actual trigger/trap or river-control bounding volume, while still needing point markers to remain visible for point-only hidden objects.
