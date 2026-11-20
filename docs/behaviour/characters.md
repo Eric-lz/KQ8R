@@ -944,8 +944,10 @@ directions by pressing forward or back while facing one of them.
     (handled in the same pass, `anim-scripts.md` rule 8), not at once.
 16. **The state numbers:** Unborn (Birth) 1, Wait 2, Move 4, **Die 8**,
     **SwapWeapons 32**, Jump 64, Push 128, Special 256, ThrowRock 512,
-    Talk 1,024, Tile 2,048, rope 4,096, hammer throw 8,192, Portal
-    32,768, Choice 524,288. So `$4 == 32` means **a weapon swap just
+    Talk 1,024, Tile 2,048, rope 4,096, hammer throw 8,192, **Tile2
+    16,384**, Portal 32,768, **Tile3 65,536**, **Scales 131,072**,
+    **Fall 262,144**, Choice 524,288 (the middle four traced 2026-11-20,
+    Q198 e). So `$4 == 32` means **a weapon swap just
     ended** (the data's own comments say "finished swapping weapons";
     the comment "starting special state" next to it is wrong), `$5 == 8`
     means "started dying", `$4 == 256` (19 scripts) a Special list ended,

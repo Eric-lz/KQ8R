@@ -7,8 +7,8 @@ behind Connor"), the mouse value and Q27/Q53/Q100 added 2026-10-19.
 Sources: game data files, the game's own
 manual (`MASK/Manual.pdf`, "Controlling the Camera"), and `Mask.exe`
 (studied, described here in our own words). Covers the gameplay camera that
-follows Connor. Scripted cutscene cameras (`KQCamera::addCamLoc`,
-`cutToCamLoc`, `flyToCamLoc`) and camera shake are only summarised.
+follows Connor, camera shake (`KQCamera::shake`), and cutscene cameras
+(`KQCamera::addCamLoc`, `cutToCamLoc`, `flyToCamLoc`, `move KQCamera`).
 
 ## Purpose
 
@@ -541,8 +541,39 @@ starts a swing (not checked in the game).
 
 ### Shake and cutscene cameras
 
-- `KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>` wobbles the
-  camera with two sine waves for the given time (usage text in the game).
+- **`KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>`**
+  (traced 2026-11-20, Batch 1): wobbles the camera for `<seconds>`
+  seconds using two sine waves inside a triangular envelope (exact 6
+  words required, all five numbers parsed as floats; wrong word count
+  prints its usage line and does nothing):
+  - **Envelope (per 15 Hz game update while `tick < seconds × 15`):**
+    `half = seconds × 7.5`. If `tick < half`, `curX += xMax / half` and
+    `curZ += zMax / half`; otherwise `curX -= xMax / half` and
+    `curZ -= zMax / half`. Then `tick` increases by 1. (So amplitude
+    ramps linearly from 0 up to `xMax`/`zMax` at half time and back down
+    to 0.)
+  - **Wave:** `pitch = sin(xPeriod × tick × 0.293) × curX` and
+    `yaw = sin(zPeriod × tick × 0.293) × curZ`. Despite the usage text's
+    names, `xPeriod` and `zPeriod` act as **frequency multipliers**, not
+    periods.
+  - **How it moves the camera (three modes):**
+    - **Third-person following (`aims` on):** sets the player tilt to
+      `pitch − 0.2` and the yaw offset to `yaw`, then runs a normal
+      follow update (which adds the yaw offset to the camera heading and
+      builds view tilt from player tilt plus the look-up angle).
+    - **Third-person fixed (`aims` off):** adds `pitch` onto camera tilt
+      (`rx`) and `yaw` onto camera heading (`rz`) each tick (not undone
+      when the shake ends).
+    - **First person:** sets first-person tilt to `pitch − 0.175` and
+      yaw to `yaw + 3.14` and rebuilds the view.
+  - **Ending (`tick ≥ seconds × 15`):** switches shaking off and resets
+    `tick` and the envelope (`curX`, `curZ`) to 0; in third person
+    restores player tilt and yaw offset to their saved defaults (`−0.2`
+    and `0`); in first person sets `(−0.175, 0, 3.14)`.
+  - **Data:** 5 uses in all — Daventry `beer42.cs`, `hibeer.cs`,
+    `hibeer2.cs` (`KQCamera::shake 4 .01 2 .01 2`) and Barren
+    `gongtp1.cs`, `gsetup.cs` (`KQCamera::shake 4 .02 4 .03 5`), all run
+    in third-person following mode.
 - Camera flights and cuts (`addCamLoc`, `flyToCamLoc`, `cutToCamLoc`):
   see "Camera flights and cuts" below.
 - **`move KQCamera <flags> x y z rx ry rz`** (traced 2026-10-17, Q89 c):
@@ -1022,6 +1053,11 @@ view toward what is followed). `follow <object>` switches both on
   Connor is knocked over) should hold perfectly still, high up (the
   script's spot), until the flight; the first shot looks down at Connor
   from about the script's height.
+- **Camera shake (`KQCamera::shake`, our logs, B):** trigger Daventry's
+  `hibeer.cs` (`4 .01 2 .01 2`, 60 ticks, peak at tick 30) or Barren's
+  `gongtp1.cs` (`4 .02 4 .03 5`) and log start, tick 30 amplitude
+  (`curX`/`curZ`), `pitch`/`yaw`, and end restore (`playerTilt −0.2`,
+  `yawOff 0` at tick 60).
 - In the original game, compare screenshots of the same spot with the same
   inputs (you can do this by eye; we only compare numbers we log).
 

@@ -50,6 +50,20 @@ is shown or hidden.
 
 3. `GAME/Kq/KqGui.kq` names the tag file `kqGuiTag.ttag` and the four
    screen files (main menu, game play, options, loading) [data].
+3a. **`KQGame::selectScreen <id>`** (traced 2026-11-20, Batch 1): switches
+    the active UI screen by index `0`–`8` (hiding the previous screen
+    first; out-of-range values do nothing):
+    - `0` Main Menu (`MainMenu.kq`)
+    - `1` Game Play (`GPlayScr.kq`)
+    - `2` Options (`Options.kq`)
+    - `3` Loading (`Loading.kq`)
+    - `4` Graphics (`Graphics.kq`)
+    - `5` Load Game (`loadgame.kq`)
+    - `6` Save Game (`savegame.kq`)
+    - `7` Key Remap (`movekeys.kq`)
+    - `8` Credits (`credits.kq`)
+    Shipped scripts only call `0` (`mask.cs`) and `1` (each world's
+    `world.cs` `Load`).
 4. **Layout format.** The `.gui` blocks (dialogs `UIDL`/`CCBD`, buttons
    `CCBB`, texts `UITX`, pictures `UIBM`), their ids, rectangles, fonts,
    texts and pictures, the tag file and the `.pft` / `.pba` formats are
@@ -645,6 +659,68 @@ uses whatever the window holds [traced].
 52. Item descriptions in the inventory have no caption (`talking.md`
     rule 20).
 
+## Help popups (`doPopup`, `stopHelp`, `notStartingHelp`, F1 help book)
+
+Traced 2026-11-20 (Batch 1).
+
+53. **`doPopup <textNumber>`:** requires 2 words (else prints its usage
+    line). Queues a help-popup cue to Connor **1.5 s** in the future
+    (game time).
+54. **Deferral and pacing on Connor:** when Connor receives the help cue,
+    if any of the following holds:
+    - `handsOff` is on,
+    - Connor's current state is neither `Wait` nor `Move`,
+    - Connor is currently speaking (speech queue not empty), or
+    - fewer than **3.0 s** of world time have passed since the last popup
+      was shown,
+    he defers it by re-queuing the cue **1.0 s** later and keeping it in
+    a pending list. When clear, he opens the popup and records the
+    current world time. If a popup is **already open** on screen when
+    shown, the screen re-queues the cue to Connor **3.0 s** later. (See
+    "Do not reproduce" for the original's pending-list removal bug.)
+55. **Showing a popup (`IDCTL_POPUP`, `GAME/ENGLISH/500.MSG`):**
+    - Normal mode: numbers **below 170** are "Help Getting Started" tips;
+      if starting help is switched off (`notStartingHelp` is 1 or 2),
+      they are skipped silently. Numbers **170 or higher** always show
+      (and have no "Turn off" checkbox).
+    - The text is looked up in `500.MSG` by condition number
+      `(0, 0, textNumber, 1)`.
+    - **Keybinding placeholders (`^<char>`):** sequences like `[^4]`,
+      `[^5]`, `[^8]`, `[^9]`, `[^:]` expand to the player's current
+      mapped key name (`movekeys.kq`: Run/Walk, Jump, Map, Tilt, Play
+      Cursor, etc.).
+    - **Wrapping:** splits on explicit newlines or wraps words at **38
+      characters** per line, up to **7 lines**.
+    - **Controls:** shows an **OK** button (`#148` in `500.MSG`), and
+      for numbers `< 170` also shows the **"Turn off Help Getting
+      Started"** checkbox (`#147`, displaying `X` when checked).
+    - Plays **`intrface.aud`** and **pauses the game** while open.
+      Clicking OK (or pressing Enter or F1) hides the popup and
+      **unpauses the game**. Clicking the checkbox flips starting help
+      off/on (`0 ↔ 1`), unless permanently disabled (`2`).
+56. **F1 Help Book browse mode:** pressing **F1** opens `IDCTL_POPUP` in
+    browse mode over a fixed **24-entry table** of `500.MSG` condition
+    numbers: **`127–146`, `149–151`, `153`** (indices `0–23`), with
+    **Close** (`#155`), **`<<`**, and **`>>`** buttons (and left/right
+    arrow keys) wrapping around `0 ↔ 23`.
+57. **`notStartingHelp <0|1|2>`:** sets the starting-help switch (`0` =
+    tips shown, `1` = turned off by player, `2` = permanently disabled /
+    greyed out in Options). The shipped `MASK/Options.cs` runs
+    `notStartingHelp 1`, so starting tips are off by default unless
+    re-enabled in Options.
+58. **`stopHelp`:** sets all **7 bits** (`0x7f`) of Connor's built-in
+    one-off beginner-tip flags so built-in gameplay tips never fire
+    (such as `#140` on first empty-handed combat hit, `#130` when health
+    drops below 50%, `#138` on reaching level 2, `#137` on first monster
+    kill). Every non-Daventry `conStart.cs` runs `stopHelp` on line 2
+    (10 worlds).
+59. **Data:** 14 active `doPopup` script calls exist in the shipped game
+    — 12 in Daventry (`camera1.cs` 127, `healitem.cs` 131, `jumpa.cs`
+    133, `keepdoor.cs` 146 & 151, `lookup.cs` 139, `movement.cs` 141,
+    `pushing.cs` 142, `savegmh.cs` 143, `start.cs` 144, `useropeh.cs`
+    145, `wizard.cs` 153; `graveyrd.cs` 129 is commented out), 1 in
+    Swamp (`camera2.cs` 127), and 1 shared (`GAME/Kq/walk_la.cs` 143).
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -661,12 +737,15 @@ uses whatever the window holds [traced].
 | caption wrap width | box width: 320 at 640 × 480 (400 at 800 × 600, inferred) | traced / inferred |
 | hidden top bar | 1/480 screen above | traced |
 | hidden map | 50/640 screen beyond the left edge | traced |
+| help popup delay / retry / cooldown | 1.5 s / 1.0 s / 3.0 s (game time) | traced |
+| help popup text wrap / F1 pages | 38 chars × 7 lines / 24 entries (`127–146, 149–151, 153`) | traced |
 
 ## Data used
 
 - `GAME/Kq/Gplayscr.kq`, `KqGui.kq`, `Mainmenu.kq`, `Options.kq`,
   `Graphics.kq`, `Loading.kq`, `MASK/movekeys.kq`, `MASK/Options.cs`.
 - `GAME/Resource/Gplayscr.gui`, `kqGuiTag.TTAG`.
+- `GAME/ENGLISH/500.MSG` (help popup texts and buttons).
 - `<world>/8gui/*` (pictures, cursors, fonts).
 - `GAME/Kq/Invinfo.itl` (`GUIBitmap`, `cursor`, `category`).
 - `GAME/Kq/Connor.kq` (`stats=`, `level=`, `[ConnerInventory]`).
@@ -699,6 +778,10 @@ uses whatever the window holds [traced].
 - The caption's off-centre position with the map closed (rule 51) is a
   side effect of the layout; reproduce it only if the user's check says
   the original does it.
+- **Help popup pending-list index-0 quirk** (rule 54): if more than one
+  help cue waits while deferred, the original fails to remove index 0
+  when showing it (while indices `1+` re-queue at `+3.0 s` and remove
+  themselves). Keep a clean FIFO queue with the same 3.0 s spacing.
 
 ## How to check
 
@@ -756,6 +839,12 @@ uses whatever the window holds [traced].
    green; everything else looks the same. That matches the data
    (rule 1i). Escape to the main menu and back: nothing changes, the
    bars are in the world's colours at once (rule 1d).
+9. **Help popups (our logs / in the original):** with `notStartingHelp 0`
+   in `Options.cs`, trigger `doPopup 127` (`camera1.cs`) and log the
+   1.5 s cue, deferral while `handsOff`/speaking, pause on show, `500.MSG`
+   lookup, and unpause on OK; in non-Daventry worlds confirm `stopHelp`
+   suppresses built-in beginner tips (`#140`, `#130`); press F1 to step
+   through all 24 help-book pages (`0 ↔ 23`).
 
 ## Open questions
 

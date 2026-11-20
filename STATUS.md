@@ -8,6 +8,31 @@ B built Dead City's river controls (U-10) and weeper draining bolts
 
 ## Where we are (2026-11-20)
 
+- **2026-11-20 (A): Batch 1 (Shared / Everywhere) + `Q197`–`Q198` studied**
+  (traced in `Mask.exe` via Ghidra and checked against `MASK/` data;
+  **not checked by hand in the running original**; no Rust code written):
+  - **`Q197` (`fighting.md` 7a):** Tower Skeleton's second Cue 50 puts the
+    camera **in front** of Connor (`−Y` = forward), and `follow Connor`
+    immediately pulls it in from ~`5,016` onto `max − 1` (`4,999`) before
+    frame 0; `+0.2 s` `mtower.aud` is the music pop.
+  - **`Q198` (`tile-puzzle.md` rules 23–26, `characters.md` rule 16):**
+    `Scales` state number `131,072` (`Tile2` `16,384`, `Tile3` `65,536`,
+    `Fall` `262,144`), all 6 instant camera cuts (correcting `53,490`,
+    `49,034`, `214,420`), held-forward step after `onscale2`/`offscale2`,
+    `1.57f` tie choosing north dish (`2.207`), instant turn off a dish,
+    and stepping away via `walkTo` into `portrap7`.
+  - **Batch 1 (`camera.md`, `object-lighting.md`, `interface.md`,
+    `script-commands.md`):** `KQCamera::shake` triangular wave across
+    3 modes; `KQHazer` 3D entry + 2D XY ramp (only `DeadCity/litehaze.kq`
+    loaded); `doPopup`/`stopHelp`/`notStartingHelp`/F1 help book/
+    `KQGame::selectScreen`; script parser (`;` statement separator,
+    case sensitivity, `.cs` AutoExec fallback); `inc`, `setcat`,
+    `alias`, `getConnorFlag`, `loadAnim` (spawns live `KQAnimOnce`),
+    `mouseAction`, `IceWorld` `Preload`, and confirmed cache/save hints
+    (`preload*`, `purge*`, `lock*`, `letCatchUp`, `activatePersistMgr`).
+  - **Next:** Build Session (B) for Batch 1 + `Q197`/`Q198` fixes, or
+    Study Session (A) for Batch 3 (Swamp).
+
 - **2026-11-20 (B): U-10 (`RiverControl`) and U-11 (`KQWeepBolt`) built**
   (DESIGN "U-10", "U-11"; 756 workspace unit tests, Dead City viewer logs,
   and **checked in game by the user 2026-11-20**):
@@ -750,10 +775,11 @@ M6 has started with the Rope and Hook (6a).
 
 ## Open questions (`docs/behaviour/QUESTIONS.md`)
 
-- **New for A (2026-11-01, B): Q197** (the tower skeleton's second Cue
-  50 camera: the numbers put it in front of Connor), **Q198** (the
-  scales: camera views, one step per press, stepping away, the turn off
-  a dish, the state number, the tie at the entry heading).
+- **Answered by A (2026-11-20): `Q197`** (second Cue 50 camera in front
+  of Connor, `4,999` on frame 0), **`Q198`** (`Scales` cameras, held
+  forward, `portrap7` walk, state numbers, `1.57f` north-dish tie), plus
+  **Batch 1** shared commands/classes (`script-commands.md`, `camera.md`,
+  `object-lighting.md`, `interface.md`). Awaiting B implementation.
 - **Answered by A (2026-11-01): Q184–Q196, Q110 (a)**; built by B the
   same day except Q193 and Q194 (U-10, U-11 not built yet). **Still open for A (older, low priority, not done):** Q24
   (frame-by-frame steps), Q28 (b)(c), Q30 (b), Q41 (rest), Q106, Q108

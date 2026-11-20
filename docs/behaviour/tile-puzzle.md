@@ -301,34 +301,84 @@ lit stone, the checking, the "teleports" and the end.
     wrong argument count prints
     "usage:  DeadHallTeleport fromHallName toHallName".
 
-### The scales (Connor's `Scales` state, traced 2026-10-28)
+### The scales (Connor's `Scales` state, traced 2026-10-28; Q198 traced 2026-11-20)
 
 Dead City's Scales of Justice: a second puzzle state built like `Tile`
-(same refusal of other states, same weapon-swap line as rule 18; it
-is not left with `tileExit`, only by stepping away, below).
+(**state number 131,072** in `StateChange` messages; same refusal of
+other states; it is not left with `tileExit`, only by stepping away,
+below).
 
-23. **Entering**: `portrap3.cs` puts Connor at (217,450, 49,140, 2,900),
-    heading 1.57, then sets `Scales`. A drawn weapon is put away first.
-    His movement list gains `conscale.anm`: `onscale1` (25 frames),
-    `onscale2` (46), `offscale1` (12), `offscale2` (12) (data).
+23. **Entering and weapon refusal**: `portrap3.cs` puts Connor at
+    (217,450, 49,140, 2,900), heading 1.57, then sets `Scales`. If a
+    weapon is drawn when entering, `Scales` plays `away` and switches his
+    mode directly to empty hands without going through the weapon-swap
+    state, so he does **not** speak the refusal line on entry. While in
+    `Scales`, any weapon-swap request is refused with the same line as
+    `Tile` (file 0, noun 0, verb 37, condition 23, sequence 1 — rule 18)
+    and the pending state request is cleared. His movement list gains
+    `conscale.anm`: `onscale1` (25 frames), `onscale2` (46),
+    `offscale1` (12), `offscale2` (12) (data).
 24. **Keys**: turn left / right plays `left` / `right` and turns on the
-    spot; back held with a turn key also turns; forward (walk or run)
-    takes one step (rules 25–26); nothing held plays `stop`.
-25. **Forward on the floor** (Connor's x < 219,000): of three headings,
-    the one nearest his own is chosen:
-    - **−1.57 (step away):** he is put on the start spot facing −1.57,
-      the camera goes to (216,360, 52,250, 7,260) and he walks to
-      (209,500, 49,065). This is the **only way out** of the state.
-    - **2.207 or 0.933 (one of the two dishes):** he is put on the start
-      spot at that heading and plays `onscale1` then `onscale2`; the
-      camera during this is at (216,115, 53,496, 5,560) for 2.207 and
-      (216,115, 44,790, 5,560) for 0.933. Afterwards he is turned 180°
-      and raised 200, and the camera is at (216,500, 49,140, 4,500),
-      looking along −1.57.
-26. **Forward on a dish** (x ≥ 219,000) steps off: on the dish with
-    y > 50,000 he turns to −0.933, with y < 50,000 to −2.207 (exactly
-    50,000: nothing happens); then `offscale1`, `offscale2`, the camera
-    goes to (214,421, 49,340, 4,190) and follows him again.
+    spot; back held with a turn key also turns (and blocks forward steps
+    while held); nothing held plays `stop`. The state compares the
+    movement Connor's keys currently ask for against the last wanted
+    movement it acted on (ignoring case), and triggers a step only when
+    that wanted movement **changes** to forward (`Walk` or `Run`).
+    However, when `onscale2` or `offscale2` finishes, the state clears
+    both its busy flag and the remembered wanted movement: so pressing
+    forward once takes one step, and **keeping forward held** across the
+    end of `onscale2` / `offscale2` immediately triggers the next step on
+    the very next update.
+25. **Forward on the floor** (Connor's x < 219,000): of three target
+    headings (−1.57, 2.207, 0.933), the one nearest his own is chosen
+    with strict `<`. At the entry heading `1.57` (32-bit float), `2.207`
+    (the north dish) is fractionally closer than `0.933` (`≈ 0.6370000`
+    vs `0.6370000` rounded a step higher), so pressing forward without
+    turning steps onto the **north dish** (`2.207`). (On an exact
+    mathematical tie, strict `<` starts no animation while leaving the
+    state stuck busy — see "Do not reproduce".)
+    All camera views in `Scales` are **instant cuts** to a fixed world
+    position and fixed angles `(rx tilt, ry roll, rz heading)` — no
+    flight and no look-at target:
+    - **−1.57 (step away):** Connor is snapped to (217,450, 49,140,
+      2,900), heading −1.57; camera following and auto-places /
+      auto-turns are switched off; the camera cuts to **(216,360,
+      52,250, 7,260)**, angles **(−0.716, 0, 2.644)**; leaving the state
+      is enabled; then the state immediately starts the same auto-walk
+      as `KQConner::walkTo` (without a cue target) to **(209,500,
+      49,034, 2,909)** (earlier doc: 49,065). That walk **leaves `Scales`
+      for `Wait` at once**, switches **`handsOff 1`** on, and **walks**
+      (not runs) away. Neither `Scales` nor `walkTo` turns `handsOff`
+      back off or restores camera following: in Dead City the walk
+      carries Connor straight into the room's exit portal trap
+      (`portrap7`, `portrap7.cs`), which runs `walkExit` (ending the
+      walk) and plays the return portal sequence (`Cue 5` restores
+      `KQCamera::follow Connor`, `handsOff 0`, and `setThirdPerson`).
+      This is the **only way out** of `Scales`.
+    - **2.207 (north dish) or 0.933 (south dish):** Connor is snapped to
+      (217,450, 49,140, 2,900) at that heading; camera following and
+      auto-places / auto-turns are switched off; the camera cuts to
+      **(216,115, 53,490, 5,560)**, angles **(−0.38, 0, −2.449)** for
+      2.207 (earlier doc: 53,496), or **(216,115, 44,790, 5,560)**,
+      angles **(−0.38, 0, −0.692)** for 0.933; then he plays `onscale1`
+      followed by `onscale2`. When `onscale2` ends, Connor gets a
+      relative move of **(0, 0, +200)** and a relative turn of **+3.14**
+      (about 180°), and the camera (still not following) cuts to
+      **(216,500, 49,140, 4,500)**, angles **(−0.1, 0, −1.57)**.
+26. **Forward on a dish** (x ≥ 219,000) steps off:
+    - on the **north dish** (`y > 50,000`): Connor's heading **snaps at
+      once** to **−0.933** (not a gradual turn; position kept), and the
+      camera (still not following) cuts back to **(216,115, 53,490,
+      5,560)**, angles **(−0.38, 0, −2.449)**;
+    - on the **south dish** (`y < 50,000`): Connor's heading **snaps at
+      once** to **−2.207** (position kept), and the camera (still not
+      following) cuts back to **(216,115, 44,790, 5,560)**, angles
+      **(−0.38, 0, −0.692)**;
+    - (at `y == 50,000` exactly, nothing happens);
+    - he plays `offscale1` then `offscale2`. When `offscale2` ends, the
+      camera cuts to **(214,420, 49,340, 4,190)** (earlier doc:
+      214,421), angles **(−0.2, 0, −1.64)**, and resumes **`follow
+      Connor`** with auto-places / auto-turns back on.
 26a. **Gravity during the steps** (traced 2026-11-01, Q189): just before
     `onscale1` (onto a dish) and before `offscale1` (off it) the state
     switches **gravity and keep-on-ground off**; the movement's own steps
@@ -402,6 +452,12 @@ is not left with `tileExit`, only by stepping away, below).
 ## Do not reproduce
 
 - The missing-stone crash (rule 2).
+- **`Scales` exact-tie soft lock** (rule 25): comparing distance to the
+  three floor headings uses strict `<` from a default index of `0`
+  (none), so if Connor's heading is mathematically equidistant between two
+  targets, no animation starts while `busy` stays on forever. Break ties
+  deterministically instead (for example in favour of `2.207`, north
+  dish).
 - Not a bug, but note: the right order is in the program, not the data.
   Keep it as data in our code (a list of grid cells with their
   "put on" stones and camera points) so it can be logged and checked.
@@ -409,6 +465,13 @@ is not left with `tileExit`, only by stepping away, below).
 ## How to check
 
 - Log on entering `Tile`: the 64 stones found, Connor's spot (rule 6).
+- **In `Scales`:** log each of the 6 camera cuts (position, `(rx, ry,
+  rz)`, follow on/off); verify pressing forward right after `portrap3.cs`
+  (heading `1.57`) chooses the north dish (`2.207`), holding forward
+  across `onscale2`'s end steps back off cleanly into `follow Connor` at
+  `(214,420, 49,340, 4,190)`, and turning toward `−1.57` and pressing
+  forward leaves `Scales` → `Wait` with `handsOff 1`, walking into
+  `portrap7` (`walkExit` + return portal).
 - Log each jump: spot before, chosen spot, straight/diagonal/back, the
   facing angle; each landing: spot, expected cell, result
   (right / wrong / start strip / door).

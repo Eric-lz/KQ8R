@@ -650,10 +650,10 @@ scripted fall, not the ordinary `die`:
    (`skcmdiex.kqs`, the body flying apart) there on the ground.
 5. `die2` ends: it is **hidden** (not drawn, not solid; the near / far
    lists are worked out again); **Cue 50** is sent to it 3 s later. That
-   second Cue 50 brings the camera back behind Connor with the controls
-   on ("Cues" below) and then **finishes the death** the ordinary way
-   (experience to Connor, its script's `Die`, removed; rule 32's finish
-   and corpse) and gives the dropped item `chainmal.cs`.
+   second Cue 50 brings the camera back in front of Connor with the
+   controls on ("Cue 50" below) and then **finishes the death** the
+   ordinary way (experience to Connor, its script's `Die`, removed;
+   rule 32's finish and corpse) and gives the dropped item `chainmal.cs`.
    **Correction 2026-11-01 (Q196):** the order is `teeter`, `die`,
    **`fallend`, `die2`**; the first version of this list had the last
    two the other way round, which put the shattering in mid-air. All
@@ -690,14 +690,25 @@ scripted fall, not the ordinary `die`:
   keys of `skeltowr.kq` are the same numbers for its hurt line, rule
   "Do not reproduce" below). A later flight ending while it is on the
   list does the same again (harmless).
-- **Cue 50** (traced 2026-11-01, Q195 b): only the dying state sends it
-  (steps 2 and 5); nothing else does. The first one says the scream's
-  sequence 2 (2000/16/12/22). The second: the camera cuts to Connor's
-  position + (0, −5,000, +1,000) in Connor's own axes, looking at him,
-  follows him again, the controls come on, first person is allowed, the
-  music system is told about `mtower.aud` again 0.2 s later (inferred:
-  to stop it, as `towskltp.cs` `Off` pops it), and the death is
-  finished (step 5).
+- **Cue 50** (traced 2026-11-01, Q195 b; clarified 2026-11-20, Q197):
+  only the dying state sends it (steps 2 and 5); nothing else does. The
+  first one says the scream's sequence 2 (2000/16/12/22). The second:
+  - the camera cuts (`addCamLoc` with new list, `cutToCamLoc` aimed at
+    Connor) to `Connor's position + (0, −5,000, +1,000)` in Connor's own
+    axes. Because Connor's own `−Y` is his **forward** direction (the
+    same as every other model), this places the camera **5,000 units in
+    front of Connor** and 1,000 up, looking back at his face (the
+    earlier "behind Connor" phrasing in step 5 was a wording mistake);
+  - immediately on the next line (in the same handler, before any frame
+    is drawn), `follow Connor` runs; because the 3D distance from the
+    aim point (`Connor + (0, 0, +1,400)`) to `(0, −5,000, +1,000)` is
+    about `5,016` (more than the `5,000` maximum), the follow call
+    pulls the camera straight in onto `max − 1` (`4,999`) before a
+    single frame is drawn (**0 updates shown at 5,000**);
+  - the controls come on, first person is allowed again, the music
+    system gets the `mtower.aud` pop event 0.2 s later (confirmed: stops
+    the tower music, as `towskltp.cs` `Off` does), and the death is
+    finished (step 5).
 - **`Unborn` from `towskltp.cs` `Off`** (traced, Q195 e): Connor leaving
   the tower: the script moves it back to (185,481, 124,053, 9,814) and
   sets `Unborn`, the ordinary hidden state (`character-movement.md`

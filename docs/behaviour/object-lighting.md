@@ -17,6 +17,9 @@ surfaces in full (rule 16), which flag bit makes a model's light a point
 light (rule 26b), `KQPointLight` and the near / far / off test (rule 37),
 and the draw-distance ball of a building (rule 40).
 
+Updated 2026-11-20 (study session A, Batch 1): proximity haze zones
+(`KQHazer`, rules 23a–23e).
+
 "Traced" = read in the exe. "Measured" = checked on the data with a
 throwaway script. "Not traced" = an assumption, marked as such.
 
@@ -443,6 +446,52 @@ B draws it (open question 1).
       `translucency` ÷ 255, times a fade (1 while haze < 0.5, then
       1.2 − haze).
 
+### Proximity haze zones (`KQHazer`, traced 2026-11-20, Batch 1)
+
+23a. **What it is and its `.kq` keys:** an invisible proximity box that
+    smoothly changes the world's haze distances around a location
+    (`classType=KQHazer`, collision type `0x10`, cube collision box
+    `[-radius, +radius]` on all three axes). Keys read: `locX`, `locY`,
+    `locZ` (if `locZ == −1`, snaps to the ground surface height),
+    `colliderMask` (default `0x221f`; all 7 data files set `4` = Connor),
+    `radius` (default `1.0`), `innerRadius` (default `1.0`),
+    `hazeCenterFactor` (default `0.0`), plus save-only `collided`,
+    `origHazeEdge`, `hazeEdge`. Supports `KQMoveEvent` like other
+    objects.
+23b. **Entering the zone:** when Connor touches the hazer while it is not
+    yet active, and the **3D distance** between Connor's position and the
+    hazer's position is `≤ radius`, the hazer activates, subscribes to
+    Connor's move notices, and saves the terrain's current `hazeDistance`
+    (or `20,000` if no terrain) as both `origHazeEdge` and `hazeEdge`.
+23c. **Updating haze as Connor moves:** on each of Connor's moves while
+    the hazer is active:
+    - if Connor is no longer inside the `[-radius, +radius]` cube box,
+      the hazer deactivates, unsubscribes, and restores `hazeDistance =
+      origHazeEdge` and `visibleDistance = 1.5 × origHazeEdge`;
+    - while still inside the box, `innerRadius` is clamped to
+      `min(innerRadius, radius)`, and the **2D horizontal (XY)
+      distance** `d` from the hazer to Connor sets the new haze start
+      `h`:
+      - `d < innerRadius`: `h = hazeEdge × hazeCenterFactor`
+      - `innerRadius ≤ d ≤ radius`: linear ramp from
+        `hazeEdge × hazeCenterFactor` at `innerRadius` to `hazeEdge` at
+        `radius`
+      - `d > radius`: `h = hazeEdge` (possible in the outer corners of
+        the cube outside the horizontal circle)
+    - sets terrain `hazeDistance = h` and `visibleDistance = 1.5 × h`
+      (same `1.5×` ratio as `setHaze`).
+23d. **Removal:** if either the hazer or Connor is removed from the world
+    while active, `hazeDistance = origHazeEdge` and `visibleDistance =
+    1.5 × origHazeEdge` are restored.
+23e. **Data:** 7 `.kq` files exist across Dead City, Gnome, and Swamp,
+    but only **one** is loaded in the shipped game:
+    `DeadCity/litehaze.kq` (`newworld.cs`, `radius=20000`,
+    `innerRadius=8000`, `hazeCenterFactor=0.35`, `colliderMask=4`).
+    `brighaze.kq` is commented out in Dead City and Gnome; Swamp's
+    `hazer1`–`3.kq` are never loaded (and `hazer1.kq` has a typo
+    `hazeCenterPercent = .1`, which the reader ignores, leaving
+    `hazeCenterFactor = 0.0`).
+
 ## Rules: point lights (traced 2026-10-17, Q72)
 
 24. **Point lights on models.** `KQPointLight` (`tsLightType=2`,
@@ -843,6 +892,7 @@ an object takes part in the game at all.
 | card blend | (1 − h) × colour + h × haze colour; h sent as h × 255 | traced (Glide) |
 | haze colour | nearest palette entry (10–244) to `resetHazeColor` R G B (0–255) | traced |
 | background | flat palette entry `newSky n`, no haze | traced |
+| `KQHazer` (`DeadCity/litehaze.kq`) | radius 20,000, inner 8,000, factor 0.35; 3D entry, 2D XY ramp | traced, data |
 | draw distance | off when (distance from Connor to ball centre − radius) ≥ visibleDistance | traced |
 | far band | distance > `tooFar` × visibleDistance, `tooFar` default 0.83 | traced |
 | ball radius without a `BOUNDS.KQ` box | 100 (emitters 250) | traced |
@@ -874,7 +924,7 @@ an object takes part in the game at all.
 - Scripts: `setActiveCamera 0|1`, `makeActive <name> 0|1`.
 - `GAME/patch/BOUNDS.KQ` (bounding balls). Dead City's
   `kq/Light/PLIGHT01.KQ`, `facelt*.KQ` and `newworld.cs` / `azrieltp.cs`
-  (point lights). Objects' `.kq`: `turnOffDynLighting`.
+  (point lights). `DeadCity/kq/litehaze.kq` (`KQHazer`). Objects' `.kq`: `turnOffDynLighting`.
 - `GAME/Kq/Invinfo.itl` (items' shapes and translucency).
 
 ## Edge cases
@@ -939,6 +989,11 @@ an object takes part in the game at all.
 - `setActivePoint` (a second reference point used when an object is
   beyond the limit from Connor) exists, but the only two uses in the data
   are commented out. Leave it out.
+- **`KQHazer` far-clip mismatch** (rule 23c): when updating haze on
+  Connor's move inside a hazer, the original passes `h` (instead of
+  `1.5 × h`) to the camera's far-clip distance while setting terrain
+  `visibleDistance` to `1.5 × h` (and leaving/removal passes `1.5 × h`).
+  Keep camera far-clip matching `visibleDistance = 1.5 × h` as usual.
 
 ## How to check
 
