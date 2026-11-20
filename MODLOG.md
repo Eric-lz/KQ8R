@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 Hand-over docs after U-10 and U-11
+- **Changed:** `STATUS.md`, `docs/FEATURES.md`, `README.md`, `MODLOG.md`.
+- **Why:** Record completed batch 2 steps U-10 (`RiverControl`) and U-11 (`KQWeepBolt`) and updated `docs/SCRIPT-COVERAGE.md` for hand-over.
+- **Tested how:** Docs-only update; inspected updated sections (`Q197`–`Q198` checked in `docs/behaviour/QUESTIONS.md`, `README.md` kept concise). Not played by hand.
+- **Result:** Hand-over docs match current codebase (`b56aecf`, `aaf1941`, `ad4be44`).
+- **Still broken:** Pending user in-game check of U-10 and U-11 by eye and ear.
+- **Next:** User in-game verification of Dead City river dipping and weepers, and session A answers to `Q197`–`Q198`.
+
 ## 2026-11-20 U-11: Dead City's weeper draining bolt (`KQWeepBolt`, Q194)
 - **Changed:** `crates/kq8-data/src/characters.rs` (`shoot_offsets` in `CharacterKeys`/`FightSettings`, `WeepBoltKeys` and `classType=KQWeepBolt` in `ProjectileKeys`), `crates/kq8-core/src/{connor.rs,character.rs,sound.rs,portal.rs,active.rs,fight.rs}` (`special_hold`, handle-based `LoopOrder` loop sounds, `spawn_template` without mutating `$ObjectName`, `shootOffsets` fallback when `meshName` is absent, invisible `KQWeepBolt` flight, `start_weep_drain` / `weep_drains_step` / `end_weep_drain`, and unit tests), `crates/kq8-viewer/src/{load.rs,connor_view.rs,door_view.rs,sound_view.rs}` (preload `magicReact`, preload `suckFile`/`suckEnd` templates while hiding `weepbolt.kqs`, loop sound start/stop), `docs/DESIGN.md`, `docs/provenance/README.md`, `MODLOG.md`.
 - **Why:** Batch 2 step U-11 (`docs/behaviour/ranged-weapons.md` section 9, Q194): make Dead City's weepers shoot their invisible draining bolt, render the animated chain of `lifesuck.kq`/`lifesuk2.kq` pieces, loop `LIFESUCK.AUD`, hold Connor in `magicReact` and the weeper in `suck`, drain plain health (11 over 3 s, ignoring protection/flinch), and release both cleanly at the end (`suckstop` + `attackDelay` cooldown).

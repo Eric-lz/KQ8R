@@ -1,11 +1,44 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-10-20 after
-B built the fight (M5 5c, `fighting.md`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+Hand-over in case the chat is lost. Brought up to date 2026-11-20 after
+B built Dead City's river controls (U-10) and weeper draining bolts
+(U-11). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-11-01)
+## Where we are (2026-11-20)
+
+- **2026-11-20 (B): U-10 (`RiverControl`) and U-11 (`KQWeepBolt`) built**
+  (DESIGN "U-10", "U-11"; 756 workspace unit tests and Dead City viewer
+  logs, **not played by hand or checked by eye**):
+  - **U-10 (`RiverControl`):** Dead City's four river-dipping boxes load
+    with `acceptsInventory` (`BrokenShield`, `IronLock`) and `1,300`
+    reach; clicks handle empty hand, out-of-reach, wrong item, sword/axe
+    sheathing when armed, turning toward the river box, camera cut
+    (+ following), `river.anm` `dipShield`/`dipLock`, item swaps to
+    `RustedBrokenShield`/`RustedLock`, `+2,000` XP once per box
+    (`rusted_one` carried across world changes), and returning controls
+    when `out` ends.
+  - **U-11 (`KQWeepBolt`):** `nShootOffsets`/`shootOffsets0..n` fallback
+    when `meshName` is absent; invisible `KQWeepBolt` collider flight;
+    vanishes on a target already in `Special`; otherwise spawns the
+    `lifesuck.kq`/`lifesuk2.kq` chain pieces, loops `lifesuck.wav`,
+    holds shooter (`suck`) and target (`magicReact`), drains 1 plain
+    health whenever the accumulator passes `0.25 s` (~11 over 3 s,
+    ignoring protection and flinch), and on end (duration, death or
+    disappearance) stops sound, removes chain pieces, sends living
+    target to `Wait`, and puts living shooter through `Wait` ->
+    `suckstop` + `attackDelay`.
+  - **Script coverage updated:** regenerated `docs/SCRIPT-COVERAGE.md`
+    (`RiverControl` and `KQWeepBolt` both `named`).
+  - **Please look at:** dipping `BrokenShield` / `IronLock` at a Dead
+    City river edge (`rivercn2`–`rivercn4`), and approaching a weeper
+    (`weeper14`) to see the drain chain, `magicReact` pose and sound.
+  - **Asked (for A):** `Q197` (second Cue 50 camera side) and `Q198`
+    (scales cameras and edge cases) remain open.
+  - **All Q184–Q196 U-steps built;** see `docs/SCRIPT-COVERAGE.md` for
+    remaining Dead City / global script items (`KQAttackEvent` on
+    objects, `KQMonster::add`, etc.).
 
 - **2026-11-01 (B): session A's Q184–Q196 built, U-1 to U-9c** (DESIGN
   "U"; logs and unit tests, **not played by hand**):

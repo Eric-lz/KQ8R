@@ -884,6 +884,15 @@ Checked in the logs and unit tests only, **not played by hand**.
 - **Throwing rocks:** a click with the rock in hand throws it in an
   arc; it presses Dead City's plates, which stay down, and lies where it
   lands.
+- **Dead City's river-dipping boxes (`RiverControl`):** clicking a
+  river box with `BrokenShield` or `IronLock` dips it with a camera
+  cut, sheathing any weapon first, swaps it to `RustedBrokenShield` or
+  `RustedLock`, and gives 2,000 experience once per box (unit tests and
+  logs only).
+- **Dead City's weepers (`KQWeepBolt`):** weepers fire invisible
+  draining bolts that build an animated energy chain, loop their drain
+  sound, hold Connor in `magicReact`, and drain plain health over 3 s
+  until release or death (unit tests and logs only).
 - **Smaller:** scripted attacks on characters, the spirit drain in whole
   numbers, `dropItem`; animated objects drawn from their movements
   (trees and flames that stood still now move).
