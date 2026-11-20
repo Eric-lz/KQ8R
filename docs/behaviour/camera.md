@@ -538,6 +538,26 @@ starts a swing (not checked in the game).
      sets the variable to 0.)
    - So a call without its pair leaves the first-person key locked, or
      unlocked when it should be locked.
+8. **`setFirstPerson`** (traced 2026-11-20, Batch 3) is the mirror-image
+   toggle with memory for forcing first person, requiring exactly 1 word
+   (otherwise prints usage). Unlike `setThirdPerson`, its script variable
+   has **no `<World>::` prefix** — it is always the global variable
+   **`SetFirstPerson::WasThirdPerson`**. Scripts call it in pairs (8 uses
+   across the game: Swamp `swdoor.cs`, Temples 1–3 `swordget.cs`,
+   `armorget.cs`, `grailget.cs`):
+   - **In third person:** sets `SetFirstPerson::WasThirdPerson` to `1`,
+     forbids the first-person key (F2), switches the camera to first
+     person, hides Connor's third-person body, switches his animations and
+     arm skin to the first-person lists, and sets an internal
+     "forced into first person" flag.
+   - **In first person with `SetFirstPerson::WasThirdPerson` non-zero (the
+     second call):** sets it to `0`, allows F2 again, and (if the forced
+     flag is set) switches the camera back to third person, shows Connor's
+     body again, restores his third-person animations/skin, and clears
+     the flag.
+   - **In first person with `SetFirstPerson::WasThirdPerson` zero (already
+     in first person before the pair):** only **flips** whether F2 is
+     allowed, leaving the camera in first person.
 
 ### Shake and cutscene cameras
 

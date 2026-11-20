@@ -298,6 +298,38 @@ scripts.
     if he has no inventory, `getConInventory:  can't find Connor's
     inventory`; in both cases the variables are left as they were.
 
+## Paying items from scripts (`KQConner::pay`)
+
+Study session A, 2026-11-20 (Batch 3).
+
+27. **Syntax** [traced]: `KQConner::pay <itemType> <quantity>` requires
+    exactly 3 words (otherwise prints usage and sets `$Console::Return` to
+    `0`).
+28. **Item lookup** [traced]: looks up `<itemType>` in `Invinfo.itl` by
+    name; if not found, tries **`INVITEM_<itemType>`** (so `silvercoins`,
+    `SilverCoins`, and `INVITEM_SilverCoins` all match the same item).
+    Looks up that item in Connor's inventory. If Connor is missing, has no
+    inventory, the type is unknown, or Connor does not carry that item, it
+    prints an error and sets **`$Console::Return` to `0`**.
+29. **Taking the quantity** [traced]: reads `<quantity>` as a whole number:
+    - **fewer than `<quantity>` carried**: changes nothing and sets
+      **`$Console::Return` to `0`**;
+    - **more than `<quantity>` carried**: subtracts `<quantity>` from the
+      stack's count, refreshes the bars, and sets **`$Console::Return` to
+      `1`**;
+    - **exact match (`count == quantity`)**: if applied (`userId ≠ −1`),
+      un-applies it first (rule 15); removes the item from Connor's
+      inventory without dropping it into the world; sends Connor the
+      item-removed notice (putting down a held item or updating armour
+      skin if applicable); refreshes the bars; and sets **`$Console::Return`
+      to `1`**.
+30. **Data** [data]: 34 shipped uses across four worlds — Daventry
+    `poorbox.cs` (1), Swamp `protree.cs` (11), Gnome shops
+    (`apothgnm.cs`, `armorgnm.cs`, `weapngnm.cs`,
+    `crystal`/`invis`/`invul`/`mushroom`/`strength`/`suntzu.cs`, 14), and
+    Barren (`bartendr.cs`, `dancer.cs`, `drunk.cs`, `tw_weird.cs`,
+    `witchdoc.cs`, 8).
+
 ## Connor's look for the armour he wears (traced 2026-11-01, Q184)
 
 1. **One body skin at a time.** `Connor.kq`'s `ConnerSkinList` (third
@@ -389,7 +421,11 @@ scripts.
 
 ## Do not reproduce
 
-- Nothing found yet.
+- **`KQConner::pay` with a negative quantity** (rule 29): in the
+  original, `quantity < current` subtracts `<quantity>`, so a negative
+  number would add items instead of failing. Treat `< 0` (and `0`,
+  unless already no-op) as invalid and return `0` without changing
+  Connor's inventory.
 
 ## How to check
 
@@ -424,6 +460,11 @@ item closes the gap in the strip (not checked with 8 or more items).
    [data, `bell.cs`]. **Checked by the user in the original
    (2026-10-24):** with the small axe drawn, the bell rings at each hit
    and the third starts the Lake Sword scene.
+7. **`KQConner::pay` (rules 27–30):** with 5 silver coins in inventory,
+   test `KQConner::pay silvercoins 10` (`$Console::Return == 0`, 5 left),
+   `KQConner::pay SilverCoins 2` (`$Console::Return == 1`, 3 left), and
+   `KQConner::pay INVITEM_SilverCoins 3` (`$Console::Return == 1`, coins
+   removed from inventory and UI updated).
 
 ## Open questions
 

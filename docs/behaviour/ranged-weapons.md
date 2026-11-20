@@ -525,13 +525,15 @@ the rock is in hand (`INVITEM_Rock` taken from the bar):
 - `dropItem` places the new rock **still**, with no throw (8f), so the
   dropped item never sets a trap off by itself.
 
-**8e. `Tile2` (Swamp)** (traced, Q186 f, partly): a rock click in
-`Tile2` does not switch to `ThrowRock`; the `Tile2` state starts its own
-throw (controls off, its own movement, the rock's projectile file) and
-stays in `Tile2`. This is what `fienfire.cs`'s "won't really change
-state" means. A script's `setState Connor ThrowRock` while in a Tile
-state is a change the Tile state refuses (`tile-puzzle.md`). The rest
-of `Tile2`'s throw belongs to the Swamp study.
+**8e. `Tile2` (Swamp)** (traced, Batch 3, `tile-puzzle.md` rules 35 and 37):
+a rock click in `Tile2` — whether clicking a `KQSwampTile` or anywhere
+else with `INVITEM_Rock` in hand — **and** a script calling
+`KQMonster::setState Connor ThrowRock` while in `Tile2` both run `Tile2`'s
+built-in rock throw (`handsOff 1`, `away` → `throw` with `Prrock.kq`,
+then restoring `handsOff 0` and Connor's saved projectile file) without
+leaving `Tile2`. This is why `fienfire.cs`'s comment says "won't really
+change state". (Only Dead City's `Tile` and Barren's `Tile3` refuse
+`setState Connor ThrowRock`.)
 
 **8f. The inventory** (traced, Q186 e): nothing is taken at the throw.
 `rockHit.cs`'s `KQMonster::dropItem Connor INVITEM_Rock <loc>` removes

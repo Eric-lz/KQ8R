@@ -396,9 +396,188 @@ below).
     (`terrain.md`) and `terAnimSwitch Blood1`–`Blood5`.
     The state does not set `DeadCity::Scales::Connor` itself.
 
+### The Swamp fiend-tile puzzle (Connor's `Tile2` state and `KQSwampTile`, traced 2026-11-20, Batch 3)
+
+Swamp's fiend room is a 6 × 7 field of stones and tree stumps
+(`KQSwampTile`) flanked by two doors (`fiendoor` on the west,
+`Lfswdoor` / `Rtswdoor` on the east) and six fire-shooting totems. Like
+Dead City's `Tile`, the scripts load the objects and switch Connor into
+`Tile2`; the `Tile2` state handles grid movement, throwing rocks from the
+puzzle, and the door exits, while `KQSwampTile` itself handles gas puffs,
+damage, and Reveal highlights.
+
+28. **Setting up (data):** `Swamp/newworld.cs` loads 42 `KQSwampTile`
+    objects named `tile<col><row>` (columns 0–5 at x = 50,000 + 2,000·col,
+    rows 0–6 at y = 92,600 + 2,000·row, on the drawn surface z = −2),
+    built from `gastrap1–3.kq` and `stump1–2.kq`. Twelve tiles
+    (`tile02`, `tile11`, `tile16`, `tile20`, `tile23`, `tile26`, `tile31`,
+    `tile32`, `tile34`, `tile35`, `tile45`, `tile54`) are assigned the
+    comment-only script `fiensafe.cs` (`KQObject::setScript`), which
+    marks them as safe; the remaining 30 have **no script** and act as
+    unsafe gas traps. Six totems (`totem.01`–`totem.06`, `totem.kq`) stand
+    along the west side (x = 44,727) and repeat `Cue 500` every 8 s while
+    both `Swamp::Tile::SwitchOn` (toggled by `traplvr.cs`, starts `true`)
+    and `Swamp::Tile::PowerOn` are true. Entry into `Tile2` comes from
+    `swdoor.cs` (east double doors unlocked with `INVITEM_hmhand`),
+    `fiendoor.cs` (west gate via `fienlevr.cs`), or the room's floor
+    traps `tiletrp1` / `tiletrp2` (`tiletrap.cs`).
+29. **The 10 × 7 grid (`Tile2`, state number 16,384, traced):** when
+    `Tile2` starts (and when rebuilt after loading a save), it looks up all
+    42 `tile<col><row>` objects (columns 0–5, rows 0–6) and writes their
+    positions into **columns 2–7** of a 10-column by 7-row grid. The outer
+    columns (0, 1, 8, 9) stay at (0, 0, 0) **except on row 3** (the middle
+    door row, y = 98,600):
+    - **west door approach (`fiendoor`)**: `(col 1, row 3)` =
+      `tile03.x − 2,000` (48,000) and `(col 0, row 3)` =
+      `tile03.x − 4,000` (46,000), keeping `tile03`'s y and z;
+    - **east door approach (`Rtswdoor`)**: `(col 8, row 3)` =
+      `tile53.x + 2,000` (62,000) and `(col 9, row 3)` =
+      `tile53.x + 4,000` (64,000), keeping `tile53`'s y and z.
+    Just like `Tile` (rule 2), the original does not check for missing
+    tiles (**do not reproduce**: skip a missing tile and log it).
+30. **Which spot Connor is on (traced):** the bounds use margin 1,000:
+    `minX = col0_row3.x − 1,000` (45,000),
+    `maxX = col9_row3.x + 1,000` (65,000),
+    `minY = tile00.y − 1,000` (91,600),
+    `maxY = tile56.y + 1,000` (105,600).
+    Inside (`minX < x ≤ maxX` and `minY < y ≤ maxY`):
+    `col = trunc((x − minX) / ((maxX − minX) × 0.1))` (0–9),
+    `row = trunc((y − minY) / ((maxY − minY) × 1/7))` (0–6), returning
+    `col + row × 10` (0–69). Outside: y < `minY` → 300 (south),
+    y > `maxY` → 400 (north), x < `minX` → 100 (west), x > `maxX` → 200
+    (east).
+31. **Entering and leaving `Tile2` (traced):** entering builds the grid
+    and sets the exit switch off (`tileExit 0`, rule 20). If a hand or
+    ranged weapon is drawn, Connor plays `away`, asks for empty hands
+    through the normal weapon-swap path (hitting `Tile2`'s refusal so he
+    speaks `"A weapon will not help me here."` — file 0, noun 0, verb 37,
+    condition 23 — as in `Tile` rule 7), and forces empty hands directly;
+    otherwise he plays `stop` and lights the tile ahead. While in `Tile2`,
+    leaving is allowed only when the exit switch is on (`tileExit 1`,
+    rule 21) **or when entering `Die` (state 8)** — unlike `Tile`, traps
+    and gas can kill Connor inside `Tile2`. Any weapon-swap request is
+    refused with the same 0/0/37/23 line. Unlike `Tile`, `Tile2` has
+    **no camera hold switch and no teleports**.
+32. **Keys, target choice, and forbidden edge moves (traced):** while
+    neither a jump nor a rock throw is under way, turn keys (`left` /
+    `right`) turn on the spot and update the lit tile; `walk` / `run`,
+    `back`, and the Jump key (`Insert`, forwarding forward/back like `Tile`
+    rule 8) pick a target spot. Leaning stays off. If Connor stands
+    outside the grid to the **west (100)** or **east (200)**, he plays
+    his ordinary `jump` movement without turning first. Inside the grid,
+    from `(col, row)`, the 8 neighbours (clamped to `0–9`, `0–6`) are
+    scored by angular distance to his facing (forward) or opposite facing
+    (back), with **four edge blocks** so he never jumps into the empty
+    corners off columns 0, 1, 8, or 9:
+    - from column 2 (`tile0*`), stepping west into column 1 is allowed
+      **only onto row 3** (the `fiendoor` spot);
+    - from column 7 (`tile5*`), stepping east into column 8 is allowed
+      **only onto row 3** (the `Rtswdoor` spot);
+    - from column 1 (west door spot), leaving row 3 is allowed **only
+      eastward** (into column 2, e.g. `tile02` or `tile04`);
+    - from column 8 (east door spot), leaving row 3 is allowed **only
+      westward** (into column 7, e.g. `tile52` or `tile54`).
+33. **Lit stone and jump physics (traced):** the forward target tile (or
+    the back-jump target when a back jump starts) is drawn at full
+    brightness (`tile<col−2><row>`'s unlit switch) whenever its column is
+    in **2–7**, turning off the previous one. When the turn-to-target ends,
+    **gravity and keep-on-ground go off** (step up/down stay at 325) and he
+    plays `tilejump1` (straight forward), `tilejump2` (diagonal forward),
+    `tilebackjump` (straight back), or `tilebackjump2` (diagonal back).
+    When the jump movement finishes, gravity and keep-on-ground go back on,
+    he plays `stop`, the highlight refreshes, and his landing cell is
+    checked.
+34. **Door exits on landing (traced + data):** after every jump lands:
+    - **cells 30 or 31** (column 0 or 1, row 3 — west side): queues
+      **`Cue 1`** (extra 0) to **`fiendoor`** (`fiendoor.cs` Cue 1 runs
+      `tileExit 1`, clears `PowerOn` and `SwitchOn`, and walks him out
+      through the west gate);
+    - **cells 38 or 39** (column 8 or 9, row 3 — east side): queues an
+      empty-handed click (`ConnorAction`, `"do"`) to **`Rtswdoor`**
+      (`swdoor.cs` opens both east doors, runs `tileExit 1`, and walks him
+      back outside).
+    Landing anywhere else leaves him standing in `Tile2`.
+35. **Throwing a rock inside `Tile2` (traced):** Connor can toss rocks
+    onto tiles to test for gas without leaving `Tile2`. Started from any of
+    three paths while in `Tile2`: clicking a `KQSwampTile` with
+    `INVITEM_Rock` in hand, clicking elsewhere with a rock in hand
+    (`ranged-weapons.md` 8e), or a script calling `KQMonster::setState
+    Connor ThrowRock` (which detects `Tile2` and calls this sequence
+    directly without changing state):
+    1. switches `handsOff 1` on (cursor hidden as normal, same as console
+       `handsOff 1`) and marks a throw pending and the state busy;
+    2. plays `away`;
+    3. remembers Connor's current projectile file name and temporarily sets
+       it to `INVITEM_Rock`'s (`Prrock.kq`);
+    4. when `away` finishes while `handsOff` and throw-pending are on,
+       clears throw-pending and plays `throw` (`c_rktoss.kqs`, whose `do`
+       cue launches the rock as usual);
+    5. when `throw` finishes, clears busy, turns `handsOff 0` back off, and
+       restores Connor's remembered projectile file name.
+    (`Prrock.kq` runs `rockHit.cs`, dropping a rock item where it lands.)
+36. **`KQSwampTile` keys and defaults (traced + data):** an object
+    subclass with two extra `.kq` keys: `heightNum` (whole number, default
+    `0`; data: `gastrap2` = 1, `gastrap1` = 2, `gastrap3` = 3, `stump1` =
+    12, `stump2` = 13) and `damFactor` (decimal, default **0.48**; no
+    shipped `.kq` file sets it). All five template files set
+    `colliderType=16417` (which includes bit `0x4000`, immune to
+    projectiles), `colliderMask=5`, `acceptsInventory=INVITEM_Rock`, and
+    `groupsAlways=2054` (for Reveal).
+37. **Clicking a `KQSwampTile` (traced):** turns Connor toward the tile; if
+    clicked with `INVITEM_Rock` in hand, triggers `Tile2`'s built-in rock
+    throw (rule 35) when in `Tile2`, or switches to `ThrowRock`
+    (`ranged-weapons.md` section 8) otherwise.
+38. **Reveal potion on `KQSwampTile` (traced):** when Reveal turns on
+    (`potions.md` rule 31), **only tiles that have a script** (the 12 safe
+    tiles with `fiensafe.cs`) swap textures:
+    - `heightNum` 1, 2, or 3 (gas traps): `gastrap.bmp` → `I_gastrp.bmp`
+      and `wtower5.bmp` → `I_wtowr7.bmp`;
+    - `heightNum` 12 or 13 (stumps): `trapring.bmp` → `I_trprng.bmp` and
+      `trunk.bmp` → `I_trunk.bmp`.
+    When Reveal turns off, those original textures are restored. Unsafe
+    tiles do not glow.
+39. **Rock hit (0-damage projectile) on an unsafe tile (traced):** because
+    every `KQSwampTile` has collision bit `0x4000` (projectile-immune), a
+    thrown rock delivers a 0-damage hit to the tile. When damage is 0, both
+    `Swamp::Tile::PowerOn` and `Swamp::Tile::SwitchOn` are non-zero,
+    **and the tile has no script** (unsafe), it spawns a `KQAnimOnce`
+    playing **`swmpgas.kqs`** (auto-deleted when done, speed 1,
+    non-repeating) at the tile's position raised by a `heightNum` offset:
+    - `heightNum` 1 (`gastrap2`): **+750**;
+    - `heightNum` 2 (`gastrap1`) or 12 (`stump1`): **+1,000**;
+    - `heightNum` 3 (`gastrap3`) or 13 (`stump2`): **+1,250**.
+    Safe tiles (with `fiensafe.cs`) puff nothing.
+40. **Connor colliding with an unsafe tile (traced):** when Connor touches
+    a `KQSwampTile`, if **more than 2.0 s** have passed since the tile's
+    last collision time, both `Swamp::Tile::PowerOn` and
+    `Swamp::Tile::SwitchOn` are non-zero, **and the tile has no script**:
+    1. spawns `swmpgas.kqs` at the same `heightNum` z offset (rule 39);
+    2. subtracts **`trunc(−Connor.level × 10 × damFactor)`** from Connor's
+       health directly via a stats event (with default `damFactor = 0.48`,
+       that is −4 at level 1, −9 at level 2, −24 at level 5 — about 48% of
+       max health, bypassing protection);
+    3. also sends Connor a **1-damage Fire (kind 2)** attack event
+       (causing his fire reaction/sound, or `firedie` if that kills him).
+    On **every** collision with the tile (whether gas fired or not), the
+    tile updates its last-collision time to now — so staying on an unsafe
+    tile resets the 2.0 s cooldown each frame and prevents repeated blasts
+    until Connor leaves the tile for more than 2 s and returns.
+41. **Unused legacy scripts (`fienfire.cs`, `fienfir2.cs`, `fienfir3.cs`,
+    data):** these three scripts sit in `MASK/swamp/kq/` (using
+    `loadAnim swmpgas.kqs` and `KQConner::setRelDamage .2`), but no
+    shipped `.kq` or `.cs` assigns them. `KQSwampTile` replaced them in
+    code (rules 39–40, raising the health loss from 0.2 to `damFactor`
+    0.48).
+
 ## Numbers and units
 
 - Stone spacing 2,000 (x and y), rise 500 per row; spot margin 1,000.
+- Swamp tiles (`Tile2`): 6 × 7 tiles in columns 2–7 of a 10 × 7 grid
+  (spacing 2,000, z −2 on surface); outer approach cells on row 3 (`y =
+  98,600`) at x = 46,000 / 48,000 (west) and 62,000 / 64,000 (east).
+- `KQSwampTile`: `damFactor` default 0.48; collision cooldown 2.0 s; gas
+  offsets +750 (`heightNum` 1), +1,000 (2, 12), +1,250 (3, 13); extra
+  Fire hit 1 damage (kind 2).
 - Jump travel 2,000 / ≈ 2,840 (straight / diagonal); movements 2.0,
   2.33, 2.8, 2.8 s; `teleportdown` 21 frames, `teleportup` 22 frames,
   1.4 s each (`Conner.anm` movements 51–56).
@@ -411,9 +590,15 @@ below).
 - `dhalltrp.cs`, `ddoor4.cs`, `tileshow.cs`, `tileshow.kq`,
   `tile_<x>.kq`, `notile.kq`, `notile2.kq`, `azrieltp.cs`,
   `worldvar.cs` (`DeadCity::DeadHall::*`, `DeadCity::Azriel::TrapOn`).
+- `Swamp`: `newworld.cs` (`tile00`–`tile56`, `fiensafe.cs` assignments),
+  `gastrap1–3.kq`, `stump1–2.kq`, `fiendoor.{kq,cs}`, `fienlevr.{kq,cs}`,
+  `lfswdoor.kq`, `rtswdoor.kq`, `swdoor.cs`, `tiletrp1–2.kq`,
+  `tiletrap.cs`, `totem.{kq,cs}`, `traplvr.{kq,cs}`, `Prrock.kq`,
+  `rockHit.cs`, `swmpgas.kqs`, unused legacy `fienfir*.cs`.
 - `GAME/Kq/Conner.anm` movements `tilejump1`, `tilejump2`,
   `tilebackjump`, `tilebackjump2`, `teleportdown`, `teleportup`,
-  `left`, `right`, `stop`, `away`; their `.kqs` in `GAME/Common`.
+  `left`, `right`, `stop`, `away`, `throw` (`c_rktoss.kqs`), `jump`;
+  their `.kqs` in `GAME/Common`.
 - `deadcity/resource/tile*.kqs`, `notile*.kqs` (stone bobbing).
 - Dead City `2000.msg` noun 2 (conditions 3 and 133).
 
@@ -443,15 +628,16 @@ below).
   buildings (data, our log).
 - From the edge columns the neighbour search does not wrap.
 - Jumping north off row 7 (row 8 spot) counts as wrong.
-- Because of rule 20 the state also refuses the Fall state: Connor
-  cannot fall while in it.
+- Because of rule 20 (`Tile`) the state also refuses the Fall state:
+  Connor cannot fall while in it. `Tile2` refuses every state except `Die`
+  when the exit switch is off (rule 31).
 - Rule 15's "once per visit" assumes the state is made afresh each
   time Connor enters it (as the other Connor states are; not checked
   for this one).
 
 ## Do not reproduce
 
-- The missing-stone crash (rule 2).
+- The missing-stone crash (rule 2, rule 29).
 - **`Scales` exact-tie soft lock** (rule 25): comparing distance to the
   three floor headings uses strict `<` from a default index of `0`
   (none), so if Connor's heading is mathematically equidistant between two
@@ -465,6 +651,22 @@ below).
 ## How to check
 
 - Log on entering `Tile`: the 64 stones found, Connor's spot (rule 6).
+- **In `Tile2` / `KQSwampTile` (Swamp, B):**
+  - Open `Rtswdoor` with `INVITEM_hmhand` or walk onto `tiletrp1`; log
+    the 10 × 7 grid, cells `30/31` and `38/39` (x = 46k/48k and 62k/64k),
+    and the refusal to step into empty outer corner cells (rule 32).
+  - Drink a Reveal potion: verify only the 12 `fiensafe.cs` tiles swap to
+    `I_gastrp.bmp`/`I_wtowr7.bmp`/`I_trprng.bmp`/`I_trunk.bmp`.
+  - Throw `INVITEM_Rock` while standing inside `Tile2`: confirm `handsOff`
+    toggles, `away` -> `throw` plays with `Prrock.kq` without leaving
+    `Tile2`, safe tiles do not puff, and unsafe tiles spawn `swmpgas.kqs` at
+    +750 / +1,000 / +1,250.
+  - Step onto an unsafe tile with `PowerOn` and `SwitchOn` true: confirm
+    health drops by `trunc(level × 10 × 0.48)` plus 1 Fire attack event,
+    `swmpgas.kqs` spawns, and staying on the tile does not repeat damage.
+  - Jump onto column 0/1 row 3 (`fiendoor` Cue 1) and column 8/9 row 3
+    (`Rtswdoor` `ConnorAction` `"do"`): confirm `tileExit 1` runs and
+    Connor exits cleanly.
 - **In `Scales`:** log each of the 6 camera cuts (position, `(rx, ry,
   rz)`, follow on/off); verify pressing forward right after `portrap3.cs`
   (heading `1.57`) chooses the north dish (`2.207`), holding forward
@@ -497,12 +699,10 @@ below).
    answered 2026-11-01 (Q189), rule 26a.
 4. ~~The camera flight speed after a teleport~~: answered 2026-10-30,
    rule 13 ("The camera flight").
-5. **Tile2 (Swamp) and Tile3 (Barren) are separate states**, not the
-   same one with other numbers (traced, briefly): they share the stone
-   jump movements (`tilejump1/2`, `tilebackjump/2`), `stop` and `away`,
-   and also use `jump`, `out` (and Tile2 `throw`), but have no
-   teleports and their own puzzle rules (Swamp: `KQSwampTile`,
-   `Swamp::Tile::SwitchOn` / `PowerOn`; Barren: `KQLavaTile`,
-   `lvtile*.bmp`, `Barren::Tile::Complete`, `tiletpn2.cs` /
-   `tiletps2.cs`). The jumping and lit-stone rules (8–11) are probably
-   shared; to be studied with the Swamp and Barren batches.
+5. ~~**Tile2 (Swamp)**~~ and **Tile3 (Barren) are separate states**, not
+   the same one with other numbers (`Tile2` answered 2026-11-20, Batch 3,
+   rules 28–41; `Tile3` still open): `Tile3` shares the stone jump
+   movements (`tilejump1/2`, `tilebackjump/2`), `stop`, `away`, `jump`,
+   and `out`, has no teleports, and uses Barren's own puzzle rules
+   (`KQLavaTile`, `lvtile*.bmp`, `Barren::Tile::Complete`, `tiletpn2.cs`
+   / `tiletps2.cs`); to be studied with the Barren batch.

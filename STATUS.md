@@ -8,6 +8,35 @@ B built Dead City's river controls (U-10) and weeper draining bolts
 
 ## Where we are (2026-11-20)
 
+- **2026-11-20 (A): Batch 3 (Swamp) studied** (traced in `Mask.exe` via
+  Ghidra and checked against `MASK/` data; **not checked by hand in the
+  running original**; no Rust code written):
+  - **`Tile2` & `KQSwampTile` (`tile-puzzle.md` rules 28–41, `ranged-weapons.md`
+    8e):** 6 × 7 tiles in columns 2–7 of a 10 × 7 grid with row-3 door
+    approaches (`fiendoor` `Cue 1` on cells `30/31`, `Rtswdoor`
+    `ConnorAction` `"do"` on cells `38/39`), edge-block jump rules,
+    allowing `Die` transitions, built-in `Tile2` rock throw (`away` →
+    `throw` with `Prrock.kq`), Reveal texture swaps only on the 12
+    `fiensafe.cs` tiles, `0`-damage rock puff (`+750`/`+1,000`/`+1,250`),
+    2.0 s cooldown, `damFactor = 0.48` health loss + 1 Fire hit, and
+    unused legacy `fienfire*.cs`.
+  - **Mandragore (`fighting.md` 7b):** `KQMandragorTree` and
+    `KQMandragorRoot`, `0x4042` projectile immunity (`Special laugh`),
+    roots locked to tree's `±600, −1,000` shoulders, `tooClose 700` →
+    `repelDist 800` + `Special reactback`, root sink (`rootDownCount` +
+    tree `noTurn` ON) / rebirth (`5 s` L / `4 s` R), and permanent root
+    death when the parent tree enters `Die`; notes unused `tooClose`/
+    `repelDist` on `mandrg.kq`.
+  - **Swamp commands:** `KQConner::pay` (`inventory.md` 27–30, `INVITEM_`
+    fallback, 34 uses), `KQConner::setRelDamage` (`$CurRelDamage` /
+    `$CurRelHealth`, `script-commands.md` 12a), `KQMonster::preSpecial`
+    (interruptable + `"Stop"`, `script-commands.md` 12b), `setFirstPerson`
+    (global `SetFirstPerson::WasThirdPerson`, `camera.md` 8),
+    `KQConner::addImmunity` + saved/carried `.kq` `immunities` mask
+    (`water.md` 5), and `beep` (`Swamp/boiloil.cs:4` unused typo).
+  - **Next:** Build Session (B) for Batch 1 + `Q197`/`Q198` and/or Batch 3
+    (Swamp), or Study Session (A) for Batch 4 (Gnome).
+
 - **2026-11-20 (A): Batch 1 (Shared / Everywhere) + `Q197`–`Q198` studied**
   (traced in `Mask.exe` via Ghidra and checked against `MASK/` data;
   **not checked by hand in the running original**; no Rust code written):

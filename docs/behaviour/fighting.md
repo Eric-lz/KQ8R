@@ -720,6 +720,114 @@ scripted fall, not the ordinary `die`:
   Cue 201 after a greeting.
 - The chain mail it drops when killed gets the script `chainmal.cs`.
 
+### 7b. The Mandragore (`KQMandragorTree` and `KQMandragorRoot`, traced 2026-11-20, Batch 3)
+
+Ten Mandragore trios appear in Swamp (`mand3`, `mand4`, `mand5`, `mand7`,
+`mand10`–`mand16` in `Swamp/monsters.kq`). Each trio spawns at the same
+`(x, y, −2)` ground spot with the same team name (`mand<N>`): one trunk
+(`mand<N>t`, `KQMandragorTree`, `mandrg.kq`, `mandrg.anm`) and two roots
+(`mand<N>l` / `mand<N>r`, `KQMandragorRoot`, `mandrtl.kq` /
+`mandrtr.kq`, `mandroot.anm`).
+
+**Stats and shapes (`Monstats.mtl`, `BOUNDS.KQ`, `.kq`):**
+- **`mandragorTree`** (`mandrg.kq`): 300 health, 25 damage, 15
+  protection, 20,000 experience, reach 2,000, attack delay 1 s, alarm
+  radius 4,000 in `Monstats.mtl` overridden by 15,000 in `mandrg.kq`,
+  guard (chase radius 0), corpse `deadDts=mt_dead.kqs`, box
+  `−450..450, −450..450, 0..1,960`.
+- **`mandragorRootL` / `mandragorRootR`** (`mandrtl.kq` / `mandrtr.kq`):
+  250 health, 15 damage, 30 protection, **0 experience**, reach 2,000,
+  attack delay 1 s (`RootL`) / 1.2 s (`RootR`), alarm radius 3,000
+  overridden by 15,000 in `.kq`, guard, box
+  `−360..360, −450..450, 0..2,140`.
+
+**Projectile immunity and laughing:**
+- Both `KQMandragorTree` and `KQMandragorRoot` start with collision type
+  **0x4042** (ordinary monster `0x42` plus the `ProjImmune` bit
+  `0x4000`), so arrows and crossbow bolts deal 0 damage.
+- Whenever the **tree** receives a 0-damage hit, it plays **`Special
+  laugh`** (`Mt_laugh.KQS` + `Mt_laugh.aud`).
+- Whenever a **root** receives a 0-damage hit and still has a parent tree,
+  it sends its **parent tree** to **`Special laugh`** (without counting
+  as hitting the tree itself).
+
+**`KQMandragorTree` behaviour:**
+- Extra `.kq` keys: `rootDownCount` (whole number, default `0`, saved) and
+  `maxRoots` (whole number, default `2`, saved). Note: `mandrg.kq` sets
+  `tooClose=1600` and `repelDist=1800`, but `KQMandragorTree` **never
+  reads** those keys (only `KQMandragorRoot` reads them).
+- **Entering the world:** switches gravity off.
+- **Alarming:** when alarmed with no target yet, ignores `Unborn`/active
+  flags and `goHome`, takes Connor as its target immediately with **no
+  0–1 s delay**, and (if game time > 0) alerts its team (`mand<N>`
+  roots) without waiting for a sight check. If hit, sets hit count 2 and
+  asks for `run` with chase timer `now + 10 s`; otherwise `now + 5 s`.
+  While active and within `alarmRadius`, it refreshes the team's
+  last-seen Connor position.
+- **Dying:** when its death movement ends, it awards 20,000 experience,
+  **always** spawns its `deadDts` corpse (`mt_dead.kqs`) regardless of
+  whether the killing blow was Normal, Projectile, Fire, or Ice (keeping
+  the corpse's default collision instead of making it non-solid), calls
+  its script's `Die`, and removes itself.
+
+**`KQMandragorRoot` behaviour:**
+- Extra `.kq` keys: `offsetX`, `offsetY`, `offsetZ` (defaults `0, 0, 0`;
+  data: `RootL` `−600, −1,000, 0`, `RootR` `+600, −1,000, 0`),
+  `rebirthDelay` (default 10 s; data: `RootL` 5 s, `RootR` 4 s),
+  `tooClose` (default 1,000; data: 700), `repelDist` (default 1,500;
+  data: 800), plus save-only `origHealth` (captured from starting health
+  on entering the world) and `origBirthDelay` (saved/loaded only, never
+  used).
+- **Linking and following the tree:** on entering the world, each root
+  copies its own object name and replaces the **last character** (`'l'`
+  or `'r'`) with **`'t'`** to find its parent `KQMandragorTree` (for
+  example `mand11l` → `mand11t`). It switches gravity off, subscribes to
+  its parent tree's movement notices, and adds itself to the tree's
+  state-change notify list. Both at world entry and **every time the
+  parent tree moves or turns**, the root snaps to `treePos +
+  treeRotation × offset`, updates its home position there, and runs the
+  repel check below. (Because the offsets are `(±600, −1,000, 0)` and a
+  model's `−Y` is forward, the two roots stay locked 1,000 units in front
+  of the tree on its left and right shoulders whenever the tree turns.)
+- **Repel check (knocking Connor back):** runs whenever the root is in
+  `Wait`, whenever the parent tree moves/turns, and at the start of root
+  `Birth`. If the root has a parent tree, Connor is **not** in a
+  `Special` state, and the **2D horizontal distance** between the root's
+  position and Connor's position is strictly less than `tooClose` (700):
+  1. computes the horizontal direction from Connor toward the parent tree,
+     then pushes Connor from the root's XY outward **away from the tree**
+     by `repelDist` (800), keeping Connor's current z;
+  2. turns Connor's heading to face back toward the tree (`yaw + 3.14`);
+  3. puts Connor into **`Special reactback`** (`c_rctbk.kqs` +
+     `conrowbk.aud`).
+- **Root death and rebirth (creating an opening to hit the tree):** as
+  long as its parent tree is alive, a root entering `Die` uses a custom
+  sinking/regrowing state instead of vanishing:
+  1. **Entering `Die`:** health becomes `0`, collision type and mask are
+     zeroed (no longer solid), gravity and keep-on-ground go off, parent
+     tree's `rootDownCount` increases by 1 (clamped to `maxRoots`), and
+     parent tree's **`noTurn` flag is turned ON** — so **the tree stops
+     turning toward Connor** while at least one root is down, letting him
+     walk around the surviving root to strike the trunk! The root plays
+     `Die` (`r_sink.kqs` + `rtsink.aud`); hits are ignored in this state.
+  2. **Underground wait:** when `Die` ends, the root waits `rebirthDelay`
+     seconds (`5 s` left, `4 s` right).
+  3. **Rebirth:** when the timer passes, health resets to `origHealth`,
+     the repel check runs (knocking Connor back if he is standing on top
+     of the root's spot), and `Birth` (`r_appr.kqs` + `rtappear.aud`)
+     plays.
+  4. **Resurfaced:** when `Birth` ends, collision returns (`colliderType =
+     0x4042`, `colliderMask = 0x201f`). If the parent tree still exists,
+     `rootDownCount` decreases by 1 (when it reaches 0, parent tree's
+     **`noTurn` turns OFF**, so the tree turns to track Connor again) and
+     the root returns to `Wait`; if the parent tree has already died, the
+     root enters `Die` permanently (below).
+- **When the parent tree dies:** the tree's transition to `Die (8)`
+  notifies both roots, which clear their parent-tree link and enter
+  `Die (8)`. With no parent link left, each root uses the **ordinary
+  `Die` state**, sinking (`r_sink.kqs`) and removing itself permanently (0
+  experience).
+
 ### 8. Ranged characters (`doMode=1`)
 
 34. **Who is ranged** (traced and data): a character that holds a
@@ -841,6 +949,8 @@ scripted fall, not the ordinary `die`:
 | bolt (Daventry `Prscbolt.kq`) | speed 8,000, `maxDistance` 18,000 | data |
 | big swing | × 0.75 to 4 (`Connor.kq`) | traced, data |
 | first-kill tip | 1.5 s after | traced |
+| Mandragore (`mand<N>t/l/r`) | Tree 300 HP / 25 dmg / 15 prot / 20,000 XP; Roots 250 HP / 15 dmg / 30 prot / 0 XP; both `0x4042` (`ProjImmune`) | traced, data |
+| Mandragore roots | offset `(±600, −1,000, 0)`, repel `< 700` → `+800` + `reactback`, rebirth `5 s` (L) / `4 s` (R) | traced, data |
 
 ## Data used
 
@@ -854,6 +964,10 @@ scripted fall, not the ordinary `die`:
 - Character `.kq`: `deadDts`, `idedKqs`, `projdKqs`, `ouchSound`,
   `normalReactPercent`, `specialReactAnim`, `specialReactPercent`,
   `likelyToFlee`, `mustFlee`, `Surprise…`, `script` (gets `Die`).
+- Swamp Mandragore: `mandrg.kq` (`rootDownCount`, `maxRoots`),
+  `mandrtl.kq` / `mandrtr.kq` (`offsetX/Y/Z`, `rebirthDelay`, `tooClose`,
+  `repelDist`), `mandrg.anm` (`Mt_laugh.KQS`, `Mt_laugh.aud`,
+  `mt_dead.kqs`), `mandroot.anm` (`r_sink.kqs`, `r_appr.kqs`).
 - `.anm`: `attack` (with `interruptable` and `Do` cues), `react`, `die`,
   `projdie`, `firedie`, `icedie`; Connor's `attack`, `attackb`,
   `attack2`, `react`, `dropweapon`.
@@ -926,11 +1040,29 @@ scripted fall, not the ordinary `die`:
   Whether any of them drops a weapon laid by rule 31a: not checked. Do
   instead: leave the dying character out of the test and take the
   nearest of the others.
+- **Unused keys in Mandragore data** (section 7b): `mandrg.kq` lists
+  `tooClose=1600` and `repelDist=1800` (never read by `KQMandragorTree`),
+  and `KQMandragorRoot` loads/saves `origBirthDelay` without ever using
+  it. Ignore all three.
 - Keep the rest, including the asymmetric rolls (25–100 % on Connor,
   75–125 % on characters), the first attack being due at once, and the
   1.25 × reach against a Connor walking backward.
 
 ## How to check
+
+- **Swamp Mandragore (`mand3t/l/r`, B):**
+  - Shoot a bolt/arrow at a root or tree: verify 0 damage and the tree
+    plays `laugh`.
+  - Walk within 700 units horizontally of a standing root: verify Connor is
+    moved to `repelDist` 800 away from the tree facing back toward it and
+    plays `Special reactback`.
+  - Kill one root: verify `r_sink.kqs` plays, the root becomes non-solid,
+    the tree stops turning (`noTurn` on), and after `5 s` (L) / `4 s` (R)
+    the root plays `r_appr.kqs` back to full `origHealth` (`250`) and
+    restores turning when both roots are back.
+  - Kill the tree while a root is alive or regenerating: verify both
+    roots clear their tree link, sink permanently (0 XP), and the tree
+    awards 20,000 XP and leaves `mt_dead.kqs` (even from Fire/Ice).
 
 **Our logs (B):** per attack: who, distance, angle off its heading,
 Connor's back key, attack time before / after, the movement started; per

@@ -1,21 +1,26 @@
-# Script language gaps and shared commands (Batch 1)
+# Script language gaps and shared commands (Batch 1 & Batch 3)
 
 Study session A, 2026-11-20. Sources: `Mask.exe` (studied in Ghidra and
 described here in our own words) and the `.cs` scripts under `MASK/`.
-Covers Batch 1 ("Shared / Everywhere") items from `docs/SCRIPT-COVERAGE.md`
-not placed in a subsystem note.
+Covers Batch 1 ("Shared / Everywhere") and Batch 3 ("Swamp") command items
+from `docs/SCRIPT-COVERAGE.md` not placed in a subsystem note.
 
-Related notes for other Batch 1 items:
-- Camera shake (`KQCamera::shake`): `camera.md` ("Shake and cutscene
-  cameras").
-- Proximity haze (`KQHazer`), `newSky`, `resetHazeColor`: `object-lighting.md`
-  (rules 23a–23e, 23, 31).
-- `doPopup`, `stopHelp`, `notStartingHelp`, `KQGame::selectScreen`, `blackOut`,
-  `loadPalette`: `interface.md` (rules 1a–1f, 3a, 53–59).
-- `allowShadows`: `characters.md` (rule 36).
-- World `Load`, `setLoadProgress`, `activatePersistMgr`: `world-change.md`
-  (rules 8, 24).
-- `KQEnvInfo`: `water.md`. `KQCamMover`: `camera.md`.
+Related notes for other Batch 1 & Batch 3 items:
+- **Batch 1:** Camera shake (`KQCamera::shake`): `camera.md` ("Shake and
+  cutscene cameras"); Proximity haze (`KQHazer`), `newSky`,
+  `resetHazeColor`: `object-lighting.md` (rules 23a–23e, 23, 31);
+  `doPopup`, `stopHelp`, `notStartingHelp`, `KQGame::selectScreen`,
+  `blackOut`, `loadPalette`: `interface.md` (rules 1a–1f, 3a, 53–59);
+  `allowShadows`: `characters.md` (rule 36); World `Load`,
+  `setLoadProgress`, `activatePersistMgr`: `world-change.md` (rules 8,
+  24); `KQEnvInfo`: `water.md`; `KQCamMover`: `camera.md`.
+- **Batch 3 (Swamp):** Swamp `Tile2` state, `KQSwampTile`, `fienfire*.cs`,
+  and `Tile2` rock throwing: `tile-puzzle.md` (rules 28–41) and
+  `ranged-weapons.md` (section 8e); Mandragore (`KQMandragorTree`,
+  `KQMandragorRoot`): `fighting.md` (section 7b); `setFirstPerson`:
+  `camera.md` (rule 8); `KQConner::pay`: `inventory.md` (rules 27–30);
+  `KQConner::addImmunity` and `.kq` `immunities`: `water.md` ("Liquid
+  damage" rule 5).
 
 ## Purpose
 
@@ -60,6 +65,11 @@ hints with no visible gameplay effect.
      is dying and about to be removed).
    - `Gnome/emptyloc.cs:10` calls `cls`: no built-in command or `cls.cs`
      exists; sets `$Console::Return = 1` and does nothing.
+   - `Swamp/boiloil.cs:4` calls `beep`: no built-in command or `beep.cs`
+     exists (`Mask.exe` has no `"beep"` string and never calls a beep
+     routine), so it sets `$Console::Return = 1` and does nothing. In
+     addition, `boiloil.kq` is commented out in `Swamp/newworld.cs` and has
+     no `script=` key anyway.
 6. **`Preload` in `IceWorld/icelord.cs`:** `Mask.exe` never sends a `Preload`
    event. That branch is invoked directly by Ice World scripts (`icelord.cs`,
    `lucreto.cs`, `sentry.cs` running `icelord.cs Icelord Preload`) to run
@@ -132,6 +142,31 @@ hints with no visible gameplay effect.
     (`Daventry/ax.cs`: `mouseAction 0 0 480 0` twice, `click = 0`, sliding the
     top bar away during the axe cutscene; plus a commented-out line in
     `wizard.cs`). See "Do not reproduce".
+12a. **`KQConner::setRelDamage <fraction>` (traced 2026-11-20, Batch 3):**
+    requires exactly 2 words (otherwise prints usage and returns `0`). Reads
+    Connor's current level (`maximum health = level × 10`), parses
+    `<fraction>` (`0.0` to `1.0`) as a decimal, and computes
+    `d = trunc(−level × 10 × fraction)` (truncated toward zero). Sets two
+    script variables:
+    - **`$CurRelDamage`** = `d` (negative whole number passed to
+      `KQStatsChangeRequestEvent`, e.g. `−2` at level 1 for `0.2`, `−5` for
+      `0.5`);
+    - **`$CurRelHealth`** = `−d` (positive whole number passed as the cue
+      parameter to arrow shooters in `Swamp/arwtrap1–3.cs`).
+    Leaves `$Console::Return` at `0`. Data: 8 active uses — Swamp
+    `arwtrap1–3.cs` (`0.5`), legacy `fienfire/2/3.cs` (`.2`), Gnome
+    `rollside.cs` (`0.2`), Barren `witchdoc.cs` (`1.0`).
+12b. **`KQMonster::preSpecial <monsterName>` (traced 2026-11-20, Batch 3):**
+    requires exactly 2 words (otherwise prints usage; unknown character
+    prints `can't find monster`). Finds `<monsterName>`, turns ON its
+    currently playing animation's **can-be-cut-short (interruptable)**
+    flag, and sets its cached wanted movement to `"Stop"`. Scripts run it
+    just before `KQMonster::setState <who> Special ...` so a
+    non-interruptable movement in progress does not block or delay the
+    `Special` animation. Leaves `$Console::Return` at `0`. Data: 8 uses —
+    Swamp `swhnchmn.cs` (`Connor`), Gnome `armorgnm.cs`, `brikwall.cs`,
+    `gnometlk.cs`, `weapngnm.cs`, Barren `chest1.cs`, `symbol.cs`, Ice World
+    `grifnymp.cs`.
 
 ### Loading, cache, timing, and persistence hints
 
@@ -158,13 +193,17 @@ hints with no visible gameplay effect.
 | `setcat` max joined length | 512 bytes | traced |
 | `stopHelp` mask | 7 bits (`0x7f`) | traced |
 | `loadAnim` shipped uses | 20 scripts | data |
+| `KQConner::setRelDamage` shipped uses | 8 scripts (`arwtrap1–3.cs` 0.5, `fienfir*.cs` .2, `rollside.cs` 0.2, `witchdoc.cs` 1.0) | data |
+| `KQMonster::preSpecial` shipped uses | 8 scripts | data |
 
 ## Data used
 
 - `MASK/Snowexit/kq/worldinv.cs` (`;` lines), `MASK/GAME/Kq/getloc.cs`,
   `MASK/DeadCity/kq/skelking.cs`, `MASK/Gnome/kq/emptyloc.cs`.
-- `MASK/IceWorld/kq/{icelord,lucreto,sentry}.cs` (`Preload`).
-- `MASK/Barren/kq/{dockup,gsetup}.cs` (`setcat`).
+- `MASK/swamp/kq/{boiloil,arwtrap1,arwtrap2,arwtrap3,fienfire,fienfir2,fienfir3,swhnchmn}.cs`.
+- `MASK/IceWorld/kq/{icelord,lucreto,sentry,grifnymp}.cs` (`Preload`, `preSpecial`).
+- `MASK/Barren/kq/{dockup,gsetup,witchdoc,chest1,symbol}.cs` (`setcat`, `setRelDamage`, `preSpecial`).
+- `MASK/Gnome/kq/{rollside,armorgnm,brikwall,gnometlk,weapngnm}.cs`.
 - `MASK/daventry/kq/{drawings,girl,horsie,ax}.cs`,
   `MASK/temple2/kq/cauldtp.cs` (`getConnorFlag`, `mouseAction`).
 - `MASK/swamp/kq/fienfir*.cs`, `MASK/temple4/kq/vortrap.cs`,
@@ -203,9 +242,15 @@ hints with no visible gameplay effect.
     spawns, plays `swmpgas.kqs` once, fires `Die`, and deletes itself.
   - Set `MetGirlInDC` via `setConnorFlag` and confirm `getConnorFlag
     metgirldc` sets `$Console::Return = 1` (case-insensitive).
+  - Run `KQConner::setRelDamage 0.5` at level 1 and check `$CurRelDamage ==
+    -5` and `$CurRelHealth == 5`; at level 2 (`0.2` → `-4` / `4`).
+  - Run `KQMonster::preSpecial Connor` while Connor plays a non-interruptable
+    movement, then `KQMonster::setState Connor Special ...`: confirm the
+    `Special` movement starts immediately and cached movement resets to
+    `"Stop"`.
 
 ## Open questions
 
-- None for Batch 1 items; `KQGame::letCatchUp` exact delta clamping details
-  outside loading pauses are unneeded as long as our fixed-timestep loop
-  already caps large frame gaps cleanly.
+- None for Batch 1 or Batch 3 command items; `KQGame::letCatchUp` exact
+  delta clamping details outside loading pauses are unneeded as long as our
+  fixed-timestep loop already caps large frame gaps cleanly.

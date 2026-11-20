@@ -221,10 +221,20 @@ game works out a damage number for the square's flags:
    always-groups bit 0x1000) counts as standing on poison + fire
    (0x240) wherever it is: the "always" case of the first outline.
 5. **Immunities**: a square's flags count only where they are not in the
-   object's immunity mask (for Connor `KQConner::addImmunity n` adds the
-   bits of n, traced; a `.kq` key `immunities` exists by name, its reader
-   not traced: the Swamp's
-   `whisp.cs` gives 256, swamp). No other file sets one (data).
+   object's 16-bit immunity mask (traced 2026-11-20, Batch 3):
+   - Every object loads and saves its mask under the `.kq` key
+     **`immunities`** (default `0`; no shipped `.kq` file sets it). Because
+     it is part of every object's saved fields, Connor's immunity mask is
+     **saved in save games and carried across world changes** with his
+     saved object (`world-change.md` rule 17).
+   - **`KQConner::addImmunity <mask>`** requires exactly 2 words (its
+     usage message prints `"usage: KQConner::addImmune  immuneValue"` with
+     a typo) and bitwise-ORs the integer `<mask>` into Connor's immunity
+     mask, leaving `$Console::Return` at `0`.
+   - Shipped game: only one use — Swamp's `whisp.cs` (Cue 10, after
+     Connor eats the anti-poison flower) calls `KQConner::addImmunity 256`
+     (`0x100`, the `swamp` ground flag), making him permanently immune to
+     swamp-water damage while leaving poison and lava harmful.
 6. **Who is hurt**, when the damage is not 0 and some flag is not
    immune:
    - an `ontop` square (0x800) with the surface at most 100 below the
