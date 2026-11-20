@@ -4171,3 +4171,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Scales north/south dish cuts `(216,115, 53,490 / 44,790, 5,560)`, on-dish cut `(216,500, 49,140, 4,500)` `(-0.1, 0, -1.57)`, off-dish cut `(214,420, 49,340, 4,190)` `(-0.2, 0, -1.64)` + `follow Connor`; clearing remembered forward after `onscale2`/`offscale2` | `tile-puzzle.md` rules 24–26 (Q198) | Dead City `connor.log` / `camera.log` updates 5, 76, 77, 101 (held forward immediately starts `offscale1` at update 77) |
 | Tower skeleton second `Cue 50`: `KQMusic::pop mtower.aud` queued 0.2 s later (`MUSIC_TARGET` event survives `death_ended`), and `follow Connor` immediately after cut snaps frame 0 onto the followed spot (`<= 4,999`) | `fighting.md` 7a (Q197) | unit test `tower_cue50_second_cuts_to_connor_follows_and_pops_music_after_death`; Dead City `camera.log` update 21 (`follow,snap_after_cut`) |
 
+## B1-2 2026-11-20: Script `;` separator, `inc`/`setcat`/`alias`, `getConnorFlag`, `mouseAction`, loading & screen hints — data `world_script.rs`; core `script.rs`, `active.rs`; viewer `load.rs`, `door_view.rs`; cli `script_coverage.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `;` separates statements outside `'...'`/`"..."` (never a comment; fixes `Snowexit/worldinv.cs`'s 11 `;KQMonster::inventory` mushroom lines); `#` starts comments | `script-commands.md` rule 1; `MASK/Snowexit/kq/worldinv.cs` | unit test `semicolon_separates_statements_in_startup_scripts`; Snowexit `items.log` (11 world mushrooms at `z = 26,910`) |
+| `inc <var>` (C `atoi` prefix / non-numeric -> `1`); `setcat` (no separator, 2 words `""`, 512-byte cap); `alias` (case-sensitive word-0, max 20 expansions, `;` in body, single quotes block expansion; `newWorld.cs` definitions passed to `Scripts::aliases`) | `script-commands.md` rules 7–9 | unit tests `inc_setcat_and_alias_follow_batch1_rules`, `world_script::follows_scripts_in_order` |
+| `getConnorFlag` case-insensitive across the 7 `CONNOR_FLAGS` -> `"1"`/`"0"` (error + `"0"` on unknown); `mouseAction` hides Top panel for `y > 60` without moving OS pointer; `KQGame::selectScreen` `0..=8`; 14 loading/cache/world-start hints return `"0"` | `script-commands.md` rules 10, 12, 13; `interface.md` rule 3a | unit test `get_connor_flag_mouse_action_select_screen_and_loading_hints`; Daventry `doors.log`, `viewer.log`, `gui.log` |
+
+

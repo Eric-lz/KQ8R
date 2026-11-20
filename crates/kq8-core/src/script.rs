@@ -42,6 +42,8 @@
 //! go to the caller ([`ScriptHost::world_command`]). Commands of later
 //! milestones are stubs: one log line ([`STUBS`]).
 
+use std::collections::BTreeMap;
+
 use kq8_data::world_script::Vars;
 
 /// Commands of later milestones: the door scripts' (dialogue, GUI,
@@ -58,21 +60,19 @@ use kq8_data::world_script::Vars;
 /// `checkSave`, ...) are not stubs: they stay unknown (error line,
 /// result 1) until they are studied; `getloc` and `checkDistance` are
 /// handled by the world.
-pub const STUBS: [&str; 4] = [
+pub const STUBS: [&str; 2] = [
     "doPopup",
-    // `addMapIcon` was here until M6 6d-2; `earnTeleport`,
-    // `teleportersEarned`, `onTeleport`, `offTeleport` until 6d-7.
-    "preloadShape",
-    // Daventry's trap scripts (3d-3). `KQMusic::push` / `pop` were here
-    // until M3 3h-5, the `KQConner::setRope*` commands until M6 6a-1.
-    "KQGame::letCatchUp",
-    // Item commands of later milestones (3e-2). `KQObject::changeBmp` was
-    // here until batch 2 D-6, `KQMonster::dropItem` until U-9a.
     "KQObject::setGroupsAlways",
 ];
 
 /// Words a command may have (`anim-scripts.md` rule 18).
 pub const MAX_WORDS: usize = 40;
+
+/// Maximum `setcat` joined length (`script-commands.md` rule 8).
+pub const MAX_SETCAT_LEN: usize = 512;
+
+/// Maximum `alias` expansions on word 0 per statement (`script-commands.md` rule 9).
+pub const MAX_ALIAS_EXPANSIONS: usize = 20;
 
 /// Scripts calling scripts deeper than this stop (a guard of ours).
 const MAX_DEPTH: usize = 16;
@@ -107,10 +107,12 @@ pub trait ScriptHost {
 }
 
 /// The scripts' shared state: the variables (set by the start-up scripts
-/// and by every script since).
+/// and by every script since) and `alias` definitions (`script-commands.md`
+/// rule 9).
 #[derive(Debug, Clone, Default)]
 pub struct Scripts {
     pub vars: Vars,
+    pub aliases: BTreeMap<String, String>,
 }
 
 /// One `if` level: whether the lines in it run.
@@ -130,7 +132,7 @@ impl Block {
 
 impl Scripts {
     pub fn new(vars: Vars) -> Self {
-        Scripts { vars }
+        Scripts { vars, aliases: BTreeMap::new() }
     }
 
     /// Runs script `name` with `args` as `$1`, `$2`, ... Returns false if
@@ -189,7 +191,8 @@ impl Scripts {
                     host.log(format!("{at}: if without a command"));
                     self.vars.set(RETURN, "1".into());
                 } else {
-                    self.checked_command(&command, host, at, depth);
+                    let allow_alias = !words[1].literal;
+                    self.checked_command_with_alias(&command, allow_alias, host, at, depth);
                 }
                 let result = self.vars.get(RETURN).unwrap_or("");
                 let taking = result.is_empty() || result == "0";
@@ -213,7 +216,8 @@ impl Scripts {
             _ if runs => {
                 let command = self.expand(words, args);
                 if !command.is_empty() {
-                    self.checked_command(&command, host, at, depth);
+                    let allow_alias = !words[0].literal;
+                    self.checked_command_with_alias(&command, allow_alias, host, at, depth);
                 }
             }
             _ => {}
@@ -243,16 +247,51 @@ impl Scripts {
         out
     }
 
-    /// [`Self::command`], unless it has more than [`MAX_WORDS`] words
-    /// (rule 18: it fails). Counted after variables are replaced (the note
-    /// doesn't say; no script line has more than 29 words, data).
+    /// [`Self::command`] with alias expansion (`script-commands.md` rules 2,
+    /// 9: word 0 only, case-sensitive, up to 20 expansions per statement) and
+    /// the [`MAX_WORDS`] limit (rule 18).
     fn checked_command(&mut self, words: &[String], host: &mut dyn ScriptHost, at: &str, depth: usize) {
-        if words.len() > MAX_WORDS {
-            host.log(format!("{at}: Console: Too many arguments ({} words): {}", words.len(), words.join(" ")));
+        self.checked_command_with_alias(words, true, host, at, depth);
+    }
+
+    fn checked_command_with_alias(&mut self, words: &[String], allow_alias: bool, host: &mut dyn ScriptHost, at: &str, depth: usize) {
+        let mut current: Vec<String> = words.to_vec();
+        if allow_alias {
+            let mut expansions = 0usize;
+            while expansions < MAX_ALIAS_EXPANSIONS {
+                let Some(body) = current.first().and_then(|first| self.aliases.get(first).cloned()) else {
+                    break;
+                };
+                expansions += 1;
+                let stmts = split_commands(&body);
+                if stmts.is_empty() {
+                    return;
+                }
+                // If an alias holds multiple `;`-separated commands, run all
+                // but the last cleanly before splicing trailing arguments onto
+                // the final command.
+                for stmt in &stmts[..stmts.len() - 1] {
+                    let expanded = self.expand(stmt, &[]);
+                    if !expanded.is_empty() {
+                        let inner_alias = !stmt[0].literal;
+                        self.checked_command_with_alias(&expanded, inner_alias, host, at, depth);
+                    }
+                }
+                let last_stmt = stmts.last().unwrap();
+                let mut combined = self.expand(last_stmt, &[]);
+                combined.extend(current.into_iter().skip(1));
+                current = combined;
+                if current.is_empty() {
+                    return;
+                }
+            }
+        }
+        if current.len() > MAX_WORDS {
+            host.log(format!("{at}: Console: Too many arguments ({} words): {}", current.len(), current.join(" ")));
             self.vars.set(RETURN, "1".into());
             return;
         }
-        self.command(words, host, at, depth);
+        self.command(&current, host, at, depth);
     }
 
     /// Runs one command (words expanded) and leaves its result in
@@ -278,6 +317,46 @@ impl Scripts {
                     Some("1".into())
                 }
             },
+            "inc" => {
+                // script-commands.md rule 7: exact 2 words; C atoi + 1, returns 0.
+                match words {
+                    [_, var] => {
+                        let cur = self.vars.get(var).map_or(0, atoi_i64);
+                        let next = cur.saturating_add(1);
+                        host.log(format!("{at}: inc {var}: {cur} -> {next}"));
+                        self.vars.set(var, next.to_string());
+                    }
+                    _ => host.log(format!("{at}: usage: inc <varName>")),
+                }
+                Some("0".into())
+            }
+            "setcat" => {
+                // script-commands.md rule 8: < 2 words logs all vars; >= 2
+                // concatenates words[2..] without spaces (up to 512 bytes).
+                if words.len() < 2 {
+                    let list: Vec<String> = self.vars.iter().map(|(k, v)| format!("{k}={v}")).collect();
+                    host.log(format!("{at}: setcat variables: {}", list.join(", ")));
+                } else {
+                    let mut joined: String = words[2..].concat();
+                    truncate_bytes(&mut joined, MAX_SETCAT_LEN);
+                    host.log(format!("{at}: setcat {} = '{joined}'", words[1]));
+                    self.vars.set(&words[1], joined);
+                }
+                Some("0".into())
+            }
+            "alias" => {
+                // script-commands.md rule 9: < 2 words lists aliases; >= 2
+                // stores case-sensitive alias for word 0.
+                if words.len() < 2 {
+                    let list: Vec<String> = self.aliases.iter().map(|(k, v)| format!("{k} -> \"{v}\"")).collect();
+                    host.log(format!("{at}: aliases: {}", list.join(", ")));
+                } else {
+                    let value = words[2..].join(" ");
+                    host.log(format!("{at}: alias {} = '{value}'", words[1]));
+                    self.aliases.insert(words[1].clone(), value);
+                }
+                Some("0".into())
+            }
             "eval" => {
                 // STAND-IN (M4 4a-2, Q103): no note describes `eval`; the
                 // data uses it only as `if eval KQMonster::testMessage …`
@@ -353,7 +432,7 @@ pub fn split_commands(line: &str) -> Vec<Vec<Word>> {
     while let Some(&c) = chars.peek() {
         if c.is_whitespace() {
             chars.next();
-        } else if c == ';' {
+        } else if c == ';' && !single {
             chars.next();
             commands.push(Vec::new());
         } else if (c == '"' || c == '(') && !single {
@@ -364,7 +443,7 @@ pub fn split_commands(line: &str) -> Vec<Vec<Word>> {
         } else {
             let (mut text, mut literal, mut had_quote) = (String::new(), false, false);
             while let Some(&c) = chars.peek() {
-                if c.is_whitespace() || c == ';' {
+                if c.is_whitespace() || (c == ';' && !single) {
                     break;
                 }
                 chars.next();
@@ -385,6 +464,32 @@ pub fn split_commands(line: &str) -> Vec<Vec<Word>> {
     }
     commands.retain(|c| !c.is_empty());
     commands
+}
+
+/// Leading signed base-10 integer (C `atoi` for `inc`, rule 7).
+fn atoi_i64(s: &str) -> i64 {
+    let s = s.trim_start();
+    let (neg, digits) = match s.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, s.strip_prefix('+').unwrap_or(s)),
+    };
+    let n = digits.bytes().take_while(u8::is_ascii_digit).count();
+    if n == 0 {
+        return 0;
+    }
+    let abs = digits[..n].parse::<i64>().unwrap_or(i64::MAX);
+    if neg { -abs } else { abs }
+}
+
+fn truncate_bytes(s: &mut String, max: usize) {
+    if s.len() <= max {
+        return;
+    }
+    let mut end = max;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s.truncate(end);
 }
 
 /// The note's "looks like a number": a digit first, or `-` or `.`
@@ -684,5 +789,46 @@ endif
         assert_eq!(s.vars.get("Daventry::Door::Locked"), Some("1"));
         assert_eq!(s.vars.get("Long"), Some("a b c"));
         assert!(h.log.iter().any(|l| l.ends_with("echo Keep Door x")), "{:?}", h.log);
+    }
+
+    #[test]
+    fn inc_setcat_and_alias_follow_batch1_rules() {
+        // inc: unset -> 1, non-numeric -> 1, numeric -> +1, C atoi prefix, wrong words -> usage + return 0.
+        let (s, h) = run(
+            "inc Counter\ninc Counter\nset Word abc\ninc Word\nset Mixed -5xyz\ninc Mixed\ntest a == b\ninc\nset IncRet $Console::Return\n",
+            &[],
+            &[],
+        );
+        assert_eq!(s.vars.get("Counter"), Some("2"));
+        assert_eq!(s.vars.get("Word"), Some("1"));
+        assert_eq!(s.vars.get("Mixed"), Some("-4"));
+        assert_eq!(s.vars.get("IncRet"), Some("0"));
+        assert!(h.log.iter().any(|l| l.contains("usage: inc <varName>")), "{:?}", h.log);
+
+        // setcat: no separator join, 2 words sets empty string, 1 word logs vars, 512-byte cap.
+        let big = "a".repeat(600);
+        let cat_src: &'static str = Box::leak(format!("set I 3\nsetcat Trap gongtp $I\nsetcat Empty\nsetcat\nsetcat Capped {big}\n").into_boxed_str());
+        let (s, h) = run(cat_src, &[], &[]);
+        assert_eq!(s.vars.get("Trap"), Some("gongtp3"));
+        assert_eq!(s.vars.get("Empty"), Some(""));
+        assert_eq!(s.vars.get("Capped").map(str::len), Some(512));
+        assert!(h.log.iter().any(|l| l.contains("setcat variables:")), "{:?}", h.log);
+
+        // alias: case-sensitive, word 0 only, up to 20 expansions, single quotes block expansion, works in `if` & multi-statement.
+        let (s, h) = run(
+            "alias sayhi echo\nsayhi hello sayhi\nSayhi nope\nalias two \"set X 10 ; set Y\"\ntwo 20\nalias\n'sayhi' blocked\nif sayhi in_if\nset IfRan yes\nendif\n",
+            &[],
+            &[],
+        );
+        assert!(h.log.iter().any(|l| l.ends_with("echo hello sayhi")), "{:?}", h.log);
+        assert!(h.log.iter().any(|l| l.contains("ERROR unknown command 'Sayhi'")), "{:?}", h.log);
+        assert_eq!((s.vars.get("X"), s.vars.get("Y")), (Some("10"), Some("20")));
+        assert!(h.log.iter().any(|l| l.contains("aliases: sayhi -> \"echo\"")), "{:?}", h.log);
+        assert!(h.log.iter().any(|l| l.contains("ERROR unknown command 'sayhi'")), "single quotes skip alias: {:?}", h.log);
+        assert_eq!(s.vars.get("IfRan"), Some("yes"));
+
+        // Self-referential alias stops cleanly after 20 expansions instead of infinite recursion.
+        let (_, h) = run("alias loop loop\nloop\n", &[], &[]);
+        assert!(h.log.iter().any(|l| l.contains("ERROR unknown command 'loop'")), "{:?}", h.log);
     }
 }

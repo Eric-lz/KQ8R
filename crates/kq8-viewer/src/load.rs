@@ -1631,6 +1631,8 @@ pub struct Objects {
     pub damage_timers: Vec<(String, String)>,
     /// U-10 (`objects.md` "River controls"): Dead City's river-dipping boxes.
     pub river_controls: Vec<kq8_core::active::RiverControl>,
+    /// `alias` definitions from `newWorld.cs` passed to runtime scripts (`script-commands.md` rule 9).
+    pub aliases: Vec<(String, String)>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -2250,6 +2252,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     let mut objects = placer.finish();
     objects.scripts = scripts;
     objects.vars = script.vars;
+    objects.aliases = script.aliases;
     // M6 6e-8 (world-change.md rules 13, 14): a kept world's variables over
     // its own start values, before its objects' Init.
     if let Some(a) = &arrival {
@@ -5180,6 +5183,7 @@ impl Placer<'_> {
             max_monsters: None,
             damage_timers: Vec::new(),
             river_controls,
+            aliases: Vec::new(),
         }
     }
 }

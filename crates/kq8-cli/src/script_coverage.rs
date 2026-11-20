@@ -39,8 +39,9 @@ const CONTROL: [&str; 6] = ["if", "else", "endif", "echo", "set", "test"];
 
 /// What the world loader acts on in start-up scripts (`world_script.rs`;
 /// `setLoadProgress` drives the loading meter). Lower case.
-const LOADER: [&str; 13] = [
+const LOADER: [&str; 14] = [
     "set",
+    "alias",
     "loadkq",
     "getloc",
     "kqobject::getloc",
@@ -174,6 +175,45 @@ fn text(bytes: &[u8]) -> String {
     bytes.iter().map(|&b| b as char).collect()
 }
 
+fn commands(line: &str) -> Vec<Vec<String>> {
+    let line = line.split('#').next().unwrap_or("");
+    let mut out = vec![Vec::new()];
+    let mut chars = line.chars().peekable();
+    let mut single = false;
+    while let Some(&c) = chars.peek() {
+        if c.is_whitespace() {
+            chars.next();
+        } else if c == ';' && !single {
+            chars.next();
+            out.push(Vec::new());
+        } else if c == '"' && !single {
+            chars.next();
+            let w: String = chars.by_ref().take_while(|&c| c != '"').collect();
+            out.last_mut().unwrap().push(w);
+        } else {
+            let mut w = String::new();
+            let mut had = false;
+            while let Some(&c) = chars.peek() {
+                if c.is_whitespace() || (c == ';' && !single) {
+                    break;
+                }
+                chars.next();
+                if c == '\'' {
+                    single = !single;
+                    had = true;
+                    continue;
+                }
+                w.push(c);
+            }
+            if !w.is_empty() || had {
+                out.last_mut().unwrap().push(w);
+            }
+        }
+    }
+    out.retain(|c| !c.is_empty());
+    out
+}
+
 fn words(line: &str) -> Vec<String> {
     let line = line.split('#').next().unwrap_or("");
     line.split_whitespace().map(|w| w.trim_matches('\'').to_string()).collect()
@@ -187,7 +227,9 @@ fn read_world(world: &'static str, files: &[(String, Vec<u8>)], found: &mut Foun
         if lower.ends_with(".cs") {
             *found.scripts_per_world.entry(world).or_default() += 1;
             for line in text(bytes).lines() {
-                read_script_line(world, name, &words(line), &scripts, found);
+                for w in commands(line) {
+                    read_script_line(world, name, &w, &scripts, found);
+                }
             }
         } else if lower.ends_with(".kq") {
             for line in text(bytes).lines() {
@@ -224,10 +266,12 @@ fn startup_scripts(files: &[(String, Vec<u8>)], scripts: &BTreeSet<String>) -> B
         }
         let Some(bytes) = by_name.get(&name) else { continue };
         for line in text(bytes).lines() {
-            let Some(first) = words(line).first().map(|w| w.to_ascii_lowercase()) else { continue };
-            let as_script = if first.ends_with(".cs") { first } else { format!("{first}.cs") };
-            if scripts.contains(&as_script) {
-                todo.push(as_script);
+            for w in commands(line) {
+                let Some(first) = w.first().map(|w| w.to_ascii_lowercase()) else { continue };
+                let as_script = if first.ends_with(".cs") { first } else { format!("{first}.cs") };
+                if scripts.contains(&as_script) {
+                    todo.push(as_script);
+                }
             }
         }
     }

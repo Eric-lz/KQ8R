@@ -738,6 +738,7 @@ pub fn spawn_doors(
         std::mem::take(&mut objects.known).into_iter().chain(["Connor".to_string()]),
         sources,
     );
+    active.scripts.aliases.extend(std::mem::take(&mut objects.aliases));
     // Traps (3d-2): loaded where the start-up scripts left them.
     let mut trap_log = match Log::create("traps") {
         Ok(l) => Some(l),

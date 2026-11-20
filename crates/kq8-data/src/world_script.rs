@@ -188,6 +188,8 @@ pub struct ScriptRun {
     pub item_commands_inside_if: usize,
     /// The variables at the end.
     pub vars: Vars,
+    /// `alias <name> <body>` definitions passed to runtime scripts (`script-commands.md` rule 9).
+    pub aliases: Vec<(String, String)>,
 }
 
 /// Runs `start` (e.g. `newWorld.cs`) with `host`.
@@ -197,31 +199,46 @@ pub fn run(start: &str, host: &mut dyn Host) -> ScriptRun {
     out
 }
 
-/// Splits a line (comment already removed) into words; a double-quoted
-/// part is one word, without its quotes. The flag says it was quoted.
-fn split_words(line: &str) -> Vec<(String, bool)> {
-    let mut words = Vec::new();
+/// Splits a line (comment already removed) into statements at unquoted `;`,
+/// and each statement into words; a double-quoted part is one word without its
+/// quotes. Single quotes keep `$` / `;` unsplit inside them. The flag says it
+/// was double-quoted.
+fn split_commands(line: &str) -> Vec<Vec<(String, bool)>> {
+    let mut commands = vec![Vec::new()];
     let mut chars = line.chars().peekable();
+    let mut single = false;
     while let Some(&c) = chars.peek() {
         if c.is_whitespace() {
             chars.next();
-        } else if c == '"' {
+        } else if c == ';' && !single {
+            chars.next();
+            commands.push(Vec::new());
+        } else if c == '"' && !single {
             chars.next();
             let w: String = chars.by_ref().take_while(|&c| c != '"').collect();
-            words.push((w, true));
+            commands.last_mut().unwrap().push((w, true));
         } else {
             let mut w = String::new();
+            let mut had_quote = false;
             while let Some(&c) = chars.peek() {
-                if c.is_whitespace() {
+                if c.is_whitespace() || (c == ';' && !single) {
                     break;
                 }
-                w.push(c);
                 chars.next();
+                if c == '\'' {
+                    single = !single;
+                    had_quote = true;
+                    continue;
+                }
+                w.push(c);
             }
-            words.push((w, false));
+            if !w.is_empty() || had_quote {
+                commands.last_mut().unwrap().push((w, false));
+            }
         }
     }
-    words
+    commands.retain(|c| !c.is_empty());
+    commands
 }
 
 /// Replaces `$name` words after the first (Q20 b). Unknown variables are
@@ -262,129 +279,135 @@ fn run_script(name: &str, args: &[String], host: &mut dyn Host, out: &mut Script
     let mut if_depth = 0usize;
     for (n, raw) in text.lines().enumerate() {
         let line = raw.split('#').next().unwrap_or("").trim();
-        let raw_words = split_words(line);
-        let Some((first, _)) = raw_words.first() else { continue };
-        let command = first.to_ascii_lowercase();
-        let at = format!("{name} line {}", n + 1);
-        // Blocks are tracked whatever their condition says (not evaluated).
-        match command.as_str() {
-            "if" => {
-                if_depth += 1;
-                continue;
-            }
-            "endif" => {
-                if_depth = if_depth.saturating_sub(1);
-                continue;
-            }
-            "set" if raw_words.len() == 1 => {
-                // A bare `set` names nothing to set.
-                *out.other_commands.entry("set (alone)".into()).or_default() += 1;
-                continue;
-            }
-            "set" | "loadkq" | "getloc" | "kqobject::getloc" | "move" | "kqobject::sethidden" => {}
-            "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {}
-            "applycombatlevel" | "kqconner::setlevel" | "sendevent" => {}
-            c if c.ends_with(".cs") => {}
-            // Not run: counted without looking at its variables.
-            _ => {
-                // `setLoadProgress [percent]` (M6 6e-4a, `world-change.md`
-                // rule 24): also told to the host, for the loading meter.
-                if command == "setloadprogress" {
-                    host.load_progress(raw_words.get(1).and_then(|w| w.0.parse::<f32>().ok()));
+        for raw_words in split_commands(line) {
+            let Some((first, _)) = raw_words.first() else { continue };
+            let command = first.to_ascii_lowercase();
+            let at = format!("{name} line {}", n + 1);
+            // Blocks are tracked whatever their condition says (not evaluated).
+            match command.as_str() {
+                "if" => {
+                    if_depth += 1;
+                    continue;
                 }
-                *out.other_commands.entry(command).or_default() += 1;
-                continue;
-            }
-        }
-        let words = match expand(&raw_words, args, &out.vars) {
-            Ok(w) => w,
-            Err(unknown) => {
-                for u in &unknown {
-                    *out.unknown_vars.entry(u.clone()).or_default() += 1;
+                "endif" => {
+                    if_depth = if_depth.saturating_sub(1);
+                    continue;
                 }
-                if command.ends_with(".cs") {
-                    // A script still runs; the unknown argument is left out.
-                    let known: Vec<(String, bool)> =
-                        raw_words.iter().filter(|(w, _)| !w.starts_with('$')).cloned().collect();
-                    expand(&known, args, &out.vars).unwrap_or_default()
-                } else {
-                    out.bad_lines.push(format!("{at}: unknown variable {}: '{line}'", unknown.join(", ")));
+                "set" if raw_words.len() == 1 => {
+                    // A bare `set` names nothing to set.
+                    *out.other_commands.entry("set (alone)".into()).or_default() += 1;
+                    continue;
+                }
+                "set" | "loadkq" | "getloc" | "kqobject::getloc" | "move" | "kqobject::sethidden" => {}
+                "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {}
+                "applycombatlevel" | "kqconner::setlevel" | "sendevent" => {}
+                c if c.ends_with(".cs") => {}
+                // Not run: counted without looking at its variables.
+                _ => {
+                    if command == "alias" && raw_words.len() >= 3 {
+                        let body = raw_words[2..].iter().map(|(w, _)| w.as_str()).collect::<Vec<_>>().join(" ");
+                        out.aliases.push((raw_words[1].0.clone(), body));
+                        continue;
+                    }
+                    // `setLoadProgress [percent]` (M6 6e-4a, `world-change.md`
+                    // rule 24): also told to the host, for the loading meter.
+                    if command == "setloadprogress" {
+                        host.load_progress(raw_words.get(1).and_then(|w| w.0.parse::<f32>().ok()));
+                    }
+                    *out.other_commands.entry(command).or_default() += 1;
                     continue;
                 }
             }
-        };
-        match command.as_str() {
-            "set" => match words.get(1) {
-                Some(var) => {
-                    out.vars.set(var, words[2..].join(" "));
-                    out.sets += 1;
-                }
-                None => out.bad_lines.push(format!("{at}: set without a name")),
-            },
-            "loadkq" => match parse_load(&words[1..]) {
-                Ok((file, name_arg, position, angles, ignored_numbers)) => {
-                    let load = LoadKq {
-                        file,
-                        name: name_arg,
-                        position,
-                        angles,
-                        ignored_numbers,
-                        from: name.to_string(),
-                        line: n + 1,
-                        inside_if: if_depth > 0,
-                    };
-                    host.load(&load, &out.vars);
-                    out.loads.push(load);
-                }
-                Err(e) => out.bad_lines.push(format!("{at}: {e}: '{line}'")),
-            },
-            "getloc" | "kqobject::getloc" => match words.get(1) {
-                Some(who) => {
-                    out.getlocs += 1;
-                    match host.locate(who) {
-                        Some((p, a)) => {
-                            let f = |v: &[f32]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
-                            out.vars.set("KQObject::loc", format!("{} {}", f(&p), f(&a)));
-                            out.vars.set("KQObject::locOnly", f(&p));
-                        }
-                        None => out.getloc_not_found.push(format!("{at}: {who}")),
+            let words = match expand(&raw_words, args, &out.vars) {
+                Ok(w) => w,
+                Err(unknown) => {
+                    for u in &unknown {
+                        *out.unknown_vars.entry(u.clone()).or_default() += 1;
+                    }
+                    if command.ends_with(".cs") {
+                        // A script still runs; the unknown argument is left out.
+                        let known: Vec<(String, bool)> =
+                            raw_words.iter().filter(|(w, _)| !w.starts_with('$')).cloned().collect();
+                        expand(&known, args, &out.vars).unwrap_or_default()
+                    } else {
+                        out.bad_lines.push(format!("{at}: unknown variable {}: '{line}'", unknown.join(", ")));
+                        continue;
                     }
                 }
-                None => out.bad_lines.push(format!("{at}: getLoc without a name")),
-            },
-            "kqobject::sethidden" => match (words.get(1), words.get(2).map(|v| v.parse::<i64>())) {
-                (Some(who), Some(Ok(v))) => {
-                    out.set_hidden += 1;
-                    host.set_hidden(who, v != 0, &at);
+            };
+            match command.as_str() {
+                "set" => match words.get(1) {
+                    Some(var) => {
+                        out.vars.set(var, words[2..].join(" "));
+                        out.sets += 1;
+                    }
+                    None => out.bad_lines.push(format!("{at}: set without a name")),
+                },
+                "loadkq" => match parse_load(&words[1..]) {
+                    Ok((file, name_arg, position, angles, ignored_numbers)) => {
+                        let load = LoadKq {
+                            file,
+                            name: name_arg,
+                            position,
+                            angles,
+                            ignored_numbers,
+                            from: name.to_string(),
+                            line: n + 1,
+                            inside_if: if_depth > 0,
+                        };
+                        host.load(&load, &out.vars);
+                        out.loads.push(load);
+                    }
+                    Err(e) => out.bad_lines.push(format!("{at}: {e}: '{line}'")),
+                },
+                "getloc" | "kqobject::getloc" => match words.get(1) {
+                    Some(who) => {
+                        out.getlocs += 1;
+                        match host.locate(who) {
+                            Some((p, a)) => {
+                                let f = |v: &[f32]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
+                                out.vars.set("KQObject::loc", format!("{} {}", f(&p), f(&a)));
+                                out.vars.set("KQObject::locOnly", f(&p));
+                            }
+                            None => out.getloc_not_found.push(format!("{at}: {who}")),
+                        }
+                    }
+                    None => out.bad_lines.push(format!("{at}: getLoc without a name")),
+                },
+                "kqobject::sethidden" => match (words.get(1), words.get(2).map(|v| v.parse::<i64>())) {
+                    (Some(who), Some(Ok(v))) => {
+                        out.set_hidden += 1;
+                        host.set_hidden(who, v != 0, &at);
+                    }
+                    _ => out.bad_lines.push(format!("{at}: setHidden needs a name and a whole number: '{line}'")),
+                },
+                "move" => match parse_move(&words[1..]) {
+                    Ok((who, flags, position, turn)) => {
+                        out.moves += 1;
+                        host.move_object(&Move { who, flags, position, turn, from: name.to_string(), line: n + 1 });
+                    }
+                    Err(e) => out.bad_lines.push(format!("{at}: {e}: '{line}'")),
+                },
+                "applycombatlevel" => {
+                    let on = words.get(1).and_then(|v| v.parse::<f64>().ok()).is_some_and(|v| v != 0.0);
+                    host.apply_combat_level(on, &at);
                 }
-                _ => out.bad_lines.push(format!("{at}: setHidden needs a name and a whole number: '{line}'")),
-            },
-            "move" => match parse_move(&words[1..]) {
-                Ok((who, flags, position, turn)) => {
-                    out.moves += 1;
-                    host.move_object(&Move { who, flags, position, turn, from: name.to_string(), line: n + 1 });
+                "kqconner::setlevel" | "sendevent" => {
+                    if !host.connor_line(&words, &at) {
+                        *out.other_commands.entry(command).or_default() += 1;
+                    }
                 }
-                Err(e) => out.bad_lines.push(format!("{at}: {e}: '{line}'")),
-            },
-            "applycombatlevel" => {
-                let on = words.get(1).and_then(|v| v.parse::<f64>().ok()).is_some_and(|v| v != 0.0);
-                host.apply_combat_level(on, &at);
+                "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {
+                    out.item_commands += 1;
+                    if if_depth > 0 {
+                        out.item_commands_inside_if += 1;
+                    }
+                    if let Some(name) = host.item_command(&words, &at) {
+                        out.vars.set("NewInvItem", name);
+                    }
+                }
+                _ => run_script(first, &words[1..], host, out, depth + 1),
             }
-            "kqconner::setlevel" | "sendevent" => {
-                if !host.connor_line(&words, &at) {
-                    *out.other_commands.entry(command).or_default() += 1;
-                }
-            }
-            "kqmonster::inventory" | "give" | "kqobject::setscript" | "kqobject::setdontlook" => {
-                out.item_commands += 1;
-                if if_depth > 0 {
-                    out.item_commands_inside_if += 1;
-                }
-                if let Some(name) = host.item_command(&words, &at) {
-                    out.vars.set("NewInvItem", name);
-                }
-            }
-            _ => run_script(first, &words[1..], host, out, depth + 1),
         }
     }
 }
@@ -504,7 +527,8 @@ mod tests {
         assert_eq!(host.placed.len(), 6);
         assert_eq!(r.scripts, ["newWorld.cs", "permwrld.cs"]);
         assert_eq!(r.missing_scripts, ["WorldVar.cs"]);
-        assert_eq!(r.other_commands.get("alias"), Some(&1));
+        assert_eq!(r.aliases, vec![("x".to_string(), "move".to_string())]);
+        assert!(!r.other_commands.contains_key("alias"));
         // `$KQGame::runOptimal` is unknown: permwrld.cs still runs.
         assert_eq!(r.unknown_vars.get("$KQGame::runOptimal"), Some(&1));
         assert_eq!(r.bad_lines.len(), 1, "{:?}", r.bad_lines);
@@ -585,5 +609,22 @@ mod tests {
         assert_eq!(host.hidden, [("item.1".to_string(), true)]);
         assert_eq!((r.item_commands, r.item_commands_inside_if), (4, 1));
         assert_eq!(r.vars.get("Last"), Some("item.4"));
+    }
+
+    #[test]
+    fn semicolon_separates_statements_in_startup_scripts() {
+        // script-commands.md rule 1: `;` is a statement separator, not a
+        // comment (Snowexit/worldinv.cs `;KQMonster::inventory ...`), while
+        // quoted strings keep `;` intact.
+        let mut host = TestHost::new(vec![(
+            "newworld.cs",
+            ";KQMonster::inventory\tworld\tMushroom\t1\t166292\t103177\t-2\t0\t0\t0\nalias w \"move Connor 0 1 2 3 ; give X\"\nset A 1 ; set B 2\n",
+        )]);
+        let r = run("newWorld.cs", &mut host);
+        assert!(r.bad_lines.is_empty(), "{:?}", r.bad_lines);
+        assert_eq!(host.items, ["KQMonster::inventory world Mushroom 1 166292 103177 -2 0 0 0"]);
+        assert_eq!((r.vars.get("A"), r.vars.get("B")), (Some("1"), Some("2")));
+        assert_eq!(r.aliases, vec![("w".to_string(), "move Connor 0 1 2 3 ; give X".to_string())]);
+        assert!(!r.other_commands.contains_key("alias"));
     }
 }

@@ -2605,6 +2605,18 @@ impl WorldState {
         "0".into()
     }
 
+    /// The seven cross-world flags known to `getConnorFlag` /
+    /// `setConnorFlag` (`script-commands.md` rule 10).
+    pub const CONNOR_FLAGS: [&str; 7] = [
+        "BeenToCastle",
+        "MetGirlInDC",
+        "SageGnomeEarnedTeleport",
+        "SawSwampVision",
+        "KnowAboutFeather",
+        "InTemple4",
+        "UsedElevator",
+    ];
+
     /// `setConnorFlag <flag> 0|1`: every flag is kept on Connor
     /// (`world-change.md` rule 17); only `InTemple4` changes a rule
     /// (`potions.md` rule 19, `temple4/kq/archon.cs`).
@@ -2613,13 +2625,71 @@ impl WorldState {
             self.note(format!("{at}: usage: setConnorFlag <flag> 0|1; nothing"));
             return "1".into();
         };
-        self.connor_flags.insert(flag.clone(), number_value(v) != 0.0);
-        if !flag.eq_ignore_ascii_case("InTemple4") {
-            self.note(format!("{at}: setConnorFlag {flag} {v}: kept on Connor (world-change.md rule 17)"));
+        let key = Self::CONNOR_FLAGS
+            .iter()
+            .find(|k| k.eq_ignore_ascii_case(flag))
+            .map(|&s| s.to_string())
+            .or_else(|| self.connor_flags.keys().find(|k| k.eq_ignore_ascii_case(flag)).cloned())
+            .unwrap_or_else(|| flag.clone());
+        let on = number_value(v) != 0.0;
+        self.connor_flags.insert(key.clone(), on);
+        if !key.eq_ignore_ascii_case("InTemple4") {
+            self.note(format!("{at}: setConnorFlag {key} {v}: kept on Connor (world-change.md rule 17)"));
             return "0".into();
         }
-        self.connor_in_temple4 = number_value(v) != 0.0;
+        self.connor_in_temple4 = on;
         self.item_note(format!("{at}: setConnorFlag InTemple4 {}: the shield gives half its raise per hit, at most 85 (potions.md rule 19)", u8::from(self.connor_in_temple4)));
+        "0".into()
+    }
+
+    /// `getConnorFlag <flagName>` (`script-commands.md` rule 10): exact 2
+    /// words (else error + `"0"`), case-insensitive match across the seven
+    /// Connor flags; `"1"` if set, `"0"` if clear or unknown.
+    fn get_connor_flag(&mut self, words: &[String], at: &str) -> String {
+        let [_, flag] = words else {
+            self.note(format!("{at}: ERROR getConnorFlag: expected 2 words (getConnorFlag <flagName>); 0"));
+            return "0".into();
+        };
+        let Some(&canon) = Self::CONNOR_FLAGS.iter().find(|k| k.eq_ignore_ascii_case(flag)) else {
+            self.note(format!("{at}: ERROR getConnorFlag: unknown flag '{flag}'; 0"));
+            return "0".into();
+        };
+        let set = self.connor_flags.iter().find(|(k, _)| k.eq_ignore_ascii_case(canon)).is_some_and(|(_, &v)| v);
+        let r = u8::from(set);
+        self.note(format!("{at}: getConnorFlag {canon}: {r} (script-commands.md rule 10)"));
+        r.to_string()
+    }
+
+    /// `mouseAction <time> <x> <y> <click>` (`script-commands.md` rule 12):
+    /// exact 5 words; never moves the OS pointer ("Do not reproduce"), and
+    /// hides the top bar when `y > 60` (`Daventry/ax.cs`: `0 0 480 0`).
+    fn mouse_action(&mut self, words: &[String], at: &str) -> String {
+        let [_, time, x, y, click] = words else {
+            self.note(format!("{at}: usage: mouseAction <time> <x> <y> <click>; nothing"));
+            return "0".into();
+        };
+        let y_val = number_value(y);
+        let slide = if y_val > 60.0 {
+            self.gui_orders.push(GuiOrder::Set { group: crate::panels::Group::Top, on: false, at: at.to_string() });
+            "; top bar slides away (y > 60)"
+        } else {
+            ""
+        };
+        self.note(format!("{at}: mouseAction {time} {x} {y} {click}: OS pointer not moved (Do not reproduce){slide} (script-commands.md rule 12)"));
+        "0".into()
+    }
+
+    /// `KQGame::selectScreen <id>` (`interface.md` rule 3a): logs UI screen switch `0`..`8`.
+    fn select_screen(&mut self, words: &[String], at: &str) -> String {
+        const SCREENS: [&str; 9] = ["Main Menu", "Game Play", "Options", "Loading", "Graphics", "Load Game", "Save Game", "Key Remap", "Credits"];
+        match words {
+            [_, id] if looks_like_number(id) => {
+                let n = number_value(id).trunc() as i64;
+                let what = usize::try_from(n).ok().and_then(|i| SCREENS.get(i)).copied().unwrap_or("out of range (ignored)");
+                self.note(format!("{at}: KQGame::selectScreen {n}: {what} (interface.md rule 3a)"));
+            }
+            _ => self.note(format!("{at}: usage: KQGame::selectScreen <id>; nothing")),
+        }
         "0".into()
     }
 
@@ -4023,6 +4093,7 @@ impl ScriptHost for WorldState {
             "onTeleport" | "offTeleport" | "earnTeleport" | "teleportersEarned" => Some(self.teleport_command(words, at)),
             "goldCoinPersists" => Some(self.gold_coin_persists(words, at)),
             "setConnorFlag" => Some(self.set_connor_flag(words, at)),
+            "getConnorFlag" => Some(self.get_connor_flag(words, at)),
             "KQObject::dither" => Some(self.dither(words, at)),
             "KQObject::changeBmp" => Some(self.change_bmp(words, at)),
             "KQConner::checkInvisible" => {
@@ -4053,6 +4124,25 @@ impl ScriptHost for WorldState {
             "KQMonster::stateChangeNotify" | "KQMonster::clearStateChangeNotify" => Some(self.state_change_notify(words, at)),
             "KQObject::setScript" => Some(self.set_script(words, at)),
             "KQObject::setDontLook" | "KQObject::setHidden" => Some(self.item_change(words, at)),
+            "mouseAction" => Some(self.mouse_action(words, at)),
+            "KQGame::selectScreen" => Some(self.select_screen(words, at)),
+            "preloadShape"
+            | "preloadResource"
+            | "KQObject::preloadResources"
+            | "purgeResource"
+            | "purgeResources"
+            | "lockShape"
+            | "lockInterior"
+            | "KQGame::letCatchUp"
+            | "activatePersistMgr"
+            | "setLoadProgress" => {
+                self.note(format!("{at}: {} (loading/cache hint -> 0; script-commands.md)", words[0]));
+                Some("0".into())
+            }
+            "blackOut" | "loadPalette" | "newSky" | "resetHazeColor" => {
+                self.note(format!("{at}: {} (world-start hint; handled on load)", words[0]));
+                Some("0".into())
+            }
             _ => None,
         }
     }
@@ -10462,5 +10552,61 @@ mod talk_tests {
         assert_eq!((st2.level, st2.stats.0[4]), (2, 1990), "second dip on same box gives 0 extra XP");
         a.connor_movement_ended("out");
         assert_eq!(a.world.rusted_rivers(), vec!["rivercn2".to_string()]);
+    }
+
+    #[test]
+    fn get_connor_flag_mouse_action_select_screen_and_loading_hints() {
+        let mut a = active("", &[]);
+        let w = &mut a.world;
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+
+        // All seven Connor flags round-trip case-insensitively.
+        for flag in WorldState::CONNOR_FLAGS {
+            let lower = flag.to_ascii_lowercase();
+            assert_eq!(w.world_command(&words(&format!("getConnorFlag {lower}")), "t"), Some("0".into()));
+            assert_eq!(w.world_command(&words(&format!("setConnorFlag {lower} 1")), "t"), Some("0".into()));
+            assert_eq!(w.world_command(&words(&format!("getConnorFlag {flag}")), "t"), Some("1".into()));
+        }
+        assert!(w.connor_in_temple4);
+        assert_eq!(w.world_command(&words("getConnorFlag UnknownFlag"), "t"), Some("0".into()));
+        assert_eq!(w.world_command(&words("getConnorFlag"), "t"), Some("0".into()));
+        assert_eq!(w.world_command(&words("getConnorFlag MetGirlInDC extra"), "t"), Some("0".into()));
+
+        // mouseAction ignores OS warp, hides Top panel only when y > 60, and tolerates bad arg counts.
+        assert_eq!(w.world_command(&words("mouseAction 0 100 60 0"), "t"), Some("0".into()));
+        assert!(w.gui_orders.is_empty());
+        assert_eq!(w.world_command(&words("mouseAction 0 0 480 0"), "t"), Some("0".into()));
+        assert!(matches!(
+            w.gui_orders.as_slice(),
+            [GuiOrder::Set { group: crate::panels::Group::Top, on: false, .. }]
+        ));
+        assert_eq!(w.world_command(&words("mouseAction 0 0"), "t"), Some("0".into()));
+
+        // selectScreen accepts 0..=8 and ignores out-of-range / non-numeric inputs safely.
+        for id in 0..=8 {
+            assert_eq!(w.world_command(&words(&format!("KQGame::selectScreen {id}")), "t"), Some("0".into()));
+        }
+        assert_eq!(w.world_command(&words("KQGame::selectScreen 9"), "t"), Some("0".into()));
+        assert_eq!(w.world_command(&words("KQGame::selectScreen bad"), "t"), Some("0".into()));
+
+        // All 14 loading/cache/world-start commands return Some("0").
+        for cmd in [
+            "preloadShape hero.dts",
+            "preloadResource foo",
+            "KQObject::preloadResources obj",
+            "purgeResource foo",
+            "purgeResources",
+            "lockShape hero.dts",
+            "lockInterior 1",
+            "KQGame::letCatchUp 100",
+            "activatePersistMgr 1",
+            "setLoadProgress 50",
+            "blackOut 1",
+            "loadPalette game.ppl",
+            "newSky sky.bmp",
+            "resetHazeColor",
+        ] {
+            assert_eq!(w.world_command(&words(cmd), "t"), Some("0".into()), "{cmd}");
+        }
     }
 }
