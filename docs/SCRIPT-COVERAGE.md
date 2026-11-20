@@ -257,7 +257,6 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `KQConAnimList` | **not named** | 6 | Common 6 | `Common/Connor.kq` |
 | `KQInventoryItem` | **not named** | 5 | Common 5 | `Common/Connor.kq` |
 | `KQSwampTile` | **not named** | 5 | Swamp 5 | `Swamp/gastrap1.KQ` |
-| `RiverControl` | **not named** | 4 | DeadCity 4 | `DeadCity/rivercn2.kq` |
 | `KQDragonHead` | **not named** | 2 | IceWorld 2 | `IceWorld/draglhed.kq` |
 | `KQMandragorRoot` | **not named** | 2 | Swamp 2 | `Swamp/mandrtl.KQ` |
 | `KQPersistManager` | **not named** | 2 | CastleD 1, Barren 1 | `CastleD/ALLFILES.KQ` |
@@ -279,7 +278,6 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `KQMandragorTree` | **not named** | 1 | Swamp 1 | `Swamp/MANDRG.KQ` |
 | `KQOptionsScreen` | **not named** | 1 | Common 1 | `Common/Options.kq` |
 | `KQSaveScreen` | **not named** | 1 | Common 1 | `Common/savegame.kq` |
-| `KQWeepBolt` | **not named** | 1 | DeadCity 1 | `DeadCity/PRweeper.kq` |
 | `KQObject` | named | 587 | Daventry 153, CastleD 10, DeadCity 189, Swamp 56, Gnome 42, Barren 50, IceWorld 34, Snowexit 4, temple1 24, temple2 8, temple3 8, temple4 9 | `Daventry/3beers.KQ` |
 | `KQAnimObject` | named | 458 | Daventry 67, CastleD 7, DeadCity 101, Swamp 39, Gnome 47, Barren 128, IceWorld 35, temple1 12, temple2 11, temple3 5, temple4 6 | `Daventry/alchy.kq` |
 | `KQTrap` | named | 344 | Daventry 58, CastleD 2, DeadCity 85, Swamp 33, Gnome 29, Barren 48, IceWorld 30, Snowexit 1, temple1 34, temple2 11, temple3 9, temple4 4 | `Daventry/alchrun.kq` |
@@ -303,9 +301,11 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `KQChest` | named | 10 | Daventry 4, Swamp 4, IceWorld 2 | `Daventry/jar.kq` |
 | `KQGeometryTalker` | named | 7 | Daventry 2, DeadCity 1, Swamp 1, IceWorld 3 | `Daventry/Ugly.KQ` |
 | `KQSpiriTrap` | named | 4 | DeadCity 4 | `DeadCity/spirtp1.kq` |
+| `RiverControl` | named | 4 | DeadCity 4 | `DeadCity/rivercn2.kq` |
 | `KQSkinList` | named | 3 | Common 3 | `Common/Connor.kq` |
 | `KQBoulder` | named | 1 | Gnome 1 | `Gnome/boulder.kq` |
 | `KQDeath` | named | 1 | DeadCity 1 | `DeadCity/DEATH.KQ` |
 | `KQPaddleObject` | named | 1 | DeadCity 1 | `DeadCity/paddle2.kq` |
 | `KQTowerSkeleton` | named | 1 | DeadCity 1 | `DeadCity/SKELTOWR.KQ` |
+| `KQWeepBolt` | named | 1 | DeadCity 1 | `DeadCity/PRweeper.kq` |
 
