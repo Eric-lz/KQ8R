@@ -29,7 +29,7 @@ Everything under `crates/` and `docs/` is written for this project.
 
 ## Tools and AI
 
-- Agents and models: Claude Code (Claude Opus) and Antigravity (Gemini 4 Neon),
+- Agents and models: Claude Code (Claude Opus 5.5) and Antigravity (Gemini 4 Neon),
   which wrote the code and docs.
 - Human work: Eric Peracchi Pisoni sets direction, rules and priorities,
   and tests.
