@@ -10,37 +10,43 @@ B finished Dead City polish (`Q197`–`Q198`) and Script Coverage Batch 1
 
 - **2026-11-20 (B): `Q197`–`Q198` + Script Coverage Batch 1 built (steps B1-1 to B1-8)**
   (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1"; 777 workspace
-  unit tests, headless `--sound off` viewer logs across `DeadCity`,
-  `Snowexit`, `Daventry`, `CastleD`, `Swamp`; **not checked by eye or
-  played by hand**):
+  unit tests; headless `--sound off` viewer logs across `DeadCity`,
+  `Snowexit`, `Daventry`, `CastleD`, `Swamp`; user visual checks on
+  2026-11-20 for `B1-2`, `B1-3`, `B1-5`, `B1-6`, `B1-7`; `B1-1` and `B1-4`
+  still not checked by eye):
   - **Dead City polish (`B1-1`, `Q197`–`Q198`):** added `Tile2`/`Tile3`/
     `Scales`/`Fall` state numbers, Scales of Justice six instant cuts and
     `walkTo` exit + post-`onscale2`/`offscale2` remembered-input reset,
     tower skeleton `0.2 s` delayed `KQMusic::pop mtower.aud`, and
     frame-0 follow snap after camera cut.
   - **Script syntax & shared commands (`B1-2`):** unquoted `;` statement
-    splitting (fixing `Snowexit/worldinv.cs`'s 11 mushrooms), `inc`,
+    splitting (user confirmed `Snowexit/worldinv.cs` 11 mushrooms spawn,
+    out of bounds with free camera; kept as-is), `inc`,
     `setcat` (512-byte cap), `alias` (`newWorld.cs` aliases + max 20
     expansions), `getConnorFlag`, safe `mouseAction`, `KQGame::selectScreen`,
     and 14 loading/world-start hints.
   - **World toggles, effects & haze (`B1-3`..`B1-6`):** `allowShadows`
-    on world load (`world.cs`) and live toggle, dynamic `loadAnim`
-    `KQAnimOnce` spawning (`.kqs`/`.dts`/`.anm`), `KQCamera::shake` across
-    follow/fixed/first-person cameras, and `KQHazer` proximity haze zones
-    (`DeadCity/litehaze.kq` `9000 -> 18000 -> 13500 -> 9000`).
-  - **Help popups & F1 Help Book (`B1-7`):** `doPopup` (`1.5 s` delay,
-    `1.0 s` deferrals, `3.0 s` cooldown), `notStartingHelp` (`Options.cs` +
-    command + `< 170` checkbox), `stopHelp` (`0x7f` muting the 7 built-in
-    beginner tips), `movekeys.kq` -> `500.MSG` placeholder expansion,
-    `38×7` line wrapping, `intrface.aud` + game pause, and 24-page F1
-    Help Book (`<<`, `Close`, `>>`, `0 <-> 23`).
+    (confirmed working by eye) and `KQCamera::shake` (confirmed working by
+    eye); dynamic `loadAnim` `KQAnimOnce` spawning; `KQHazer` proximity
+    haze zones (`DeadCity/litehaze.kq`: fog pushes back and restores on
+    exit by eye, but needs follow-up `B1-F2` for `H`-key bounding box
+    and severe per-frame FPS drop / terminal spam from updating `4,347`
+    materials on every ramp move).
+  - **Help popups & F1 Help Book (`B1-7`):** `doPopup`, `notStartingHelp`,
+    `stopHelp`, `movekeys.kq` -> `500.MSG` expansion, `38×7` wrap,
+    `intrface.aud`, game pause, and 24-page F1 Help Book; checked by eye
+    (both work, need follow-up `B1-F1`: F1 button order `Close, <<, >>`,
+    Portal-matching highlight & Left/Right arrow animations, `click.aud`
+    on any click inside the popup window & highlight moves, and instant
+    close without `0.2 s` blank-box linger).
   - **Script coverage regenerated (`B1-8`):** `docs/SCRIPT-COVERAGE.md`
     updated (`37 -> 20` distinct missing commands, `0` stubs remaining
     across all worlds; `CastleD` now `0` missing, `Daventry` `2`,
     `DeadCity` `1`).
-  - **Next:** User eye/play check for Batch 1 (`B1-1`..`B1-7`), then Build
-    Session (B) for **Batch 3 (Swamp)** (`Tile2`, `KQSwampTile`, Mandragore
-    tree/roots, `KQConner::pay`, `setRelDamage`, `preSpecial`,
+  - **Next:** Await user approval on Batch 1 follow-up fixes (`B1-F1` help
+    popups and `B1-F2` shared GPU haze buffer + logging + `H`-key box),
+    then Build Session (B) for **Batch 3 (Swamp)** (`Tile2`, `KQSwampTile`,
+    Mandragore tree/roots, `KQConner::pay`, `setRelDamage`, `preSpecial`,
     `setFirstPerson`, `addImmunity`) or Study Session (A) for Batch 4
     (Gnome).
 

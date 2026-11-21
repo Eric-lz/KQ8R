@@ -3,6 +3,18 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-20 Batch 1 user visual check: observations recorded
+- **Changed:** `docs/DESIGN.md`, `MODLOG.md`, `STATUS.md`, `docs/FEATURES.md`, `README.md` (documentation only; no Rust code changed).
+- **Why:** Record the user's in-game visual check results for Batch 1 (`B1-2`, `B1-3`, `B1-5`, `B1-6`, `B1-7`) and plan the follow-up fixes before editing code.
+- **Tested how:** Played in the viewer by the user (`Daventry`, `CastleD`, `DeadCity`, `Snowexit`).
+- **Result:**
+  - `KQCamera::shake` (`B1-5`) and `allowShadows` (`B1-3`) work as expected.
+  - `Snowexit` mushrooms (`B1-2`) spawn, though out of bounds when inspected with the free camera; kept as-is per user.
+  - Help popups (`B1-7`, F1 Help Book and starting help): both open and work, with 3 bugs found — (1) F1 Help Book button order should be `Close`, `<<`, `>>` (not `<<`, `Close`, `>>`); (2) highlight/click animation and Left/Right arrow navigation should match the Portal prompt (`buyhibtn.pba` highlight moving with arrows, Enter activating highlighted button, mouse pressing clicked button), and clicking anywhere on the popup window (not just buttons) should play `click.aud`; (3) closing clears text and buttons ~0.2 s before the popup window disappears (`SLIDE_MS` linger on `Panel::Popup`).
+  - `KQHazer` (`B1-6`, Dead City `litehaze`): pushes fog back near the tower and restores on exit, with 2 bugs found — (1) `H`-key bounding box looks wrong; (2) walking in spots inside the ramp repeatedly logs `setHaze` (`4097 object, 120 ground, 130 building materials changed`) every frame and drops FPS dramatically.
+- **Still broken / not tested:** All help popup (`B1-F1`) and `litehaze` (`B1-F2`) bugs above remain unfixed pending user approval of the fix plan; `B1-1` (Dead City `Q197`/`Q198`) and `B1-4` (`loadAnim`) are still not checked by eye.
+- **Next:** Await user go-ahead on the `B1-F1` and `B1-F2` fix plans (including the shared GPU haze buffer refactor and confirmation on `litehaze`'s `H`-key box) before changing code.
+
 ## 2026-11-20 Batch 1 step B1-8: Regenerate `docs/SCRIPT-COVERAGE.md` and update hand-over docs
 - **Changed:** `docs/SCRIPT-COVERAGE.md`, `STATUS.md`, `docs/FEATURES.md`, `README.md`, `docs/DESIGN.md`, `MODLOG.md`.
 - **Why:** Complete Step B1-8 of the Batch 1 checklist after building `Q197`–`Q198` and Steps `B1-1`..`B1-7`.

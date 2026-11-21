@@ -899,25 +899,33 @@ Checked in the logs and unit tests only, **not played by hand**.
 
 ## Dead City polish (Q197–Q198) and Script coverage batch 1 (2026-11-20, steps B1-1 to B1-8)
 
-Checked in the logs and unit tests only, **not checked by eye or played by hand**.
+Checked by the user on 2026-11-20 for camera shake, `allowShadows`,
+`Snowexit` mushrooms, `litehaze`, and help popups; `Q197`–`Q198` and
+`loadAnim` checked in the logs and unit tests only.
 
-- **Dead City polish (`Q197`, `Q198`):** `Tile2`/`Tile3`/`Scales`/`Fall`
-  state numbers, all six Scales camera cuts and `walkTo` exit, tower
-  skeleton `0.2 s` delayed `KQMusic::pop mtower.aud`, and instant frame-0
-  follow snap after a camera cut.
+- **Dead City polish (`Q197`, `Q198`, logs only):** `Tile2`/`Tile3`/
+  `Scales`/`Fall` state numbers, all six Scales camera cuts and `walkTo`
+  exit, tower skeleton `0.2 s` delayed `KQMusic::pop mtower.aud`, and
+  instant frame-0 follow snap after a camera cut.
 - **Script language & shared hints:** unquoted `;` statement splitting
-  (fixing `Snowexit`'s 11 mushrooms), `inc`, `setcat`, `alias`,
+  (`Snowexit`'s 11 mushrooms spawn — seen out of bounds with the free
+  camera, kept as-is per user), `inc`, `setcat`, `alias`,
   `getConnorFlag`, safe `mouseAction`, `KQGame::selectScreen`, and 14
   loading/world-start commands.
 - **World shadows, dynamic `loadAnim`, camera shake & haze zones:**
-  `allowShadows` on world load and live toggle; dynamic `KQAnimOnce`
-  spawning (`loadAnim`); triangular-wave `KQCamera::shake`; and
-  `KQHazer` proximity haze zones (`DeadCity`'s `litehaze`).
+  `allowShadows` on world load and live toggle (**checked by eye: works**);
+  `KQCamera::shake` (**checked by eye: works**); dynamic `KQAnimOnce`
+  spawning (`loadAnim`, logs only); and `KQHazer` proximity haze zones
+  (`DeadCity`'s `litehaze`: fog ramp **checked by eye**, follow-up `B1-F2`
+  planned for `H`-key bounding box and per-frame FPS drop / terminal spam).
 - **Help popups and F1 Help Book:** scripted (`doPopup`) and built-in
   beginner tips with `1.5 s` delay, `1.0 s` deferral, `3.0 s` cooldown,
   `Options.cs` `notStartingHelp`, startup `stopHelp`, `38×7` wrapping
   with key-name expansion, `intrface.aud`, game pause, and the 24-page
-  **F1** Help Book (`<<`, `Close`, `>>`).
+  **F1** Help Book (**checked by eye**: both open and pause cleanly,
+  follow-up `B1-F1` planned for `Close / << / >>` button order, Portal-style
+  highlight/arrow animation, `click.aud` on clicks, and instant close
+  without `0.2 s` blank-window linger).
 
 ## Viewer helpers (not in the original)
 
