@@ -4193,6 +4193,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `loadAnim` spawns live `KQAnimOnce` (`once = true`, `deleteWhenDone = 0` initially), sets `$ObjectName` (`@` -> `NoName<n>`), snaps `z == -1/-2` synchronously, supports `.kqs`/`.dts` (`animPos`, `timeScale`, `cyclic`, `interruptable`) and `.anm` (`loopName`) forms | `script-commands.md` rule 11 & Edge cases; `anim-scripts.md` rule 11 | unit test `load_anim_spawns_kq_anim_once_for_shape_and_anm_forms`; Swamp `doors.log` & `viewer.log` (`swmpgas.kqs`) |
 | Script-targeted `.kqs`/`.dts`/`.anm` files preloaded from world and `GAME/Kq` scripts as animated `Template`s; `loadAnim` removed from `LOADING_HINTS` | `script-commands.md` rule 11; `MASK/swamp/kq/fienfir*.cs`, `MASK/GAME/Kq/swmpfrbl.cs` | Swamp `viewer.log` (`loadAnim templates: 2 preloaded: ["endfrbl.kqs", "swmpgas.kqs"]`) & `anim.log` |
 
+## B1-5 2026-11-20: `KQCamera::shake` — core `camera.rs`, `active.rs`; viewer `door_view.rs`, `game_camera.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQCamera::shake <dur> <xMax> <xPeriod> <zMax> <zPeriod>`: 6 words, smooth tent envelope `1 - |t / half - 1|` (`dur <= 0` cancels), `x` wave `sin(period * (elapsed + period / 2) * pi) * xMax`, `z` wave `sin(period * elapsed * pi) * zMax` | `camera.md` "Shake and cutscene cameras" | unit tests `camera_shake_envelope_wave_and_reset`, `camera_shake_parses_six_words_and_checks_usage` |
+| Follow camera sets `tilt = -0.200 + pitch` and adds yaw through `aim_view`, guards `MOVE_RESETS_TILT` while shaking, and restores `-0.200` tilt / `0` yaw when finished; fixed camera adds deltas without undo; first-person helper `first_person_angles` adds `zWave` / `xWave` | `camera.md` "Shake and cutscene cameras" | unit tests; Daventry `doors.log` & `camera.log` (`update 10`..`41`: 30 active `shake` ticks, `shake_end` clean restore) |
+
 
 
 

@@ -400,6 +400,63 @@ pub struct Input {
     pub change_mode: bool,
 }
 
+/// `KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>` (`camera.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraShake {
+    pub seconds: f32,
+    pub x_max: f32,
+    pub x_period: f32,
+    pub z_max: f32,
+    pub z_period: f32,
+    pub tick: u32,
+    pub cur_x: f32,
+    pub cur_z: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ShakeStep {
+    Active { pitch: f32, yaw: f32 },
+    Ended,
+}
+
+impl CameraShake {
+    pub fn new(seconds: f32, x_max: f32, x_period: f32, z_max: f32, z_period: f32) -> Self {
+        CameraShake { seconds, x_max, x_period, z_max, z_period, tick: 0, cur_x: 0.0, cur_z: 0.0 }
+    }
+
+    /// Advances one 15 Hz update: triangular envelope (`seconds × 7.5` up,
+    /// then down) and sine wave with `0.293` frequency scale (`camera.md`).
+    pub fn step(&mut self) -> ShakeStep {
+        if self.seconds <= 0.0 || (self.tick as f32) >= self.seconds * 15.0 {
+            self.tick = 0;
+            self.cur_x = 0.0;
+            self.cur_z = 0.0;
+            return ShakeStep::Ended;
+        }
+        let half = self.seconds * 7.5;
+        if (self.tick as f32) < half {
+            self.cur_x += self.x_max / half;
+            self.cur_z += self.z_max / half;
+        } else {
+            self.cur_x -= self.x_max / half;
+            self.cur_z -= self.z_max / half;
+        }
+        self.tick += 1;
+        let t = self.tick as f32;
+        let pitch = (self.x_period * t * 0.293).sin() * self.cur_x;
+        let yaw = (self.z_period * t * 0.293).sin() * self.cur_z;
+        ShakeStep::Active { pitch, yaw }
+    }
+
+    /// First-person angles (`rx`, `ry`, `rz`) during or at end of shake (`camera.md`).
+    pub fn first_person_angles(step: ShakeStep) -> (f32, f32, f32) {
+        match step {
+            ShakeStep::Active { pitch, yaw } => (pitch - 0.175, 0.0, yaw + 3.14),
+            ShakeStep::Ended => (-0.175, 0.0, 3.14),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Camera {
     pub position: [f32; 3],
@@ -441,6 +498,9 @@ pub struct Camera {
     /// the view's tilt is only the player's, not aimed at Connor.
     pub hold: bool,
     mouse_offset: f32,
+    pub shake_yaw: f32,
+    last_shake_yaw: f32,
+    pub shaking: bool,
     last_error: f32,
     dragging: bool,
     backward: Option<bool>,
@@ -590,6 +650,9 @@ impl Camera {
             turn_back: false,
             hold: false,
             mouse_offset: 0.0,
+            shake_yaw: 0.0,
+            last_shake_yaw: 0.0,
+            shaking: false,
             last_error: 0.0,
             dragging: false,
             backward: None,
@@ -797,7 +860,7 @@ impl Camera {
         // Tilt snaps back once the followed object moves (normal mode).
         if let (Mode::Normal, Some(last)) = (self.mode, self.last_base) {
             let moved = (base[0] - last[0]).abs() + (base[1] - last[1]).abs();
-            if moved > MOVE_RESETS_TILT && self.tilt != DEFAULT_TILT && mf == 0.0 {
+            if moved > MOVE_RESETS_TILT && self.tilt != DEFAULT_TILT && mf == 0.0 && !self.shaking {
                 self.tilt = DEFAULT_TILT;
                 report.events.push("tilt back to default (Connor moved)".into());
             }
@@ -824,7 +887,7 @@ impl Camera {
         // tile-puzzle.md rule 7a: with the hold switch on, the player's
         // tilt only, not aimed up or down at Connor.
         self.view_tilt = if self.hold { self.tilt } else { self.tilt + up };
-        let error = |c: &Camera| wrap(towards + c.mouse_offset - c.heading);
+        let error = |c: &Camera| wrap(towards + c.mouse_offset + c.shake_yaw - c.heading);
         let before = self.heading_state;
         let start = error(self);
         let mut switched = None;
@@ -857,20 +920,25 @@ impl Camera {
         let e = error(self);
         let old = self.heading;
         match self.heading_state {
-            HeadingState::Idle => {}
+            HeadingState::Idle => {
+                let delta = self.shake_yaw - self.last_shake_yaw;
+                if delta != 0.0 {
+                    self.heading += delta;
+                }
+            }
             HeadingState::CatchingUp => {
                 if !((moving || e.abs() >= CATCH_UP_ANY) && !self.measure_switch(followed, &mut switched)) {
                     self.heading_state = HeadingState::Idle;
                 } else if e.abs() < HEADING_LOCK {
                     self.heading_state = HeadingState::Locked;
                 } else if e.abs() > CATCH_UP_ANY {
-                    self.heading = towards + self.mouse_offset - e.signum() * CATCH_UP_MOVING;
+                    self.heading = towards + self.mouse_offset + self.shake_yaw - e.signum() * CATCH_UP_MOVING;
                 } else if e * self.last_error >= 0.0 && e.abs() > self.last_error.abs() {
                     self.heading += e.signum() * CATCH_UP_GAIN * (e.abs() - self.last_error.abs());
                 }
             }
             HeadingState::Locked => {
-                self.heading = towards + self.mouse_offset;
+                self.heading = towards + self.mouse_offset + self.shake_yaw;
                 // Unlocked after this exact aim (STAND-IN for the order, Q113 b).
                 if !dragging && !self.turn_back && (!moving || self.measure_switch(followed, &mut switched)) {
                     self.heading_state = HeadingState::Idle;
@@ -881,11 +949,12 @@ impl Camera {
                     self.heading_state = HeadingState::Locked;
                 } else {
                     // A third of the rest, one snap angle ("Do not reproduce").
-                    self.heading = towards + self.mouse_offset - follow_turn_step(e);
+                    self.heading = towards + self.mouse_offset + self.shake_yaw - follow_turn_step(e);
                 }
             }
         }
         self.heading = wrap(self.heading);
+        self.last_shake_yaw = self.shake_yaw;
         self.last_error = error(self);
         HeadingStep { before, after: self.heading_state, error: start, turn: wrap(self.heading - old), left: self.last_error, offset: self.mouse_offset, switched }
     }
@@ -1571,5 +1640,27 @@ mod tests {
         assert!(!c.set_range(2500.0, 1000.0));
         assert_eq!(c.range, DEFAULT_RANGE);
         assert!(c.set_range(1000.0, 2500.0));
+    }
+
+    #[test]
+    fn camera_shake_envelope_wave_and_reset() {
+        let mut s = CameraShake::new(2.0, 0.02, 2.0, 0.03, 5.0);
+        let mut peak_x = 0.0f32;
+        let mut steps = Vec::new();
+        for _ in 0..30 {
+            let step = s.step();
+            let ShakeStep::Active { pitch, yaw } = step else { panic!("expected active step") };
+            peak_x = peak_x.max(s.cur_x);
+            steps.push((pitch, yaw, s.cur_x, s.cur_z));
+        }
+        assert_eq!(s.tick, 30);
+        assert!((peak_x - 0.02).abs() < 1e-6, "peak cur_x {peak_x}");
+        assert!(s.cur_x.abs() < 1e-5 && s.cur_z.abs() < 1e-5, "envelope returns to zero: {}, {}", s.cur_x, s.cur_z);
+        // Tick 1 uses t = 1 and frequency factor 0.293.
+        let want_pitch_1 = (2.0 * 1.0 * 0.293f32).sin() * (0.02 / 15.0);
+        assert!((steps[0].0 - want_pitch_1).abs() < 1e-6);
+        assert_eq!(s.step(), ShakeStep::Ended);
+        assert_eq!((s.tick, s.cur_x, s.cur_z), (0, 0.0, 0.0));
+        assert_eq!(CameraShake::first_person_angles(ShakeStep::Ended), (-0.175, 0.0, 3.14));
     }
 }

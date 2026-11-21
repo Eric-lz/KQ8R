@@ -1529,6 +1529,10 @@ pub fn trap_step(
                 (Some(c), None) => format!("{at}: applied: {}", c.cut_to(aim, roll, &|_, _| None, &|_, _| None)),
                 (None, _) => format!("{at}: cutToCamLoc: no game camera; not applied"),
             },
+            Request::CamShake { seconds, x_max, x_period, z_max, z_period, at } => match camera.as_mut() {
+                Some(c) => format!("{at}: applied: {}", c.start_shake(seconds, x_max, x_period, z_max, z_period)),
+                None => format!("{at}: KQCamera::shake: no game camera; not applied"),
+            },
             Request::CameraFollow { connor: follow, at } => match camera.as_mut() {
                 Some(c) => format!("{at}: applied: {}", c.follow(follow, connor.mover.position)),
                 None => format!("{at}: KQCamera::follow: no game camera; not applied"),

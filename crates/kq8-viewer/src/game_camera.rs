@@ -201,6 +201,8 @@ pub struct GameCam {
     /// tick; if `KQCamera::follow Connor` runs in the same tick, frame 0
     /// snaps straight to the followed spot instead of blending from the cut.
     just_cut: bool,
+    /// Active `KQCamera::shake` (`camera.md`).
+    shake: Option<kq8_core::camera::CameraShake>,
 }
 
 impl GameCam {
@@ -510,6 +512,14 @@ impl GameCam {
         self.log.detail(format!("camera update {}: {line}", self.updates));
         line
     }
+
+    /// `KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>` (`camera.md`).
+    pub fn start_shake(&mut self, seconds: f32, x_max: f32, x_period: f32, z_max: f32, z_period: f32) -> String {
+        self.shake = Some(kq8_core::camera::CameraShake::new(seconds, x_max, x_period, z_max, z_period));
+        let line = format!("shake {seconds} s (xMax {x_max}, xPeriod {x_period}, zMax {z_max}, zPeriod {z_period}) (camera.md)");
+        self.log.detail(format!("camera update {}: {line}", self.updates));
+        line
+    }
 }
 
 /// The height rule on a flight's last update or a cut (Q97: the aim point
@@ -616,6 +626,7 @@ pub fn make(
         flights_ended: 0,
         follow_due: None,
         just_cut: false,
+        shake: None,
     };
     g.log.detail("update x y z distance_to_aim terrain_below height_above_terrain tilt mode range_min range_max | connor_moving blocked_by hit swing_step swing_left pulled_in inside_building | causes (one line per camera update; a tick without one has no line) | height_step aim_moved_sum wanted start_z before_z | heading_state_before->after error turn left [mouse_offset] [switched] heading view_tilt | centre_line_at_connor (height above his feet where the view's centre line passes him; his box is 1,300 tall)");
     Some(g)
@@ -715,6 +726,10 @@ pub fn camera_step(
         g.log.detail(format!("camera tick {}: Connor's first move since the rope was taken at the top: not followed, the camera stays (ropeandhook.md rule 9); the flag is cleared", g.updates));
     }
     let script_moves = std::mem::take(&mut g.script_moves);
+    let shake_step = g.shake.as_mut().map(|s| s.step());
+    if matches!(shake_step, Some(kq8_core::camera::ShakeStep::Ended)) {
+        g.shake = None;
+    }
     // `KQCamera::follow none` (camera.md rule 1): it stays where it is,
     // unless a flight is under way (M3 3m-4).
     if !g.following {
@@ -722,6 +737,20 @@ pub fn camera_step(
         g.pending.clear();
         let ground = |x: f32, y: f32| lookup.0.ground(x, y).map(|h| h.0);
         g.flight_step(&ground, &surface_line(&lookup.0));
+        match shake_step {
+            Some(kq8_core::camera::ShakeStep::Active { pitch, yaw }) => {
+                g.cam.view_tilt += pitch;
+                g.cam.heading = wrap(g.cam.heading + yaw);
+                g.view.tilt = g.cam.view_tilt;
+                g.view.heading = g.cam.heading;
+                g.current = (g.cam.position, g.cam.view_tilt, g.cam.heading);
+                g.log.detail(format!("camera tick {}: shake fixed pitch {:+.4}, yaw {:+.4} -> view_tilt {:.4}, heading {:.4}", g.updates, pitch, yaw, g.cam.view_tilt, g.cam.heading));
+            }
+            Some(kq8_core::camera::ShakeStep::Ended) => {
+                g.log.detail(format!("camera tick {}: shake ended (fixed mode: view kept)", g.updates));
+            }
+            None => {}
+        }
         if let Some(hold) = g.follow_due.take() {
             g.follow(true, sim.mover.position);
             g.set_hold(hold);
@@ -783,6 +812,21 @@ pub fn camera_step(
     }
     if g.cam.turn_back {
         causes.push("turn_back".into());
+    }
+    match shake_step {
+        Some(kq8_core::camera::ShakeStep::Active { pitch, yaw }) => {
+            g.cam.shaking = true;
+            g.cam.tilt = kq8_core::camera::DEFAULT_TILT + pitch;
+            g.cam.shake_yaw = yaw;
+            causes.push("shake".into());
+        }
+        Some(kq8_core::camera::ShakeStep::Ended) => {
+            g.cam.shaking = false;
+            g.cam.tilt = kq8_core::camera::DEFAULT_TILT;
+            g.cam.shake_yaw = 0.0;
+            causes.push("shake_end".into());
+        }
+        None => {}
     }
     // Item 5: a mouse movement during a drag runs an update at once (one
     // per game update here, with the movement since the last); holding the

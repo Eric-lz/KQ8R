@@ -243,6 +243,8 @@ pub enum Request {
     ClickTurn { name: String, target: [f32; 2], at: String },
     /// `allowShadows 0|1` (`characters.md` rule 36): world-wide shadow toggle.
     AllowShadows { allow: bool, at: String },
+    /// `KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>` (`camera.md`).
+    CamShake { seconds: f32, x_max: f32, x_period: f32, z_max: f32, z_period: f32, at: String },
 }
 
 /// A panel command of a script (`interface.md` rule 15, M4 4c-2).
@@ -2175,6 +2177,24 @@ impl WorldState {
         };
         self.note(format!("{at}: {}: {line}", words[0]));
         self.requests.push(request);
+        "0".into()
+    }
+
+    /// `KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>` (`camera.md`).
+    fn cam_shake(&mut self, words: &[String], at: &str) -> String {
+        let [_, sec, xm, xp, zm, zp] = words else {
+            self.note(format!("{at}: usage: KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>; nothing"));
+            return "0".into();
+        };
+        let (seconds, x_max, x_period, z_max, z_period) = (
+            c_atof(sec) as f32,
+            c_atof(xm) as f32,
+            c_atof(xp) as f32,
+            c_atof(zm) as f32,
+            c_atof(zp) as f32,
+        );
+        self.note(format!("{at}: KQCamera::shake {seconds} {x_max} {x_period} {z_max} {z_period} (camera.md)"));
+        self.requests.push(Request::CamShake { seconds, x_max, x_period, z_max, z_period, at: at.to_string() });
         "0".into()
     }
 
@@ -4180,6 +4200,7 @@ impl ScriptHost for WorldState {
             "KQConner::endJump" => Some(self.end_jump(at)),
             "KQCamera::setRange" => Some(self.set_range(words, at)),
             "KQCamera::addCamLoc" | "KQCamera::flyToCamLoc" | "KQCamera::cutToCamLoc" => Some(self.cam_loc(words, at)),
+            "KQCamera::shake" => Some(self.cam_shake(words, at)),
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
             "KQMonster::dropItem" => Some(self.drop_item_command(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
@@ -10837,5 +10858,22 @@ mod talk_tests {
         assert_eq!(a.world.anims[anm_idx].player.base.position, [10.0, 20.0, 30.0]);
         assert_eq!(a.world.world_command(&words("loadAnim bad swmpgas.kqs 0 1"), "t"), Some("1".into()));
         assert_eq!(a.world.world_command(&words("loadAnim bad bad.txt a b"), "t"), Some("1".into()));
+    }
+
+    #[test]
+    fn camera_shake_parses_six_words_and_checks_usage() {
+        let mut a = active("", &[]);
+        let w = &mut a.world;
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(w.world_command(&words("KQCamera::shake 2 .02 2 .03 5"), "t"), Some("0".into()));
+        assert!(matches!(
+            w.requests.as_slice(),
+            [Request::CamShake { seconds, x_max, x_period, z_max, z_period, .. }]
+                if (*seconds - 2.0).abs() < 1e-6 && (*x_max - 0.02).abs() < 1e-6 && (*x_period - 2.0).abs() < 1e-6 && (*z_max - 0.03).abs() < 1e-6 && (*z_period - 5.0).abs() < 1e-6
+        ));
+        w.requests.clear();
+        assert_eq!(w.world_command(&words("KQCamera::shake 2 .02"), "t"), Some("0".into()));
+        assert!(w.requests.is_empty());
+        assert!(w.log.iter().any(|l| l.contains("usage: KQCamera::shake")));
     }
 }
