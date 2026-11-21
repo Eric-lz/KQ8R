@@ -40,8 +40,6 @@ struct Settings {
     // Suns: colour (w unused) and aim in world space (w unused).
     sun_colour: array<vec4<f32>, 4>,
     sun_aim: array<vec4<f32>, 4>,
-    // Screen colour 0..1 (rule 23); w unused.
-    haze_colour: vec4<f32>,
     sun_count: u32,
     // 0 = none (full brightness), 1 = flat, 2 = smooth (rule 7).
     lighting: u32,
@@ -49,11 +47,6 @@ struct Settings {
     mode: u32,
     // 1 if `colour_texture` holds the texture, 0 for a plain colour.
     textured: u32,
-    // 1 = haze on (F8).
-    haze_on: u32,
-    // Game units (rule 19).
-    haze_start: f32,
-    haze_end: f32,
     // Material flag 0x10000 (rule 20), the object's b_hazeSolid (rule 21).
     haze_halved: u32,
     haze_solid: u32,
@@ -66,6 +59,15 @@ struct Settings {
     haze_from: vec4<f32>,
     // 1 = texture pixels with alpha below one half are holes (Invisible).
     cutout: u32,
+};
+
+// Shared world haze buffer (`object_light.rs::HazeBuffer`), updated in O(1)
+// across all materials on F8, setHaze, and KQHazer ramps.
+struct HazeParams {
+    // x = object/building haze_start, y = haze_end, z = ground_start, w = visible_distance.
+    distances: vec4<f32>,
+    // rgb = haze screen colour (0..1, rule 23), w > 0.5 = haze_on (F8).
+    colour_on: vec4<f32>,
 };
 
 // One light of the scene (`scene_lights.rs`): position (world space; w = 1
@@ -107,6 +109,7 @@ struct NodeFrame {
 // Smooth joins (J-2, ours): per record the old part's node-frame (x, its
 // bits) and how far from it to the new pose the drawing has gone (y, 0-1).
 @group(constants::MATERIAL_BIND_GROUP) @binding(7) var<storage, read> anim_joins: array<vec4<f32>>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(8) var<storage, read> haze_params: HazeParams;
 
 struct ObjectIn {
     @builtin(instance_index) instance_index: u32,
@@ -272,9 +275,11 @@ fn vertex(v: ObjectIn) -> LitVertex {
     // emitter's location (rule 30).
     let at = select(world_from_local[3].xyz, settings.haze_from.xyz, settings.haze_from.w > 0.5);
     let distance = length(at - view.world_position) * settings.game_units;
+    let haze_start = haze_params.distances.x;
+    let haze_end = haze_params.distances.y;
     var haze = 0.01;
-    if distance >= settings.haze_start {
-        haze = min((distance - settings.haze_start) / max(settings.haze_end - settings.haze_start, 0.001), 1.0);
+    if distance >= haze_start {
+        haze = min((distance - haze_start) / max(haze_end - haze_start, 0.001), 1.0);
     }
 
     var out: LitVertex;
@@ -318,7 +323,7 @@ fn fragment(in: LitVertex) -> @location(0) vec4<f32> {
     // as shown on screen, so the light goes through the sRGB curve before
     // it multiplies Bevy's linear colour.
     var lit = vec4<f32>(colour.rgb * screen_to_linear(in.light), colour.a);
-    if settings.haze_on == 1u {
+    if haze_params.colour_on.w > 0.5 {
         var h = in.haze;
         if settings.haze_halved == 1u {
             h = h * 0.5; // rule 20
@@ -334,7 +339,7 @@ fn fragment(in: LitVertex) -> @location(0) vec4<f32> {
             }
         } else {
             // Rule 23: plain blend on screen colours (M1 6d).
-            lit = vec4<f32>(haze_blend(lit.rgb, settings.haze_colour.rgb, h), lit.a);
+            lit = vec4<f32>(haze_blend(lit.rgb, haze_params.colour_on.rgb, h), lit.a);
         }
     }
     return lit;

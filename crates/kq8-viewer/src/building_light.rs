@@ -221,16 +221,9 @@ pub fn factor_buffer(factors: &[f32]) -> ShaderBuffer {
 pub struct Settings {
     /// Linear colour (white for textures); alpha = opacity.
     pub base_colour: Vec4,
-    /// Haze colour, screen colour 0..1 (rule 23); w unused.
-    pub haze_colour: Vec4,
     /// 0 x1, 1 x2, 2 off.
     pub mode: u32,
     pub textured: u32,
-    /// 1 = haze on (F8).
-    pub haze_on: u32,
-    /// Haze start and end in game units (rules 19, 29).
-    pub haze_start: f32,
-    pub haze_end: f32,
     /// The building's `b_hazeSolid` (rule 29).
     pub haze_solid: u32,
     /// Game units per Bevy unit.
@@ -253,6 +246,9 @@ pub struct BuildingMaterial {
     /// Each surface's haze factor (`factor_buffer`), per building copy.
     #[storage(6, read_only)]
     pub factors: Handle<ShaderBuffer>,
+    /// Shared haze parameters (`HazeBuffer`).
+    #[storage(7, read_only)]
+    pub haze_params: Handle<ShaderBuffer>,
     pub alpha_mode: AlphaMode,
 }
 
@@ -329,12 +325,8 @@ pub fn building_material(
     BuildingMaterial {
         settings: Settings {
             base_colour: base,
-            haze_colour: Vec3::from(light.haze.colour).extend(0.0),
             mode: mode_code(light.mode),
             textured,
-            haze_on: u32::from(light.haze_on),
-            haze_start: light.haze.start,
-            haze_end: light.haze.end,
             haze_solid: 0,
             game_units: UNITS_PER_METRE,
         },
@@ -342,6 +334,7 @@ pub fn building_material(
         light: light_image,
         corners,
         factors,
+        haze_params: light.haze_buffer.clone(),
         alpha_mode: AlphaMode::Opaque,
     }
 }
@@ -381,34 +374,28 @@ pub fn surface_haze(haze: &kq8_data::haze::Haze, corners: &[[f32; 3]], camera: [
     }
 }
 
-/// F7 / F8: the building materials follow the objects' light mode (which
-/// follows the ground's) and haze switch.
+/// F7: the building materials follow the objects' light mode (which follows
+/// the ground's). F8 runs through the shared `HazeBuffer`.
 pub fn follow_mode(
     light: Res<ObjectLight>,
-    mut applied: Local<Option<(LightMode, bool)>>,
+    mut applied: Local<Option<LightMode>>,
     mut materials: ResMut<Assets<BuildingMaterial>>,
     shared: Res<Shared>,
 ) {
-    let now = (light.mode, light.haze_on);
     if applied.is_none() {
-        *applied = Some(now);
+        *applied = Some(light.mode);
     }
-    if *applied == Some(now) {
+    if *applied == Some(light.mode) {
         return;
     }
-    *applied = Some(now);
-    let (code, haze) = (mode_code(light.mode), u32::from(light.haze_on));
+    *applied = Some(light.mode);
+    let code = mode_code(light.mode);
     let mut changed = 0;
     for (_, m) in materials.iter_mut() {
         m.settings.mode = code;
-        m.settings.haze_on = haze;
         changed += 1;
     }
-    shared.log.lock().unwrap().summary(format!(
-        "building materials: light mode {}, haze {} ({changed} materials)",
-        light.mode.name(),
-        if light.haze_on { "on" } else { "off" }
-    ));
+    shared.log.lock().unwrap().summary(format!("building materials: light mode {} ({changed} materials)", light.mode.name()));
 }
 
 #[cfg(test)]

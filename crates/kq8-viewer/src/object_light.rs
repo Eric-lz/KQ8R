@@ -72,22 +72,16 @@ pub struct Settings {
     /// Linear colour (white for textures); alpha = opacity.
     pub base_colour: Vec4,
     pub ambient: Vec4,
+    /// Suns: colour (w unused) and aim in Bevy's world space (rule 5).
     pub sun_colour: [Vec4; MAX_SUNS],
     /// In Bevy's world space, not unit length (rule 5).
     pub sun_aim: [Vec4; MAX_SUNS],
-    /// Haze colour, screen colour 0..1 (rule 23); w unused.
-    pub haze_colour: Vec4,
     pub sun_count: u32,
     /// 0 none, 1 flat, 2 smooth.
     pub lighting: u32,
     /// 0 x1, 1 x2, 2 off.
     pub mode: u32,
     pub textured: u32,
-    /// 1 = haze on (F8).
-    pub haze_on: u32,
-    /// Game units: haze start and end (rule 19).
-    pub haze_start: f32,
-    pub haze_end: f32,
     /// Material flag 0x10000 (rule 20).
     pub haze_halved: u32,
     /// The object's `b_hazeSolid` (rule 21).
@@ -132,6 +126,9 @@ pub struct ObjectMaterial {
     /// Smooth joins (J-2): the join records.
     #[storage(7, read_only)]
     pub anim_joins: Handle<ShaderBuffer>,
+    /// Shared haze parameters (`HazeBuffer`), bound by objects, ground, and buildings.
+    #[storage(8, read_only)]
+    pub haze_params: Handle<ShaderBuffer>,
     /// Drawn from the animation buffers (a topology mesh and a `MeshTag`)
     /// instead of a finished mesh.
     pub animated: bool,
@@ -205,15 +202,53 @@ impl Material for ObjectMaterial {
     }
 }
 
+/// Shared 32-byte GPU buffer holding the live haze distances, colour, and F8
+/// toggle (`distances`, `colour_on`) for every object, ground, and building
+/// material so `KQHazer` ramps and `setHaze` update in O(1).
+#[derive(Resource, Clone)]
+pub struct HazeBuffer(pub Handle<ShaderBuffer>);
+
+/// Packs `[haze.start, haze.end, haze.ground_start(), haze.visible]` and
+/// `[r, g, b, haze_on]` for [`HazeBuffer`].
+pub fn haze_buffer_data(haze: &Haze, haze_on: bool) -> Vec<[f32; 4]> {
+    vec![
+        [haze.start, haze.end, haze.ground_start(), haze.visible],
+        [haze.colour[0], haze.colour[1], haze.colour[2], if haze_on { 1.0 } else { 0.0 }],
+    ]
+}
+
+/// Builds a [`ShaderBuffer`] from the current haze state.
+pub fn haze_buffer(haze: &Haze, haze_on: bool) -> ShaderBuffer {
+    ShaderBuffer::new(haze_buffer_data(haze, haze_on), RenderAssetUsages::default())
+}
+
+/// Rewrites the shared GPU [`HazeBuffer`] in O(1) without touching materials.
+pub fn write_haze_buffer(buffers: &mut Assets<ShaderBuffer>, handle: &Handle<ShaderBuffer>, haze: &Haze, haze_on: bool) {
+    if let Some(mut b) = buffers.get_mut(handle) {
+        *b = haze_buffer(haze, haze_on);
+    }
+}
+
 /// Registers the shader and the material, and the scene's light list
-/// (M1 7c) that every object material shares.
+/// (M1 7c) plus shared haze buffer (`HazeBuffer`) that materials share.
 pub fn add(app: &mut App) {
     embedded_asset!(app, "object_light.wesl");
     app.add_plugins(MaterialPlugin::<ObjectMaterial>::default());
-    let buffer = app.world_mut().resource_mut::<Assets<ShaderBuffer>>().add(crate::scene_lights::empty_buffer());
-    app.world_mut().resource_mut::<ObjectLight>().scene_lights = buffer.clone();
-    let anim = crate::anim_gpu::AnimBuffers::new(&mut app.world_mut().resource_mut::<Assets<ShaderBuffer>>());
-    app.world_mut().resource_mut::<ObjectLight>().anim = Some(anim.clone());
+    let (haze, haze_on) = {
+        let light = app.world().resource::<ObjectLight>();
+        (light.haze, light.haze_on)
+    };
+    let mut buffers = app.world_mut().resource_mut::<Assets<ShaderBuffer>>();
+    let buffer = buffers.add(crate::scene_lights::empty_buffer());
+    let haze_buf = buffers.add(haze_buffer(&haze, haze_on));
+    let anim = crate::anim_gpu::AnimBuffers::new(&mut buffers);
+    {
+        let mut light = app.world_mut().resource_mut::<ObjectLight>();
+        light.scene_lights = buffer.clone();
+        light.haze_buffer = haze_buf.clone();
+        light.anim = Some(anim.clone());
+    }
+    app.insert_resource(HazeBuffer(haze_buf));
     app.insert_resource(anim);
     app.insert_resource(crate::scene_lights::SceneLights::new(buffer))
         .init_resource::<crate::scene_lights::LightsGroup>()
@@ -251,6 +286,8 @@ pub struct ObjectLight {
     pub haze_on: bool,
     /// The scene's light list (M1 7c), set by `add`.
     pub scene_lights: Handle<ShaderBuffer>,
+    /// Shared GPU haze parameters (`HazeBuffer`), set by `add`.
+    pub haze_buffer: Handle<ShaderBuffer>,
     /// The animation buffers (step 4), set by `add`.
     pub anim: Option<crate::anim_gpu::AnimBuffers>,
     /// One image per texture (name and size) for this world's object
@@ -260,7 +297,16 @@ pub struct ObjectLight {
 
 impl ObjectLight {
     pub fn new(lights: Lights, mode: LightMode, haze: Haze, haze_on: bool) -> Self {
-        ObjectLight { lights, mode, haze, haze_on, scene_lights: Handle::default(), anim: None, images: Default::default() }
+        ObjectLight {
+            lights,
+            mode,
+            haze,
+            haze_on,
+            scene_lights: Handle::default(),
+            haze_buffer: Handle::default(),
+            anim: None,
+            images: Default::default(),
+        }
     }
 
     fn settings(&self, base_colour: Vec4, shading: Shading, textured: bool) -> Settings {
@@ -275,14 +321,10 @@ impl ObjectLight {
             ambient: Vec3::from(self.lights.ambient).extend(0.0),
             sun_colour,
             sun_aim,
-            haze_colour: Vec3::from(self.haze.colour).extend(0.0),
             sun_count: self.lights.suns.len().min(MAX_SUNS) as u32,
             lighting: lighting_code(shading.lighting),
             mode: mode_code(self.mode),
             textured: u32::from(textured),
-            haze_on: u32::from(self.haze_on),
-            haze_start: self.haze.start,
-            haze_end: self.haze.end,
             haze_halved: u32::from(shading.haze_halved),
             haze_solid: 0,
             haze_multiplier: 1.0,
@@ -371,6 +413,7 @@ pub fn object_material(look: Look, shading: Shading, light: &ObjectLight, images
         anim_normals: anim(|a| &a.normals),
         anim_nodes: anim(|a| &a.nodes),
         anim_joins: anim(|a| &a.joins),
+        haze_params: light.haze_buffer.clone(),
         animated: false,
     }
 }
@@ -473,11 +516,11 @@ pub fn setup_haze_label(mut commands: Commands, light: Res<ObjectLight>) {
     ));
 }
 
-/// F8: haze on / off in every object material.
+/// F8: haze on / off via the shared GPU haze buffer.
 pub fn toggle_haze(
     keys: Res<ButtonInput<KeyCode>>,
     mut light: ResMut<ObjectLight>,
-    mut materials: ResMut<Assets<ObjectMaterial>>,
+    mut buffers: ResMut<Assets<ShaderBuffer>>,
     mut label: Query<&mut Text, With<HazeLabel>>,
     shared: Res<Shared>,
 ) {
@@ -485,36 +528,29 @@ pub fn toggle_haze(
         return;
     }
     light.haze_on = !light.haze_on;
-    let on = u32::from(light.haze_on);
-    let mut changed = 0;
-    for (_, m) in materials.iter_mut() {
-        m.settings.haze_on = on;
-        changed += 1;
-    }
+    write_haze_buffer(&mut buffers, &light.haze_buffer, &light.haze, light.haze_on);
     for mut t in &mut label {
         t.0 = haze_label_text(light.haze_on);
     }
-    shared.log.lock().unwrap().summary(format!("key F8: haze {} ({changed} materials)", if light.haze_on { "on" } else { "off" }));
+    shared.log.lock().unwrap().summary(format!("key F8: haze {} (shared haze buffer)", if light.haze_on { "on" } else { "off" }));
 }
 
-/// The scripts' `setHaze` numbers waiting to be applied, with where they
-/// came from ([`apply_set_haze`]).
+/// The scripts' `setHaze` numbers waiting to be applied: `(haze, at, quiet)`
+/// ([`apply_set_haze`]). Continuous `KQHazer` ramp updates use `quiet = true`.
 #[derive(Resource, Default)]
-pub struct SetHaze(pub Vec<(f32, String)>);
+pub struct SetHaze(pub Vec<(f32, String, bool)>);
 
 /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): `hazeDistance` =
-/// n, `visibleDistance` = 1.5 n (the far limit the same), at once: the
-/// object, building and ground materials take the new pair now; the
-/// objects' haze and switch-off distance read it every frame. The four
-/// console lines go to the log. **Ours:** our camera's projection keeps its
-/// own far plane (twice the terrain's size, as at load); the ground ends at
-/// `visibleDistance` in its shader and objects switch off there, as before.
+/// n, `visibleDistance` = 1.5 n (the far limit the same), at once: writes the
+/// shared GPU [`HazeBuffer`] in O(1) for every object, building, and ground
+/// material; the objects' switch-off distance reads `light.haze` every frame.
+/// **Ours:** our camera's projection keeps its own far plane (twice the
+/// terrain's size, as at load); the ground ends at `visibleDistance` in its
+/// shader and objects switch off there, as before.
 pub fn apply_set_haze(
     mut queue: ResMut<SetHaze>,
     light: Option<ResMut<ObjectLight>>,
-    mut objects: ResMut<Assets<ObjectMaterial>>,
-    mut ground: ResMut<Assets<crate::ground_haze::GroundMaterial>>,
-    mut buildings: ResMut<Assets<crate::building_light::BuildingMaterial>>,
+    mut buffers: ResMut<Assets<ShaderBuffer>>,
     shared: Res<Shared>,
 ) {
     if queue.0.is_empty() {
@@ -522,43 +558,43 @@ pub fn apply_set_haze(
     }
     let mut log = shared.log.lock().unwrap();
     let Some(mut light) = light else {
-        for (_, at) in queue.0.drain(..) {
+        for (_, at, _) in queue.0.drain(..) {
             log.summary(format!("{at}: setHaze:  could not find environment manager (no terrain); nothing changes"));
         }
         return;
     };
-    for (n, at) in queue.0.drain(..) {
+    let mut any_loud = false;
+    for (n, at, quiet) in queue.0.drain(..) {
         let background = light.haze.background;
         let mut haze = Haze::new(n, 1.5 * n, light.haze.colour);
         haze.background = background;
-        log.summary(format!(
+        let msg = format!(
             "{at}: setHaze {n}: Perspective = (unchanged, not kept by us); Haze = {:.0}; Visible = {:.0}; FarPlane = {:.0} (object-lighting.md rule 33a); was haze {:.0}, visible {:.0}",
             haze.start, haze.visible, haze.visible, light.haze.start, light.haze.visible
-        ));
+        );
+        if quiet {
+            log.detail(msg);
+        } else {
+            any_loud = true;
+            log.summary(msg);
+        }
         light.haze = haze;
     }
     let h = light.haze;
-    let (mut o, mut g, mut b) = (0, 0, 0);
-    for (_, m) in objects.iter_mut() {
-        (m.settings.haze_start, m.settings.haze_end) = (h.start, h.end);
-        o += 1;
-    }
-    for (_, m) in ground.iter_mut() {
-        (m.settings.haze_start, m.settings.visible_distance) = (h.ground_start(), h.visible);
-        g += 1;
-    }
-    for (_, m) in buildings.iter_mut() {
-        (m.settings.haze_start, m.settings.haze_end) = (h.start, h.end);
-        b += 1;
-    }
-    log.summary(format!(
-        "setHaze: haze starts at {:.0}, full at {:.0}; ground haze from {:.0}, ground ends at {:.0}; objects off at {:.0} from Connor; {o} object, {g} ground, {b} building materials changed",
+    write_haze_buffer(&mut buffers, &light.haze_buffer, &h, light.haze_on);
+    let summary_msg = format!(
+        "setHaze: haze starts at {:.0}, full at {:.0}; ground haze from {:.0}, ground ends at {:.0}; objects off at {:.0} from Connor; shared haze buffer updated",
         h.start,
         h.end,
         h.ground_start(),
         h.visible,
         h.visible
-    ));
+    );
+    if any_loud {
+        log.summary(summary_msg);
+    } else {
+        log.detail(summary_msg);
+    }
 }
 
 /// The placed objects, for the haze log: name, position (game units),
@@ -686,12 +722,25 @@ mod tests {
         // Game aim (0, 1, -0.66) -> Bevy (0, -0.66, -1), length kept.
         assert_eq!(s.sun_aim[0], Vec4::new(0.0, -0.66, -1.0, 0.0));
         assert_eq!((s.sun_count, s.lighting, s.mode, s.textured), (1, 2, 0, 1));
-        assert_eq!((s.haze_on, s.haze_start, s.haze_end, s.haze_halved, s.haze_solid), (1, 18_000.0, 22_950.0, 1, 0));
+        assert_eq!((s.haze_halved, s.haze_solid, s.haze_multiplier), (1, 0, 1.0));
         // Facing up in Bevy (+Y) is facing up in the game: 0.366.
         assert!((light.corner_light(Vec3::Y)[0] - 0.366).abs() < 1e-5);
         // Bevy's -Z is the game's +Y: facing away from the sun's y part.
         let away = Vec3::new(0.0, -0.66, -1.0).normalize();
         assert!((light.corner_light(away)[0] - 0.3).abs() < 1e-5);
         assert!((light.corner_light(-away)[0] - (0.3 + 0.1 * (1.0f32 + 0.66 * 0.66).sqrt())).abs() < 1e-5);
+    }
+
+    #[test]
+    fn haze_buffer_packs_distances_colour_and_flag() {
+        let haze = Haze::new(18_000.0, 27_000.0, [0.1, 0.2, 0.3]);
+        assert_eq!(
+            haze_buffer_data(&haze, true),
+            vec![[18_000.0, 22_950.0, haze.ground_start(), 27_000.0], [0.1, 0.2, 0.3, 1.0]]
+        );
+        assert_eq!(
+            haze_buffer_data(&haze, false),
+            vec![[18_000.0, 22_950.0, haze.ground_start(), 27_000.0], [0.1, 0.2, 0.3, 0.0]]
+        );
     }
 }

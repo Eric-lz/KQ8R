@@ -774,7 +774,19 @@ pub fn world_change_step(world: &mut World) {
             let mut light = object_light(&read, &opts);
             light.scene_lights = world.resource::<crate::scene_lights::SceneLights>().buffer.clone();
             light.anim = world.get_resource::<crate::anim_gpu::AnimBuffers>().cloned();
+            let haze_buf = world.resource::<object_light::HazeBuffer>().0.clone();
+            light.haze_buffer = haze_buf.clone();
+            let (new_haze, new_haze_on) = (light.haze, light.haze_on);
             world.insert_resource(light);
+            object_light::write_haze_buffer(
+                world.resource_mut::<Assets<bevy::render::storage::ShaderBuffer>>().as_mut(),
+                &haze_buf,
+                &new_haze,
+                new_haze_on,
+            );
+            if let Some(mut q) = world.get_resource_mut::<object_light::SetHaze>() {
+                q.0.clear();
+            }
             // The portal's place on the ground (z -1, rule 20.1), else
             // the asked one.
             if let Some(at) = request.portal.as_ref().and_then(|p| p.on_ground()).or(request.at) {

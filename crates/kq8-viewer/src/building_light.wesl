@@ -23,20 +23,22 @@ import bevy_pbr::render::{
 struct Settings {
     // Linear colour (white for textures), alpha = opacity.
     base_colour: vec4<f32>,
-    // Haze colour, screen colour 0..1 (rule 23); w unused.
-    haze_colour: vec4<f32>,
     // 0 = x1, 1 = x2 (doubled, capped), 2 = off (full brightness).
     mode: u32,
     // 1 if `colour_texture` holds the texture, 0 for a plain colour.
     textured: u32,
-    // 1 = haze on (F8); start and end in game units (rules 19, 29).
-    haze_on: u32,
-    haze_start: f32,
-    haze_end: f32,
     // The building's b_hazeSolid (rule 29).
     haze_solid: u32,
     // Game units per Bevy unit.
     game_units: f32,
+};
+
+// Shared world haze buffer (`object_light.rs::HazeBuffer`).
+struct HazeParams {
+    // x = object/building haze_start, y = haze_end, z = ground_start, w = visible_distance.
+    distances: vec4<f32>,
+    // rgb = haze screen colour (0..1, rule 23), w > 0.5 = haze_on (F8).
+    colour_on: vec4<f32>,
 };
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> settings: Settings;
@@ -48,6 +50,7 @@ struct Settings {
 @group(constants::MATERIAL_BIND_GROUP) @binding(5) var<storage, read> corners: array<vec4<f32>>;
 // Each surface's haze factor (rule 16), by surface index.
 @group(constants::MATERIAL_BIND_GROUP) @binding(6) var<storage, read> factors: array<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(7) var<storage, read> haze_params: HazeParams;
 
 // The mesh data the wall shader reads (`BuildingMaterial::specialize`).
 struct WallIn {
@@ -79,9 +82,11 @@ fn vertex(vertex_in: WallIn) -> WallVertex {
         nearest = min(nearest, length(corner.xyz - view.world_position));
     }
     let distance = nearest * settings.game_units;
+    let haze_start = haze_params.distances.x;
+    let haze_end = haze_params.distances.y;
     var haze = 0.01;
-    if distance >= settings.haze_start {
-        haze = (distance - settings.haze_start) / max(settings.haze_end - settings.haze_start, 0.001);
+    if distance >= haze_start {
+        haze = (distance - haze_start) / max(haze_end - haze_start, 0.001);
     }
     // Rule 29: past 1 the haze is 0.99. Rule 16: then x 0.04 per point
     // light, before the 0.99 test.
@@ -137,11 +142,11 @@ fn fragment(in: WallVertex) -> @location(0) vec4<f32> {
     // STAND-IN (as the ground and the objects): the multiply is meant on
     // the colour as shown on screen.
     var lit = colour.rgb * screen_to_linear(light);
-    if settings.haze_on == 1u {
+    if haze_params.colour_on.w > 0.5 {
         if in.haze > 1.0 {
             discard; // rule 29: left out
         }
-        lit = haze_blend(lit, settings.haze_colour.rgb, in.haze);
+        lit = haze_blend(lit, haze_params.colour_on.rgb, in.haze);
     }
     return vec4<f32>(lit, colour.a);
 }

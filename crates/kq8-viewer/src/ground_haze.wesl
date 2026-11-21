@@ -27,15 +27,8 @@ import bevy_pbr::render::{
 struct Settings {
     // Linear colour (white for textures), alpha = opacity.
     base_colour: vec4<f32>,
-    // Haze colour, screen colour 0..1 (rule 23); w unused.
-    haze_colour: vec4<f32>,
     // 1 if `colour_texture` holds the texture, 0 for a plain colour.
     textured: u32,
-    // 1 = haze on (F8).
-    haze_on: u32,
-    // Game units: where the ground's haze starts, and visibleDistance.
-    haze_start: f32,
-    visible_distance: f32,
     // Game units per Bevy unit.
     game_units: f32,
     // F7: 0 = x1, 1 = x2 (doubled, capped), 2 = off (full brightness).
@@ -45,11 +38,20 @@ struct Settings {
     light_side: f32,
 };
 
+// Shared world haze buffer (`object_light.rs::HazeBuffer`).
+struct HazeParams {
+    // x = object/building haze_start, y = haze_end, z = ground_start, w = visible_distance.
+    distances: vec4<f32>,
+    // rgb = haze screen colour (0..1, rule 23), w > 0.5 = haze_on (F8).
+    colour_on: vec4<f32>,
+};
+
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> settings: Settings;
 @group(constants::MATERIAL_BIND_GROUP) @binding(1) var colour_texture: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(2) var colour_sampler: sampler;
 @group(constants::MATERIAL_BIND_GROUP) @binding(3) var light_texture: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(4) var light_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(5) var<storage, read> haze_params: HazeParams;
 
 struct GroundVertex {
     @builtin(position) position: vec4<f32>,
@@ -67,11 +69,13 @@ fn vertex(vertex_in: Vertex) -> GroundVertex {
     let world_from_local = mesh_functions::get_world_from_local(vertex_in.instance_index);
     let world_position = mesh_functions::mesh_position_local_to_world(world_from_local, vec4<f32>(v.position, 1.0));
     let distance = length(world_position.xyz - view.world_position) * settings.game_units;
+    let haze_start = haze_params.distances.z;
+    let visible_distance = haze_params.distances.w;
     // Rule 27: 0.01 + (d - start) / (1.02 x (visible - start)), capped 0.99.
     var haze = 0.01;
-    if distance >= settings.haze_start {
-        let span = 1.02 * max(settings.visible_distance - settings.haze_start, 0.001);
-        haze = min(0.01 + (distance - settings.haze_start) / span, 0.99);
+    if distance >= haze_start {
+        let span = 1.02 * max(visible_distance - haze_start, 0.001);
+        haze = min(0.01 + (distance - haze_start) / span, 0.99);
     }
     var out: GroundVertex;
     out.position = position_world_to_clip(world_position.xyz);
@@ -124,11 +128,11 @@ fn fragment(in: GroundVertex) -> @location(0) vec4<f32> {
     if settings.textured == 1u {
         colour = colour * textureSample(colour_texture, colour_sampler, in.uv);
     }
-    if settings.haze_on == 1u {
-        if in.distance > settings.visible_distance {
+    if haze_params.colour_on.w > 0.5 {
+        if in.distance > haze_params.distances.w {
             discard; // rule 28
         }
-        colour = vec4<f32>(haze_blend(colour.rgb, settings.haze_colour.rgb, in.haze), colour.a);
+        colour = vec4<f32>(haze_blend(colour.rgb, haze_params.colour_on.rgb, in.haze), colour.a);
     }
     return colour;
 }

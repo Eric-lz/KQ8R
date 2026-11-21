@@ -4224,6 +4224,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Plain one-shot `button1.aud` plays when left-clicking anywhere inside the open popup window (`0..360 x 0..200`), when moving button highlight with Left/Right arrows, and when pressing Enter (on `Portal`, `HelpNormal`, and `HelpBook`); modal popups block background bar/map clicks | User check in the original (2026-11-20) & user ear confirmation (2026-11-21); `world-change.md` (`Q151`); `MASK/GAME/SOUND/button1.aud` | `Daventry` `sound.log` (`start button1.aud` on `help:right` and `help:enter`) + user ear check |
 | `Panel::Popup` shows and hides immediately (`away` snapped `0.0` / `1.0`, no `0.2 s` slide timer) so text, buttons, checkbox, and window vanish on the same frame | User check in the original (2026-11-20) | unit test `panels::tests::popup_shows_and_hides_immediately`; `Daventry` `gui.log` (`popup hidden immediately`, zero empty redraws; **not yet re-checked by eye**) |
 
+## B1-F2 2026-11-21: `KQHazer` shared GPU haze buffer, quiet ramp logs, and wireframe-with-rings `H`-key marker — core `active.rs`; viewer `object_light.rs`, `object_light.wesl`, `ground_haze.rs`, `ground_haze.wesl`, `building_light.rs`, `building_light.wesl`, `main.rs`, `world_build.rs`, `door_view.rs`, `load.rs`, `terrain_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| Live `haze_start`, `haze_end`, `ground_start`, `visible_distance`, `haze_colour`, and `F8` toggle live in one persistent 32-byte `ShaderBuffer` (`HazeBuffer`) shared across `ObjectMaterial`, `GroundMaterial`, and `BuildingMaterial` (updated in O(1) on `F8`, `setHaze`, `KQHazer`, and world change) | `object-lighting.md` rules 19, 23, 27–29, 33a; engine optimization matching `SceneLights` | unit test `object_light::tests::haze_buffer_packs_distances_colour_and_flag`; `DeadCity` `litehaze` + `Daventry -> DeadCity` `goworld` runs (`RESULT: PASS`, `average_frame_ms=7.54`) |
+| `Request::SetHaze { quiet: true }` keeps continuous `KQHazer` ramp updates out of terminal summary output while preserving zone entry, exit, `deleteObject` restore, and script `setHaze` summary logs | `object-lighting.md` rules 23b–23d, 33a; user check (2026-11-20) | unit test `hazer_zone_ramps_haze_on_move_and_restores_on_exit_and_delete`; `DeadCity` stdout vs `viewer.log` / `traps.log` |
+| `MarkerKind::HazeZone` draws `KQHazer` bounds wireframe-only (`[-radius, +radius]` cube + 3 orthogonal `radius` sphere rings in teal-mint; `innerRadius.min(radius)` ring + 4 vertical cylinder guides in yellow-lime; viewer helper) | `object-lighting.md` rules 23a–23c; user visual feedback (2026-11-20) | unit test `wireframe_hazer_rings_and_guides_match_line_list_contract`; `DeadCity` `viewer.log` (`1 haze zone`, `radius 15000, innerRadius 3000`; **not yet re-checked by eye**) |
+
 
 
 

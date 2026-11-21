@@ -147,7 +147,8 @@ pub enum Request {
     ConnorSpecial { items: String, hold: bool, at: String },
     /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): the caller
     /// sets `hazeDistance` n and `visibleDistance` 1.5 n at once.
-    SetHaze { haze: f32, at: String },
+    /// `quiet`: continuous `KQHazer` ramp updates stay in detail logs only.
+    SetHaze { haze: f32, at: String, quiet: bool },
     /// `terAnimSwitch <animator> [flag]` (`emitters.md` "`terAnimSwitch`",
     /// D-8a): the named ground animator swaps its cycles; `flag` = the
     /// second word read as a number, not 0 (ours, not the original's).
@@ -3685,6 +3686,7 @@ impl WorldState {
                     self.requests.push(Request::SetHaze {
                         haze: orig,
                         at: format!("{at}: deleteObject {name}: hazer restores origHazeEdge {orig:.0} (object-lighting.md rule 23d)"),
+                        quiet: false,
                     });
                 }
             }
@@ -4293,7 +4295,7 @@ impl ScriptHost for WorldState {
                         let haze = number_value(n) as f32;
                         self.current_haze_distance = haze;
                         self.note(format!("{at}: setHaze {n}: haze {haze:.0}, visible {:.0}: handed to the viewer (object-lighting.md rule 33a)", 1.5 * haze));
-                        self.requests.push(Request::SetHaze { haze, at: at.to_string() });
+                        self.requests.push(Request::SetHaze { haze, at: at.to_string(), quiet: false });
                     }
                     _ => self.note(format!("{at}: usage: setHaze hazeVal; nothing changes")),
                 }
@@ -4453,6 +4455,7 @@ impl WorldState {
                         self.requests.push(Request::SetHaze {
                             haze: h,
                             at: format!("hazer {name} entered (object-lighting.md rule 23b)"),
+                            quiet: false,
                         });
                     }
                 }
@@ -4462,6 +4465,7 @@ impl WorldState {
                         self.requests.push(Request::SetHaze {
                             haze: h,
                             at: format!("hazer {name} ramp ({why}) -> {h:.0} (object-lighting.md rule 23c)"),
+                            quiet: true,
                         });
                     }
                 }
@@ -4475,6 +4479,7 @@ impl WorldState {
                         self.requests.push(Request::SetHaze {
                             haze: orig,
                             at: format!("hazer {name} exited -> {orig:.0} (object-lighting.md rule 23c)"),
+                            quiet: false,
                         });
                     }
                 }
@@ -11061,28 +11066,28 @@ mod talk_tests {
             balls: &balls,
         };
 
-        // Enter inner zone -> 18,000.
+        // Enter inner zone -> 18,000 (not quiet).
         a.connor_moved(&visit([96_069.0, 168_737.0, 13_890.0]));
         assert!((a.world.current_haze_distance - 18_000.0).abs() < 1e-3);
-        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, .. }) if (haze - 18_000.0).abs() < 1e-3));
+        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, quiet: false, .. }) if (haze - 18_000.0).abs() < 1e-3));
 
-        // Midpoint d = 9,000 -> 13,500.
+        // Midpoint d = 9,000 -> 13,500 (quiet ramp update).
         a.connor_moved(&visit([96_069.0, 177_737.0, 13_890.0]));
         assert!((a.world.current_haze_distance - 13_500.0).abs() < 1e-3);
-        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, .. }) if (haze - 13_500.0).abs() < 1e-3));
+        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, quiet: true, .. }) if (haze - 13_500.0).abs() < 1e-3));
 
-        // Exit cube -> restores 9,000.
+        // Exit cube -> restores 9,000 (not quiet).
         a.connor_placed(&visit([96_069.0, 190_000.0, 13_890.0]));
         assert!((a.world.current_haze_distance - 9_000.0).abs() < 1e-3);
-        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, .. }) if (haze - 9_000.0).abs() < 1e-3));
+        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, quiet: false, .. }) if (haze - 9_000.0).abs() < 1e-3));
 
-        // Re-enter then deleteObject restores origHazeEdge = 9,000.
+        // Re-enter then deleteObject restores origHazeEdge = 9,000 (not quiet).
         a.connor_moved(&visit([96_069.0, 168_737.0, 13_890.0]));
         a.world.requests.clear();
         let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
         assert_eq!(a.world.world_command(&words("deleteObject litehaze"), "t"), Some("0".into()));
         assert!((a.world.current_haze_distance - 9_000.0).abs() < 1e-3);
-        assert!(a.world.requests.iter().any(|r| matches!(r, Request::SetHaze { haze, .. } if (*haze - 9_000.0).abs() < 1e-3)));
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::SetHaze { haze, quiet: false, .. } if (*haze - 9_000.0).abs() < 1e-3)));
     }
 
     #[test]

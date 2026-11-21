@@ -916,8 +916,10 @@ Checked by the user on 2026-11-20 for camera shake, `allowShadows`,
   `allowShadows` on world load and live toggle (**checked by eye: works**);
   `KQCamera::shake` (**checked by eye: works**); dynamic `KQAnimOnce`
   spawning (`loadAnim`, logs only); and `KQHazer` proximity haze zones
-  (`DeadCity`'s `litehaze`: fog ramp **checked by eye**, follow-up `B1-F2`
-  planned for `H`-key bounding box and per-frame FPS drop / terminal spam).
+  (`DeadCity`'s `litehaze`: fog ramp **checked by eye**, `B1-F2` shared GPU
+  haze buffer for O(1) `F8`/`setHaze`/`KQHazer` updates, quiet detail-only
+  ramp logging, and wireframe+rings `H`-key marker verified in logs, **not
+  yet re-checked by eye**).
 - **Help popups and F1 Help Book:** scripted (`doPopup`) and built-in
   beginner tips with `1.5 s` delay, `1.0 s` deferral, `3.0 s` cooldown,
   `Options.cs` `notStartingHelp`, startup `stopHelp`, `38×7` wrapping
@@ -939,8 +941,11 @@ Checked by the user on 2026-11-20 for camera shake, `allowShadows`,
   walk/run zones (`walk_la.cs`, `run_la.cs`, `setRun`), **cyan**
   generic triggers (voice lines, cutscenes, plates, etc.), **yellow-gold**
   `RiverControl` click boxes, and **green** for other boxed unmodeled
-  objects; single-point objects (sound sources, emitters, point lights,
-  hazers, music, or unmodeled `.anm` characters) appear as 1 m cubes
+  objects; `KQHazer` proximity haze zones draw **wireframe-only** (no fill
+  walls) with a **teal-mint** outer cube and 3 orthogonal `radius` sphere
+  rings plus **yellow-lime** `innerRadius` horizontal ring and vertical
+  cylinder guides; single-point objects (sound sources, emitters, point
+  lights, music, or unmodeled `.anm` characters) appear as 1 m cubes
   resting at their origin; unused models appear normally.
 - **U:** shows the hidden ground under the water (the "floor"): first
   press both (the visible ground see-through where the floor differs, the

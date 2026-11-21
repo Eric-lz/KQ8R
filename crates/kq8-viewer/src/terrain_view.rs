@@ -607,10 +607,72 @@ pub fn setup_objects(
     let generic_mats = box_mats(&mut materials, 0.1, 0.95, 1.0, 0.14);
     let click_mats = box_mats(&mut materials, 1.0, 0.9, 0.15, 0.18);
     let other_mats = box_mats(&mut materials, 0.1, 1.0, 0.2, 0.15);
-    let (mut n_damage, mut n_rope, mut n_portal, mut n_walk, mut n_music, mut n_generic, mut n_click, mut n_other, mut n_point) =
-        (0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
+    let haze_outer_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.2, 1.0, 0.75), unlit: true, fog_enabled: false, ..default() });
+    let haze_inner_mat = materials.add(StandardMaterial { base_color: Color::srgb(0.95, 1.0, 0.25), unlit: true, fog_enabled: false, ..default() });
+    let sphere_rings = meshes.add(wireframe_sphere_rings_mesh(64));
+    let unit_ring = meshes.add(wireframe_ring_mesh(64));
+    let cyl_guides = meshes.add(wireframe_cylinder_guides_mesh());
+    let (
+        mut n_damage,
+        mut n_rope,
+        mut n_portal,
+        mut n_walk,
+        mut n_music,
+        mut n_generic,
+        mut n_haze,
+        mut n_click,
+        mut n_other,
+        mut n_point,
+    ) = (0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
     for m in &objects.markers {
-        if let Some((transform, scale)) = m.bounds.and_then(|(min, max)| marker_box_layout(m.position, m.angles, m.rotated, min, max)) {
+        if m.kind == MarkerKind::HazeZone {
+            n_haze += 1;
+            if let Some((transform, _scale)) = m.bounds.and_then(|(min, max)| marker_box_layout(m.position, m.angles, m.rotated, min, max)) {
+                commands.spawn((Mesh3d(wire_cube.clone()), MeshMaterial3d(haze_outer_mat.clone()), transform, Visibility::Hidden, ShownWithH));
+            }
+            let (radius, inner_radius) = m.hazer_radii.unwrap_or((0.0, 0.0));
+            let center = Vec3::from(to_bevy(m.position, [0.0; 3]));
+            if radius > 1e-3 {
+                commands.spawn((
+                    Mesh3d(sphere_rings.clone()),
+                    MeshMaterial3d(haze_outer_mat.clone()),
+                    Transform::from_translation(center).with_scale(Vec3::splat(radius / UNITS_PER_METRE)),
+                    Visibility::Hidden,
+                    ShownWithH,
+                ));
+            }
+            let inner_r = inner_radius.min(radius);
+            if inner_r > 1e-3 {
+                commands.spawn((
+                    Mesh3d(unit_ring.clone()),
+                    MeshMaterial3d(haze_inner_mat.clone()),
+                    Transform::from_translation(center).with_scale(Vec3::splat(inner_r / UNITS_PER_METRE)),
+                    Visibility::Hidden,
+                    ShownWithH,
+                ));
+                if radius > 1e-3 {
+                    commands.spawn((
+                        Mesh3d(cyl_guides.clone()),
+                        MeshMaterial3d(haze_inner_mat.clone()),
+                        Transform::from_translation(center).with_scale(Vec3::new(
+                            inner_r / UNITS_PER_METRE,
+                            2.0 * radius / UNITS_PER_METRE,
+                            inner_r / UNITS_PER_METRE,
+                        )),
+                        Visibility::Hidden,
+                        ShownWithH,
+                    ));
+                }
+            }
+            log.detail(format!(
+                "marker haze zone [{}] center ({:.0}, {:.0}, {:.0}), cube {:.0}, radius {radius:.0}, innerRadius {inner_radius:.0}",
+                m.name,
+                m.position[0],
+                m.position[1],
+                m.position[2],
+                2.0 * radius
+            ));
+        } else if let Some((transform, scale)) = m.bounds.and_then(|(min, max)| marker_box_layout(m.position, m.angles, m.rotated, min, max)) {
             let (wire_mat, fill_mat) = match m.kind {
                 MarkerKind::DamageTrap => {
                     n_damage += 1;
@@ -640,7 +702,7 @@ pub fn setup_objects(
                     n_click += 1;
                     click_mats.clone()
                 }
-                MarkerKind::OtherBox | MarkerKind::Point => {
+                MarkerKind::OtherBox | MarkerKind::Point | MarkerKind::HazeZone => {
                     n_other += 1;
                     other_mats.clone()
                 }
@@ -677,7 +739,7 @@ pub fn setup_objects(
         }
     }
     log.summary(format!(
-        "markers (key H): {} boxed ({n_damage} damage, {n_rope} rope, {n_portal} portal, {n_walk} walk/run, {n_music} music, {n_generic} generic, {n_click} click box, {n_other} other), {n_point} point cubes",
+        "markers (key H): {} boxed ({n_damage} damage, {n_rope} rope, {n_portal} portal, {n_walk} walk/run, {n_music} music, {n_generic} generic, {n_click} click box, {n_other} other), {n_haze} haze zone, {n_point} point cubes",
         n_damage + n_rope + n_portal + n_walk + n_music + n_generic + n_click + n_other
     ));
     log.summary(format!(
@@ -812,12 +874,57 @@ pub fn wireframe_cube_mesh() -> Mesh {
         positions.push(corners[a]);
         positions.push(corners[b]);
     }
+    line_list_mesh(positions)
+}
+
+fn line_list_mesh(positions: Vec<[f32; 3]>) -> Mesh {
     let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
     let uvs = vec![[0.0, 0.0]; positions.len()];
     Mesh::new(bevy::mesh::PrimitiveTopology::LineList, bevy::asset::RenderAssetUsages::default())
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+}
+
+/// Horizontal unit circle (`y = 0`) as a `LineList` wireframe.
+pub fn wireframe_ring_mesh(segments: usize) -> Mesh {
+    let n = segments.max(8);
+    let mut positions = Vec::with_capacity(n * 2);
+    for i in 0..n {
+        let a0 = (i as f32) * std::f32::consts::TAU / (n as f32);
+        let a1 = ((i + 1) as f32) * std::f32::consts::TAU / (n as f32);
+        positions.push([a0.cos(), 0.0, a0.sin()]);
+        positions.push([a1.cos(), 0.0, a1.sin()]);
+    }
+    line_list_mesh(positions)
+}
+
+/// Three orthogonal unit-radius great circles (XZ, XY, YZ) as a `LineList` wireframe.
+pub fn wireframe_sphere_rings_mesh(segments: usize) -> Mesh {
+    let n = segments.max(8);
+    let mut positions = Vec::with_capacity(n * 6);
+    for i in 0..n {
+        let a0 = (i as f32) * std::f32::consts::TAU / (n as f32);
+        let a1 = ((i + 1) as f32) * std::f32::consts::TAU / (n as f32);
+        let (c0, s0, c1, s1) = (a0.cos(), a0.sin(), a1.cos(), a1.sin());
+        positions.push([c0, 0.0, s0]);
+        positions.push([c1, 0.0, s1]);
+        positions.push([c0, s0, 0.0]);
+        positions.push([c1, s1, 0.0]);
+        positions.push([0.0, c0, s0]);
+        positions.push([0.0, c1, s1]);
+    }
+    line_list_mesh(positions)
+}
+
+/// Four vertical guide lines (`y = -0.5..+0.5` at cardinal unit circle points).
+pub fn wireframe_cylinder_guides_mesh() -> Mesh {
+    let mut positions = Vec::with_capacity(8);
+    for [x, z] in [[1.0, 0.0], [-1.0, 0.0], [0.0, 1.0], [0.0, -1.0]] {
+        positions.push([x, -0.5, z]);
+        positions.push([x, 0.5, z]);
+    }
+    line_list_mesh(positions)
 }
 
 /// H shows or hides everything marked `ShownWithH`.
@@ -1039,5 +1146,26 @@ mod tests {
         assert_eq!(mesh.count_vertices(), 24);
         assert!(mesh.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
         assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+    }
+
+    #[test]
+    fn wireframe_hazer_rings_and_guides_match_line_list_contract() {
+        let sphere = wireframe_sphere_rings_mesh(64);
+        assert_eq!(sphere.primitive_topology(), bevy::mesh::PrimitiveTopology::LineList);
+        assert_eq!(sphere.count_vertices(), 384);
+        assert!(sphere.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
+        assert!(sphere.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+
+        let ring = wireframe_ring_mesh(64);
+        assert_eq!(ring.primitive_topology(), bevy::mesh::PrimitiveTopology::LineList);
+        assert_eq!(ring.count_vertices(), 128);
+        assert!(ring.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
+        assert!(ring.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+
+        let guides = wireframe_cylinder_guides_mesh();
+        assert_eq!(guides.primitive_topology(), bevy::mesh::PrimitiveTopology::LineList);
+        assert_eq!(guides.count_vertices(), 8);
+        assert!(guides.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
+        assert!(guides.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
     }
 }

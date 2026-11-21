@@ -1320,6 +1320,7 @@ pub fn trap_step(
             }
             asked = true;
         }
+        let quiet_log = matches!(&r, Request::SetHaze { quiet: true, .. });
         let line = match r {
             Request::ConnorHurt { roll_over, special, at, terrain } => {
                 let ouch = sim.active.world.connor_fight.as_ref().map_or(kq8_core::fight::DEFAULT_OUCH.to_string(), |f| f.ouch_sound.clone());
@@ -1383,9 +1384,9 @@ pub fn trap_step(
                 let line = connor.script_anim(&movement, &at);
                 format!("{at}: applied: Connor {line}")
             }
-            Request::SetHaze { haze, at } => {
+            Request::SetHaze { haze, at, quiet } => {
                 // object-lighting.md rule 33a (Q161): applied before the next frame.
-                set_haze.0.push((haze, at.clone()));
+                set_haze.0.push((haze, at.clone(), quiet));
                 format!("{at}: applied: setHaze {haze} queued for the haze")
             }
             Request::TerAnimSwitch { name, flag, at } => {
@@ -1708,7 +1709,11 @@ pub fn trap_step(
             }
         };
         let line = format!("update {}: {line}", sim.active.world.updates);
-        shared.log.lock().unwrap().summary(format!("traps: {line}"));
+        if quiet_log {
+            shared.log.lock().unwrap().detail(format!("traps: {line}"));
+        } else {
+            shared.log.lock().unwrap().summary(format!("traps: {line}"));
+        }
         if let Some(log) = &mut sim.trap_log {
             log.detail(line);
         }

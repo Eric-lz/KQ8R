@@ -14,6 +14,7 @@ use bevy::image::ImageAddressMode;
 use bevy::pbr::{Material, MaterialPlugin};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
+use bevy::render::storage::ShaderBuffer;
 use bevy::shader::ShaderRef;
 
 use crate::load::Look;
@@ -27,15 +28,7 @@ const SHADER: &str = "embedded://kq8_viewer/ground_haze.wesl";
 pub struct Settings {
     /// Linear colour (white for textures); alpha = opacity.
     pub base_colour: Vec4,
-    /// Haze colour, screen colour 0..1 (rule 23); w unused.
-    pub haze_colour: Vec4,
     pub textured: u32,
-    /// 1 = haze on (F8).
-    pub haze_on: u32,
-    /// Game units: where the ground's haze starts (rule 27) and
-    /// `visibleDistance` (rules 27, 28).
-    pub haze_start: f32,
-    pub visible_distance: f32,
     /// Game units per Bevy unit.
     pub game_units: f32,
     /// The light map's mode (F7): 0 x1, 1 x2, 2 off (terrain-lighting.md
@@ -58,6 +51,9 @@ pub struct GroundMaterial {
     #[texture(3)]
     #[sampler(4)]
     pub light_map: Handle<Image>,
+    /// Shared haze parameters (`HazeBuffer`).
+    #[storage(5, read_only)]
+    pub haze_params: Handle<ShaderBuffer>,
     pub alpha_mode: AlphaMode,
 }
 
@@ -108,11 +104,7 @@ pub fn ground_material(
     GroundMaterial {
         settings: Settings {
             base_colour: base,
-            haze_colour: Vec3::from(light.haze.colour).extend(0.0),
             textured: u32::from(texture.is_some()),
-            haze_on: u32::from(light.haze_on),
-            haze_start: light.haze.ground_start(),
-            visible_distance: light.haze.visible,
             game_units: UNITS_PER_METRE,
             light_mode: ground.mode.code(),
             light_inv_spacing,
@@ -120,6 +112,7 @@ pub fn ground_material(
         },
         texture,
         light_map,
+        haze_params: light.haze_buffer.clone(),
         alpha_mode: AlphaMode::Opaque,
     }
 }
@@ -137,24 +130,6 @@ pub fn tinted(material: &GroundMaterial, tint: Color) -> GroundMaterial {
     let mut m = material.clone();
     m.settings.base_colour = LinearRgba::from(tint).to_vec4();
     m
-}
-
-/// F8: the ground materials follow the haze switch.
-pub fn follow_haze(light: Res<ObjectLight>, mut applied: Local<Option<bool>>, mut materials: ResMut<Assets<GroundMaterial>>, shared: Res<Shared>) {
-    if applied.is_none() {
-        *applied = Some(light.haze_on);
-    }
-    if *applied == Some(light.haze_on) {
-        return;
-    }
-    *applied = Some(light.haze_on);
-    let on = u32::from(light.haze_on);
-    let mut changed = 0;
-    for (_, m) in materials.iter_mut() {
-        m.settings.haze_on = on;
-        changed += 1;
-    }
-    shared.log.lock().unwrap().summary(format!("ground materials: haze {} ({changed} materials)", if light.haze_on { "on" } else { "off" }));
 }
 
 /// Logs the ground's haze numbers at start (the note's rule 27 at a few

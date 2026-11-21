@@ -1834,6 +1834,7 @@ pub enum MarkerKind {
     WalkRunTrap,
     MusicTrap,
     GenericTrap,
+    HazeZone,
     ClickBox,
     OtherBox,
     Point,
@@ -1848,6 +1849,7 @@ impl MarkerKind {
             MarkerKind::WalkRunTrap => "walk/run trap",
             MarkerKind::MusicTrap => "music trap",
             MarkerKind::GenericTrap => "generic trap",
+            MarkerKind::HazeZone => "haze zone",
             MarkerKind::ClickBox => "click box",
             MarkerKind::OtherBox => "other box",
             MarkerKind::Point => "point",
@@ -1921,6 +1923,8 @@ pub struct Marker {
     pub rotated: bool,
     /// Own-space `BBMinX/Y/Z`..`BBMaxX/Y/Z` when present on this hidden object.
     pub bounds: Option<([f32; 3], [f32; 3])>,
+    /// `KQHazer` `(radius, inner_radius)` for wireframe rings on `H`.
+    pub hazer_radii: Option<(f32, f32)>,
     /// True: a character in an `.anm` file (drawn by the game, not by us
     /// yet). False: no model at all (traps, sounds, paths...).
     pub anm: bool,
@@ -3560,6 +3564,7 @@ impl Placer<'_> {
                 angles: p.angles,
                 rotated: true,
                 bounds: Some((min, max)),
+                hazer_radii: None,
                 anm: false,
             });
             if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
@@ -3595,11 +3600,12 @@ impl Placer<'_> {
                 name: p.name.clone(),
                 class: kq8_core::hazer::CLASS.into(),
                 script: None,
-                kind: MarkerKind::OtherBox,
+                kind: MarkerKind::HazeZone,
                 position: pos,
                 angles: [0.0; 3],
                 rotated: false,
                 bounds: Some(([-radius, -radius, -radius], [radius, radius, radius])),
+                hazer_radii: Some((radius, inner_radius)),
                 anm: false,
             });
             if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
@@ -3879,6 +3885,7 @@ impl Placer<'_> {
                     angles: p.angles,
                     rotated: true,
                     bounds,
+                    hazer_radii: None,
                     anm: s.get("animFile").is_some(),
                 });
                 if let Some(l) = self.located.get_mut(&key) {
@@ -4467,6 +4474,7 @@ impl Placer<'_> {
             angles: [0.0; 3],
             rotated: false,
             bounds: Some(bounds),
+            hazer_radii: None,
             anm: false,
         });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
@@ -4506,6 +4514,7 @@ impl Placer<'_> {
             angles: [0.0; 3],
             rotated: false,
             bounds: None,
+            hazer_radii: None,
             anm: false,
         });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
@@ -4540,6 +4549,7 @@ impl Placer<'_> {
             angles: [0.0; 3],
             rotated: false,
             bounds: None,
+            hazer_radii: None,
             anm: false,
         });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
@@ -4575,6 +4585,7 @@ impl Placer<'_> {
             angles: [0.0; 3],
             rotated: false,
             bounds: None,
+            hazer_radii: None,
             anm: false,
         });
         if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
