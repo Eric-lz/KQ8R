@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-21 Batch 1 fix B1-F1b: Popup click sound switched to `button1.aud`
+- **Changed:** `crates/kq8-viewer/src/gui_view.rs` (`POPUP_CLICK_SOUND` changed from `"click.aud"` to `"button1.aud"` by the user after ear check), `docs/behaviour/QUESTIONS.md` (`Q199` updated with user ear confirmation for part a), `MODLOG.md`, `docs/DESIGN.md`, `STATUS.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md`.
+- **Why:** Replace the `click.aud` stand-in with `GAME/SOUND/button1.aud` after the user auditioned it and confirmed it matches the original popup stone-y click sound (`Q199` part a).
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; headless `--sound off` Daventry run (`--frames 180 --key f1,10 --key help:right,10 --key help:enter,10`) inspecting `kq8-artifacts/logs/sound.log` and `viewer.log`.
+- **Result:** All 778 workspace tests pass (5 `kq8-audio`, 599 `kq8-core`, 149 `kq8-data`, 25 `kq8-viewer`). `sound.log` confirms `start #4 button1.aud (GAME/SOUND/button1.aud, 0.189 s) group 0 plain` on `help:right` (`frame 49`) and `start #5 button1.aud` on `help:enter` (`frame 50`) with zero `click.aud` entries; `viewer.log` ends `RESULT: PASS`. Live playback of the swapped sound inside `kq8-viewer` is not yet re-tested with `--sound on` after this commit (user already confirmed `button1.aud` by ear via `.wav`).
+- **Still broken / not tested:** `Q199` part (b) (exact sound group `0` vs `1` and whether all popup triggers use the same call) remains open for Study Session (A); `B1-F2` (`litehaze` shared GPU haze buffer, quiet ramp log, `KQHazer` wireframe+rings `H`-key marker) next.
+- **Next:** Implement `B1-F2`.
+
 ## 2026-11-21 Batch 1 fix B1-F1 user check: visuals verified, popup click sound open (Q199)
 - **Changed:** `docs/behaviour/QUESTIONS.md` (`Q199`), `MODLOG.md`, `docs/DESIGN.md`, `STATUS.md`, `docs/FEATURES.md`, `README.md` (documentation only; no Rust code changed).
 - **Why:** Record the user's 2026-11-21 interactive check of `B1-F1` and ask Study Session (A) for the exact popup click sound file instead of guessing.

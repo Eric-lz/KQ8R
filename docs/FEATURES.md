@@ -921,12 +921,11 @@ Checked by the user on 2026-11-20 for camera shake, `allowShadows`,
 - **Help popups and F1 Help Book:** scripted (`doPopup`) and built-in
   beginner tips with `1.5 s` delay, `1.0 s` deferral, `3.0 s` cooldown,
   `Options.cs` `notStartingHelp`, startup `stopHelp`, `38×7` wrapping
-  with key-name expansion, `intrface.aud` on open, popup click sound on
-  clicks / arrows / Enter (currently `click.aud` stand-in; wrong sound,
-  `Q199` open), game pause, instant close, and the 24-page **F1** Help
+  with key-name expansion, `intrface.aud` on open, `button1.aud` on popup
+  clicks / arrows / Enter (confirmed by ear 2026-11-21; `Q199` part b
+  group check open), game pause, instant close, and the 24-page **F1** Help
   Book (`Close`, `<<`, `>>` with Portal-style highlight and animations;
-  **checked by eye and played by hand 2026-11-21: all visuals, buttons,
-  animations, and instant close work; click sound file pending `Q199`**).
+  **checked by eye and ear 2026-11-21**).
 
 ## Viewer helpers (not in the original)
 

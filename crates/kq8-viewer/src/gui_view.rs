@@ -212,7 +212,7 @@ const STRETCHED: u32 = 0x8000;
 const BLACK_TAG: i32 = 351;
 const POPUP_HIGHLIGHT_PICTURE: &str = "buyhibtn.pba";
 const POPUP_PRESSED_SHIFT: [i32; 2] = [1, 1];
-const POPUP_CLICK_SOUND: &str = "click.aud";
+const POPUP_CLICK_SOUND: &str = "button1.aud";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupKind {
