@@ -13,19 +13,19 @@ What the game's scripts (`.cs`) and object files (`.kq`) ask of the program, fro
 
 | World | Scripts | Commands used | Missing (uses) | Stub (uses) | Connor states not built |
 | --- | ---: | ---: | --- | --- | --- |
-| Daventry | 174 | 92 | 10 (15) | 2 (13) | — |
-| CastleD | 17 | 29 | 4 (6) | 0 (0) | — |
-| DeadCity | 281 | 97 | 7 (14) | 1 (1) | — |
-| Swamp | 93 | 82 | 11 (27) | 1 (1) | Tile2 |
-| Gnome | 111 | 79 | 12 (62) | 1 (1) | — |
-| Barren | 118 | 84 | 12 (42) | 0 (0) | Tile3 |
-| IceWorld | 78 | 82 | 10 (31) | 1 (29) | — |
-| Snowexit | 13 | 35 | 6 (7) | 0 (0) | — |
-| temple1 | 59 | 51 | 7 (9) | 0 (0) | — |
-| temple2 | 37 | 55 | 8 (10) | 0 (0) | — |
-| temple3 | 30 | 45 | 7 (9) | 0 (0) | — |
-| temple4 | 17 | 68 | 13 (17) | 0 (0) | Die |
-| Common | 30 | 14 | 2 (2) | 1 (1) | — |
+| Daventry | 174 | 92 | 2 (2) | 0 (0) | — |
+| CastleD | 17 | 29 | 0 (0) | 0 (0) | — |
+| DeadCity | 281 | 97 | 1 (1) | 0 (0) | — |
+| Swamp | 93 | 82 | 6 (22) | 0 (0) | Tile2 |
+| Gnome | 111 | 79 | 6 (52) | 0 (0) | — |
+| Barren | 118 | 84 | 4 (21) | 0 (0) | Tile3 |
+| IceWorld | 78 | 82 | 3 (7) | 0 (0) | — |
+| Snowexit | 13 | 34 | 1 (1) | 0 (0) | — |
+| temple1 | 59 | 51 | 2 (4) | 0 (0) | — |
+| temple2 | 37 | 55 | 1 (2) | 0 (0) | — |
+| temple3 | 30 | 45 | 2 (4) | 0 (0) | — |
+| temple4 | 17 | 68 | 7 (11) | 0 (0) | Die |
+| Common | 30 | 14 | 1 (1) | 0 (0) | — |
 
 Not counted as commands: 139 calls of other scripts by name, 0 lines starting with a variable. Loading hints are left out of the summary's counts.
 
@@ -33,35 +33,18 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 
 | Command | Status | Uses (start-up) | Worlds | First seen in |
 | --- | --- | ---: | --- | --- |
-| `setLoadProgress` | **missing** (loading hint?) | 256 (254) | Daventry 73, CastleD 4, DeadCity 8, Swamp 4, Gnome 8, Barren 64, IceWorld 61, Snowexit 4, temple1 7, temple2 7, temple3 8, temple4 8 | `Daventry/NEWWORLD.CS` |
-| `purgeResource` | **missing** (loading hint?) | 124 (0) | Daventry 31, IceWorld 51, temple2 3, temple4 39 | `Daventry/Shadow.cs` |
-| `KQObject::preloadResources` | **missing** (loading hint?) | 46 (37) | Daventry 18, DeadCity 16, Gnome 6, Barren 6 | `Daventry/AX.CS` |
 | `conClickItem` | **missing** | 38 (0) | Gnome 28, Barren 10 | `Gnome/ARMORGNM.CS` |
 | `KQConner::pay` | **missing** | 34 (0) | Daventry 1, Swamp 11, Gnome 14, Barren 8 | `Daventry/POORBOX.CS` |
-| `inc` | **missing** | 29 (0) | DeadCity 2, Gnome 5, Barren 8, IceWorld 13, temple4 1 | `DeadCity/boxbgmr.cs` |
-| `allowShadows` | **missing** | 28 (0) | Daventry 1, CastleD 1, DeadCity 7, Swamp 1, Gnome 1, Barren 4, IceWorld 6, Snowexit 2, temple1 1, temple2 1, temple3 1, temple4 1, Common 1 | `Daventry/WORLD.CS` |
-| `preloadResource` | **missing** (loading hint?) | 27 (0) | Daventry 23, DeadCity 2, Swamp 2 | `Daventry/WIZARD.CS` |
-| `loadAnim` | **missing** (loading hint?) | 20 (0) | Swamp 6, Barren 1, temple4 11, Common 2 | `Swamp/fienfir2.cs` |
-| `KQGame::selectScreen` | **missing** | 13 (0) | Daventry 1, CastleD 2, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
-| `blackOut` | **missing** | 13 (0) | Daventry 1, CastleD 2, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
-| `loadPalette` | **missing** (loading hint?) | 12 (0) | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
-| `newSky` | **missing** | 12 (0) | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
-| `resetHazeColor` | **missing** | 11 (0) | Daventry 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
 | `KQConner::setRelDamage` | **missing** | 8 (0) | Swamp 6, Gnome 1, Barren 1 | `Swamp/Arwtrap1.cs` |
 | `KQMonster::preSpecial` | **missing** | 8 (0) | Swamp 1, Gnome 4, Barren 2, IceWorld 1 | `Swamp/Swhnchmn.cs` |
 | `setFirstPerson` | **missing** | 8 (0) | Swamp 2, temple1 2, temple2 2, temple3 2 | `Swamp/SWDOOR.CS` |
-| `KQCamera::shake` | **missing** | 5 (0) | Daventry 3, Barren 2 | `Daventry/beer42.CS` |
 | `KQConner::reduceHealth` | **missing** | 5 (0) | temple4 5 | `temple4/altar.cs` |
 | `useAlternateLightmap` | **missing** | 5 (0) | Gnome 4, temple4 1 | `Gnome/fusebox.cs` |
-| `getConnorFlag` | **missing** | 4 (0) | Daventry 3, temple2 1 | `Daventry/drawings.cs` |
 | `KQCamera::setHeight` | **missing** | 3 (0) | temple3 2, temple4 1 | `temple3/traphz1.cs` |
 | `KQObject::setGroupsActive3D` | **missing** | 3 (0) | IceWorld 3 | `IceWorld/snowmane.cs` |
 | `KQObject::setGroupsActive3DFar` | **missing** | 3 (0) | IceWorld 3 | `IceWorld/snowmane.cs` |
-| `purgeResources` | **missing** | 3 (0) | IceWorld 1, temple2 2 | `IceWorld/icelord.cs` |
-| `setcat` | **missing** | 3 (0) | Barren 3 | `Barren/dockup.cs` |
 | `KQObject::setFootStepSound` | **missing** | 2 (0) | temple1 2 | `temple1/sloshtrp.cs` |
 | `checkSave` | **missing** | 2 (0) | Daventry 1, Common 1 | `Daventry/savegmh.cs` |
-| `mouseAction` | **missing** | 2 (0) | Daventry 2 | `Daventry/AX.CS` |
 | `playAvi` | **missing** | 2 (0) | Snowexit 1, temple4 1 | `Snowexit/PORTAL4.CS` |
 | `KQCamera::setHeight2` | **missing** | 1 (0) | temple4 1 | `temple4/archon.cs` |
 | `KQConner::addImmunity` | **missing** | 1 (0) | Swamp 1 | `Swamp/WHISP.CS` |
@@ -70,15 +53,9 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `cls` | **missing** | 1 (0) | Gnome 1 | `Gnome/EMPTYLOC.CS` |
 | `doCredits` | **missing** | 1 (0) | temple4 1 | `temple4/vortrap.cs` |
 | `killGame` | **missing** | 1 (0) | temple4 1 | `temple4/vortrap.cs` |
-| `preloadShape` | stub (loading hint?) | 309 (0) | Daventry 76, DeadCity 7, Swamp 1, Gnome 10, Barren 44, IceWorld 97, temple2 22, temple4 52 | `Daventry/miltrap1.cs` |
-| `KQGame::letCatchUp` | stub | 32 (0) | Daventry 1, DeadCity 1, Gnome 1, IceWorld 29 | `Daventry/WATERTP.CS` |
-| `doPopup` | stub | 14 (0) | Daventry 12, Swamp 1, Common 1 | `Daventry/CAMERA1.CS` |
 | `lockShape` | start-up only: counted, not run (loading hint?) | 379 (379) | Daventry 71, DeadCity 49, Gnome 48, Barren 43, IceWorld 86, temple1 50, temple2 32 | `Daventry/PERMWRLD.CS` |
 | `lockInterior` | start-up only: counted, not run (loading hint?) | 112 (112) | Daventry 26, DeadCity 18, Swamp 6, Gnome 16, Barren 16, IceWorld 9, temple1 10, temple2 5, temple3 6 | `Daventry/PERMWRLD.CS` |
-| `alias` | start-up only: counted, not run | 45 (45) | Daventry 13, DeadCity 3, Swamp 6, Gnome 7, Barren 8, IceWorld 4, temple2 3, temple4 1 | `Daventry/NEWWORLD.CS` |
 | `activatePersistMgr` | start-up only: counted, not run (loading hint?) | 24 (24) | Daventry 2, CastleD 2, DeadCity 2, Swamp 2, Gnome 2, Barren 2, IceWorld 2, Snowexit 2, temple1 2, temple2 2, temple3 2, temple4 2 | `Daventry/PERMWRLD.CS` |
-| `;KQMonster::inventory` | start-up only: counted, not run (typo in the original?) | 11 (11) | Snowexit 11 | `Snowexit/WORLDINV.CS` |
-| `stopHelp` | start-up only: counted, not run | 10 (10) | DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `DeadCity/conStart.cs` |
 | `KQMonster::setMonUseGravity` | start-up only: counted, not run | 3 (3) | DeadCity 3 | `DeadCity/NEWWORLD.CS` |
 | `KQObject::setGroupsAlways` | start-up only: counted, not run | 1 (1) | Daventry 1 | `Daventry/NEWWORLD.CS` |
 | `loadKQ` | built | 4878 (4470) | Daventry 477, CastleD 38, DeadCity 1468, Swamp 744, Gnome 608, Barren 379, IceWorld 198, Snowexit 22, temple1 383, temple2 233, temple3 245, temple4 77, Common 6 | `Daventry/AX.CS` |
@@ -88,18 +65,21 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `deleteObject` | built | 554 (0) | Daventry 55, CastleD 7, DeadCity 210, Swamp 43, Gnome 46, Barren 28, IceWorld 88, Snowexit 7, temple1 15, temple2 17, temple3 13, temple4 19, Common 6 | `Daventry/AX.CS` |
 | `KQMonster::setState` | built | 467 (0) | Daventry 68, CastleD 2, DeadCity 49, Swamp 48, Gnome 103, Barren 74, IceWorld 49, Snowexit 7, temple1 7, temple2 14, temple3 6, temple4 34, Common 6 | `Daventry/AX.CS` |
 | `handsOff` | built | 438 (0) | Daventry 85, CastleD 4, DeadCity 83, Swamp 31, Gnome 41, Barren 70, IceWorld 59, Snowexit 2, temple1 13, temple2 19, temple3 12, temple4 19 | `Daventry/AX.CS` |
-| `KQMonster::inventory` | built | 381 (360) | Daventry 27, CastleD 1, DeadCity 35, Swamp 66, Gnome 77, Barren 60, IceWorld 21, Snowexit 18, temple1 26, temple2 16, temple3 18, temple4 16 | `Daventry/girl.cs` |
+| `KQMonster::inventory` | built | 392 (371) | Daventry 27, CastleD 1, DeadCity 35, Swamp 66, Gnome 77, Barren 60, IceWorld 21, Snowexit 29, temple1 26, temple2 16, temple3 18, temple4 16 | `Daventry/girl.cs` |
 | `KQMonster::testMessage` | built | 332 (0) | Daventry 51, CastleD 1, DeadCity 69, Swamp 28, Gnome 69, Barren 49, IceWorld 41, Snowexit 5, temple1 6, temple2 5, temple3 5, temple4 3 | `Daventry/AX.CS` |
 | `setThirdPerson` | built | 322 (0) | Daventry 55, CastleD 4, DeadCity 47, Swamp 28, Gnome 27, Barren 50, IceWorld 43, Snowexit 2, temple1 15, temple2 19, temple3 14, temple4 18 | `Daventry/AX.CS` |
 | `KQCamera::follow` | built | 315 (13) | Daventry 56, CastleD 3, DeadCity 49, Swamp 23, Gnome 25, Barren 47, IceWorld 47, Snowexit 4, temple1 13, temple2 16, temple3 11, temple4 21 | `Daventry/AX.CS` |
+| `preloadShape` | built (loading hint?) | 309 (0) | Daventry 76, DeadCity 7, Swamp 1, Gnome 10, Barren 44, IceWorld 97, temple2 22, temple4 52 | `Daventry/miltrap1.cs` |
 | `KQObject::getLoc` | built | 290 (88) | Daventry 15, DeadCity 197, Swamp 20, Gnome 15, Barren 7, IceWorld 11, temple1 5, temple2 5, temple3 6, temple4 6, Common 3 | `Daventry/AX.CS` |
 | `KQObject::setHidden` | built | 271 (2) | Daventry 12, DeadCity 64, Swamp 1, Gnome 86, Barren 30, IceWorld 46, temple1 9, temple2 4, temple3 2, temple4 17 | `Daventry/BRICKS.CS` |
+| `setLoadProgress` | built (loading hint?) | 256 (254) | Daventry 73, CastleD 4, DeadCity 8, Swamp 4, Gnome 8, Barren 64, IceWorld 61, Snowexit 4, temple1 7, temple2 7, temple3 8, temple4 8 | `Daventry/NEWWORLD.CS` |
 | `KQMonster::goHome` | built | 210 (0) | Daventry 28, DeadCity 6, Swamp 16, Barren 46, temple1 66, temple2 32, temple3 10, temple4 6 | `Daventry/home1.CS` |
 | `getEndLoop` | built | 209 (0) | Daventry 34, CastleD 8, DeadCity 44, Swamp 12, Gnome 11, Barren 22, IceWorld 28, Snowexit 4, temple1 4, temple2 11, temple3 2, temple4 29 | `Daventry/AX.CS` |
 | `KQSound::play` | built | 202 (0) | Daventry 24, DeadCity 83, Swamp 14, Gnome 19, Barren 30, IceWorld 14, temple1 3, temple2 4, temple3 4, temple4 7 | `Daventry/arrotrp1.cs` |
 | `KQObject::collision` | built | 176 (0) | Daventry 12, DeadCity 99, Swamp 1, Gnome 2, Barren 42, IceWorld 1, temple1 17, temple2 2 | `Daventry/BELSTND.CS` |
 | `KQConner::conversation` | built | 169 (0) | Daventry 46, DeadCity 34, Swamp 36, Gnome 4, Barren 27, IceWorld 22 | `Daventry/Ugly.cs` |
 | `makeActive` | built | 125 (0) | DeadCity 74, Swamp 2, Gnome 45, temple2 4 | `DeadCity/ASwitch1.cs` |
+| `purgeResource` | built (loading hint?) | 124 (0) | Daventry 31, IceWorld 51, temple2 3, temple4 39 | `Daventry/Shadow.cs` |
 | `KQObject::collisionType` | built | 123 (0) | Daventry 21, CastleD 8, DeadCity 21, Swamp 4, Gnome 28, Barren 11, IceWorld 11, temple1 4, temple2 8, temple3 3, temple4 4 | `Daventry/BELSTND.CS` |
 | `KQConner::setRope` | built | 108 (0) | Daventry 16, DeadCity 32, Swamp 12, Gnome 12, Barren 16, IceWorld 16, temple1 4 | `Daventry/CHURCHR1.CS` |
 | `KQMonster::clearSpeak` | built | 108 (0) | Daventry 5, DeadCity 13, Gnome 45, Barren 30, IceWorld 15 | `Daventry/Ugly.cs` |
@@ -119,6 +99,7 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `KQMusic::push` | built | 48 (0) | Daventry 4, DeadCity 13, Swamp 9, Gnome 8, Barren 4, IceWorld 3, temple1 2, temple2 1, temple3 1, temple4 1, Common 2 | `Daventry/AX.CS` |
 | `KQCamera::cutToCamLoc` | built | 47 (0) | Daventry 22, DeadCity 18, Swamp 4, Barren 3 | `Daventry/AX.CS` |
 | `KQMusic::pop` | built | 46 (0) | Daventry 4, DeadCity 14, Swamp 9, Gnome 7, Barren 4, IceWorld 2, temple1 2, temple2 1, temple3 1, Common 2 | `Daventry/chrchtrp.cs` |
+| `KQObject::preloadResources` | built (loading hint?) | 46 (37) | Daventry 18, DeadCity 16, Gnome 6, Barren 6 | `Daventry/AX.CS` |
 | `KQConner::setRun` | built | 45 (0) | Daventry 7, CastleD 1, DeadCity 9, Swamp 3, Gnome 4, Barren 6, IceWorld 4, temple1 4, temple2 1, temple3 1, Common 5 | `Daventry/CHURCHR2.CS` |
 | `setHaze` | built | 44 (6) | Daventry 2, DeadCity 12, Gnome 8, Barren 5, IceWorld 5, temple1 3, temple2 5, temple3 3, temple4 1 | `Daventry/Shadow.cs` |
 | `KQConner::getDoMode` | built | 43 (0) | Daventry 4, DeadCity 2, Swamp 5, Gnome 3, Barren 7, IceWorld 17, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/BELL.CS` |
@@ -128,13 +109,18 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `exist` | built | 34 (4) | Daventry 1, DeadCity 24, Swamp 2, Gnome 1, Barren 2, IceWorld 4 | `Daventry/ROOFTRAP.CS` |
 | `getLoc` | built | 33 (3) | Daventry 5, DeadCity 4, Swamp 1, Gnome 8, Barren 9, IceWorld 6 | `Daventry/KNIGHT.CS` |
 | `getloc` | built | 33 (0) | Daventry 28, Swamp 1, Gnome 1, IceWorld 1, temple4 2 | `Daventry/zomtrap.cs` |
+| `KQGame::letCatchUp` | built | 32 (0) | Daventry 1, DeadCity 1, Gnome 1, IceWorld 29 | `Daventry/WATERTP.CS` |
 | `removeMapIcon` | built | 31 (0) | DeadCity 28, Gnome 2, IceWorld 1 | `DeadCity/ASwitch1.cs` |
 | `KQConner::setRopeCam2` | built | 29 (0) | Daventry 4, DeadCity 8, Swamp 5, Gnome 3, Barren 4, IceWorld 4, temple1 1 | `Daventry/CHURCHR2.CS` |
+| `inc` | built | 29 (0) | DeadCity 2, Gnome 5, Barren 8, IceWorld 13, temple4 1 | `DeadCity/boxbgmr.cs` |
+| `allowShadows` | built | 28 (0) | Daventry 1, CastleD 1, DeadCity 7, Swamp 1, Gnome 1, Barren 4, IceWorld 6, Snowexit 2, temple1 1, temple2 1, temple3 1, temple4 1, Common 1 | `Daventry/WORLD.CS` |
+| `preloadResource` | built (loading hint?) | 27 (0) | Daventry 23, DeadCity 2, Swamp 2 | `Daventry/WIZARD.CS` |
 | `KQObject::tossItems` | built | 26 (0) | Daventry 2, DeadCity 4, Swamp 4, Gnome 2, Barren 3, IceWorld 4, temple1 2, temple2 2, temple3 3 | `Daventry/brlupcr.cs` |
 | `KQMonster::setHomeRadius` | built | 25 (0) | Daventry 15, DeadCity 6, IceWorld 4 | `Daventry/SPRDUMP.CS` |
 | `KQCamera::flyToCamLoc` | built | 23 (0) | Daventry 5, DeadCity 8, Swamp 4, IceWorld 3, Snowexit 2, temple4 1 | `Daventry/AX.CS` |
 | `KQObject::setUseGravity` | built | 22 (0) | Daventry 1, IceWorld 15, temple4 6 | `Daventry/KNIGHT.CS` |
 | `getConInventory` | built | 22 (0) | Daventry 3, Gnome 13, Barren 6 | `Daventry/BELL.CS` |
+| `loadAnim` | built | 20 (0) | Swamp 6, Barren 1, temple4 11, Common 2 | `Swamp/fienfir2.cs` |
 | `KQMonster::changeAnmFile` | built | 18 (0) | IceWorld 10, temple2 2, temple4 6 | `IceWorld/DragQeen.cs` |
 | `KQObject::setAccepts` | built | 17 (3) | Gnome 17 | `Gnome/ARMORGNM.CS` |
 | `setActiveCamera` | built | 17 (0) | DeadCity 16, temple4 1 | `DeadCity/DEATH.CS` |
@@ -143,9 +129,15 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `terAnimSwitch` | built | 16 (0) | Daventry 1, DeadCity 5, Swamp 10 | `Daventry/MILLTREE.CS` |
 | `KQConner::setRopeCam` | built | 14 (0) | Daventry 2, Swamp 1, Gnome 6, Barren 3, temple1 2 | `Daventry/churchr3.cs` |
 | `KQMonster::walkSlope` | built | 14 (8) | DeadCity 14 | `DeadCity/snkarma.cs` |
+| `doPopup` | built | 14 (0) | Daventry 12, Swamp 1, Common 1 | `Daventry/CAMERA1.CS` |
+| `KQGame::selectScreen` | built | 13 (0) | Daventry 1, CastleD 2, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
+| `blackOut` | built | 13 (0) | Daventry 1, CastleD 2, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
 | `KQObject::setDontLook` | built | 12 (10) | Daventry 4, Gnome 5, Barren 3 | `Daventry/WORLDINV.CS` |
+| `loadPalette` | built (loading hint?) | 12 (0) | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
+| `newSky` | built | 12 (0) | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
 | `KQMap::activate` | built | 11 (10) | CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `CastleD/WORLD.CS` |
 | `random` | built | 11 (0) | Daventry 3, DeadCity 3, Swamp 1, Barren 4 | `Daventry/FOUNTAIN.CS` |
+| `resetHazeColor` | built | 11 (0) | Daventry 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
 | `KQCamera::setRange` | built | 10 (0) | Daventry 2, Barren 2, Common 6 | `Daventry/ropetrp2.cs` |
 | `KQConner::setRopeCamBottomLimit` | built | 10 (0) | Swamp 2, Barren 5, IceWorld 3 | `Swamp/FIENROP4.CS` |
 | `KQConner::setRopeCamTopLimit` | built | 10 (0) | Swamp 2, Barren 5, IceWorld 3 | `Swamp/FIENROP4.CS` |
@@ -159,26 +151,33 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `earnTeleport` | built | 6 (0) | Daventry 1, DeadCity 1, Swamp 1, Gnome 2, IceWorld 1 | `Daventry/KeepDoor.cs` |
 | `offTeleport` | built | 6 (0) | Daventry 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1 | `Daventry/Teletrap.cs` |
 | `onTeleport` | built | 6 (0) | Daventry 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1 | `Daventry/Teletrap.cs` |
+| `KQCamera::shake` | built | 5 (0) | Daventry 3, Barren 2 | `Daventry/beer42.CS` |
 | `matchHeights` | built | 5 (0) | DeadCity 5 | `DeadCity/SCALE.CS` |
 | `setConnorFlag` | built | 5 (0) | CastleD 1, DeadCity 2, Swamp 1, temple4 1 | `CastleD/casport.cs` |
 | `tileExit` | built | 5 (0) | DeadCity 2, Swamp 3 | `DeadCity/DDOOR4.CS` |
+| `getConnorFlag` | built | 4 (0) | Daventry 3, temple2 1 | `Daventry/drawings.cs` |
 | `KQCamera::setCamRelObj` | built | 3 (0) | Barren 3 | `Barren/gongtp1.cs` |
 | `KQConner::endJump` | built | 3 (0) | Daventry 1, Barren 2 | `Daventry/miltrap1.cs` |
 | `KQConner::runTo` | built | 3 (0) | Barren 2, IceWorld 1 | `Barren/tiletpn2.cs` |
 | `KQMap::stopLoc` | built | 3 (0) | DeadCity 3 | `DeadCity/DDOOR4.CS` |
 | `KQMonster::setReactPercent` | built | 3 (0) | DeadCity 2, temple4 1 | `DeadCity/towSklTp.CS` |
 | `KQMonster::setSpecialReact` | built | 3 (0) | DeadCity 2, temple4 1 | `DeadCity/towSklTp.CS` |
+| `purgeResources` | built | 3 (0) | IceWorld 1, temple2 2 | `IceWorld/icelord.cs` |
+| `setcat` | built | 3 (0) | Barren 3 | `Barren/dockup.cs` |
 | `KQCamera::setCamRelConner` | built | 2 (0) | Daventry 1, DeadCity 1 | `Daventry/RAVENCNR.CS` |
 | `KQConner::setRequiredWeaponMode` | built | 2 (0) | DeadCity 2 | `DeadCity/towSklTp.CS` |
 | `deadHallTeleport` | built | 2 (0) | DeadCity 2 | `DeadCity/DDOOR4.CS` |
 | `goldCoinPersists` | built | 2 (0) | Gnome 2 | `Gnome/apothgnm.cs` |
+| `mouseAction` | built | 2 (0) | Daventry 2 | `Daventry/AX.CS` |
 | `pauseAnim` | built | 2 (0) | Daventry 2 | `Daventry/OUTDOOR.CS` |
 | `KQConner::JumpDir` | built | 1 (0) | Daventry 1 | `Daventry/miltrap1.cs` |
 | `KQConner::checkInvisible` | built | 1 (0) | DeadCity 1 | `DeadCity/SKINGTP.CS` |
 | `invClick` | built | 1 (0) | DeadCity 1 | `DeadCity/REAPER.CS` |
 | `walkExit` | built | 1 (0) | DeadCity 1 | `DeadCity/PORTRAP7.CS` |
+| `alias` | start-up only: read by the loader | 45 (45) | Daventry 13, DeadCity 3, Swamp 6, Gnome 7, Barren 8, IceWorld 4, temple2 3, temple4 1 | `Daventry/NEWWORLD.CS` |
 | `applyCombatLevel` | start-up only: read by the loader | 12 (12) | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/NEWWORLD.CS` |
 | `KQConner::setLevel` | start-up only: read by the loader | 10 (10) | DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `DeadCity/conStart.cs` |
+| `stopHelp` | start-up only: read by the loader | 10 (10) | DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `DeadCity/conStart.cs` |
 
 ## Connor's states (`KQMonster::setState Connor <state>`)
 
@@ -253,7 +252,6 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `KQEnvInfo` | **not named** | 12 | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/envInfo.kq` |
 | `KQWorldInventory` | **not named** | 12 | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/worldinv.kq` |
 | `KQPushTile` | **not named** | 9 | temple3 9 | `temple3/order01.kq` |
-| `KQHazer` | **not named** | 7 | DeadCity 3, Swamp 3, Gnome 1 | `DeadCity/brighaze.KQ` |
 | `KQConAnimList` | **not named** | 6 | Common 6 | `Common/Connor.kq` |
 | `KQInventoryItem` | **not named** | 5 | Common 5 | `Common/Connor.kq` |
 | `KQSwampTile` | **not named** | 5 | Swamp 5 | `Swamp/gastrap1.KQ` |
@@ -300,6 +298,7 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `KQOrbitObj` | named | 12 | Daventry 9, Common 3 | `Daventry/orbit10.kq` |
 | `KQChest` | named | 10 | Daventry 4, Swamp 4, IceWorld 2 | `Daventry/jar.kq` |
 | `KQGeometryTalker` | named | 7 | Daventry 2, DeadCity 1, Swamp 1, IceWorld 3 | `Daventry/Ugly.KQ` |
+| `KQHazer` | named | 7 | DeadCity 3, Swamp 3, Gnome 1 | `DeadCity/brighaze.KQ` |
 | `KQSpiriTrap` | named | 4 | DeadCity 4 | `DeadCity/spirtp1.kq` |
 | `RiverControl` | named | 4 | DeadCity 4 | `DeadCity/rivercn2.kq` |
 | `KQSkinList` | named | 3 | Common 3 | `Common/Connor.kq` |

@@ -897,6 +897,28 @@ Checked in the logs and unit tests only, **not played by hand**.
   numbers, `dropItem`; animated objects drawn from their movements
   (trees and flames that stood still now move).
 
+## Dead City polish (Q197–Q198) and Script coverage batch 1 (2026-11-20, steps B1-1 to B1-8)
+
+Checked in the logs and unit tests only, **not checked by eye or played by hand**.
+
+- **Dead City polish (`Q197`, `Q198`):** `Tile2`/`Tile3`/`Scales`/`Fall`
+  state numbers, all six Scales camera cuts and `walkTo` exit, tower
+  skeleton `0.2 s` delayed `KQMusic::pop mtower.aud`, and instant frame-0
+  follow snap after a camera cut.
+- **Script language & shared hints:** unquoted `;` statement splitting
+  (fixing `Snowexit`'s 11 mushrooms), `inc`, `setcat`, `alias`,
+  `getConnorFlag`, safe `mouseAction`, `KQGame::selectScreen`, and 14
+  loading/world-start commands.
+- **World shadows, dynamic `loadAnim`, camera shake & haze zones:**
+  `allowShadows` on world load and live toggle; dynamic `KQAnimOnce`
+  spawning (`loadAnim`); triangular-wave `KQCamera::shake`; and
+  `KQHazer` proximity haze zones (`DeadCity`'s `litehaze`).
+- **Help popups and F1 Help Book:** scripted (`doPopup`) and built-in
+  beginner tips with `1.5 s` delay, `1.0 s` deferral, `3.0 s` cooldown,
+  `Options.cs` `notStartingHelp`, startup `stopHelp`, `38×7` wrapping
+  with key-name expansion, `intrface.aud`, game pause, and the 24-page
+  **F1** Help Book (`<<`, `Close`, `>>`).
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses: triggers and
@@ -1087,9 +1109,8 @@ message that shows the usage.
 - **Conversations:** not checked by eye yet; the horn on the beast,
   `clearSpeak` on a partner and a real mouse drag during a talk were
   not run.
-- **Camera:** no first person view (F2) or camera shake; the camera's
-  roll is not drawn; the mouse's recentring near the window's edges is
-  not built.
+- **Camera:** no first person view (F2); the camera's roll is not drawn;
+  the mouse's recentring near the window's edges is not built.
 - **Cutscenes:** the windmill tumble (`miltrap1.cs`) plays the
   no-weapon version (`KQConner::getDoMode` answers empty hands, 2026-10-18; checked by eye by the user;
   weapons come with M5).

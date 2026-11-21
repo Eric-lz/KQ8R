@@ -1,12 +1,48 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-20 after
-B built Dead City's river controls (U-10) and weeper draining bolts
-(U-11). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+B finished Dead City polish (`Q197`–`Q198`) and Script Coverage Batch 1
+(steps `B1-1` to `B1-8`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-20)
+
+- **2026-11-20 (B): `Q197`–`Q198` + Script Coverage Batch 1 built (steps B1-1 to B1-8)**
+  (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1"; 777 workspace
+  unit tests, headless `--sound off` viewer logs across `DeadCity`,
+  `Snowexit`, `Daventry`, `CastleD`, `Swamp`; **not checked by eye or
+  played by hand**):
+  - **Dead City polish (`B1-1`, `Q197`–`Q198`):** added `Tile2`/`Tile3`/
+    `Scales`/`Fall` state numbers, Scales of Justice six instant cuts and
+    `walkTo` exit + post-`onscale2`/`offscale2` remembered-input reset,
+    tower skeleton `0.2 s` delayed `KQMusic::pop mtower.aud`, and
+    frame-0 follow snap after camera cut.
+  - **Script syntax & shared commands (`B1-2`):** unquoted `;` statement
+    splitting (fixing `Snowexit/worldinv.cs`'s 11 mushrooms), `inc`,
+    `setcat` (512-byte cap), `alias` (`newWorld.cs` aliases + max 20
+    expansions), `getConnorFlag`, safe `mouseAction`, `KQGame::selectScreen`,
+    and 14 loading/world-start hints.
+  - **World toggles, effects & haze (`B1-3`..`B1-6`):** `allowShadows`
+    on world load (`world.cs`) and live toggle, dynamic `loadAnim`
+    `KQAnimOnce` spawning (`.kqs`/`.dts`/`.anm`), `KQCamera::shake` across
+    follow/fixed/first-person cameras, and `KQHazer` proximity haze zones
+    (`DeadCity/litehaze.kq` `9000 -> 18000 -> 13500 -> 9000`).
+  - **Help popups & F1 Help Book (`B1-7`):** `doPopup` (`1.5 s` delay,
+    `1.0 s` deferrals, `3.0 s` cooldown), `notStartingHelp` (`Options.cs` +
+    command + `< 170` checkbox), `stopHelp` (`0x7f` muting the 7 built-in
+    beginner tips), `movekeys.kq` -> `500.MSG` placeholder expansion,
+    `38×7` line wrapping, `intrface.aud` + game pause, and 24-page F1
+    Help Book (`<<`, `Close`, `>>`, `0 <-> 23`).
+  - **Script coverage regenerated (`B1-8`):** `docs/SCRIPT-COVERAGE.md`
+    updated (`37 -> 20` distinct missing commands, `0` stubs remaining
+    across all worlds; `CastleD` now `0` missing, `Daventry` `2`,
+    `DeadCity` `1`).
+  - **Next:** User eye/play check for Batch 1 (`B1-1`..`B1-7`), then Build
+    Session (B) for **Batch 3 (Swamp)** (`Tile2`, `KQSwampTile`, Mandragore
+    tree/roots, `KQConner::pay`, `setRelDamage`, `preSpecial`,
+    `setFirstPerson`, `addImmunity`) or Study Session (A) for Batch 4
+    (Gnome).
 
 - **2026-11-20 (A): Batch 3 (Swamp) studied** (traced in `Mask.exe` via
   Ghidra and checked against `MASK/` data; **not checked by hand in the
