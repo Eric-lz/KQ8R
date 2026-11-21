@@ -4216,6 +4216,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `stopHelp` sets `0x7f` muting the 7 built-in one-off tips (`#128` rope `4.5 s`, `#130` half health, `#131` health item `3.0 s`, `#132` quest item `0.0 s`, `#137` first kill `2.0 s`, `#138` level 2 `1.5 s`, `#140` empty-handed hit `1.5 s`); `conStart.cs` runs `stopHelp` before starting inventory; `Journey` preserves `tip_bits` via bitwise OR | `interface.md` rule 58; `fighting.md` rules 29, 33; `potions.md` rule 41 | `DeadCity` `viewer.log` & `doors.log` (`conStart.cs line 2: stopHelp -> tip_bits=0x7f`, suppressing `#131`, `#128`, `#132`); `active::tests::its_swings_hurt_connor_until_he_dies` (`#140`) |
 | F1 Help Book browses the 24 `500.MSG` entries (`127–146, 149–151, 153`) with `<<`, `Close` (`#155`), and `>>`, Left/Right arrows wrapping `0 <-> 23`, and Enter/F1/Escape closing (`Escape` cleared before `fly_input`) | `interface.md` rule 56; `MASK/GAME/ENGLISH/500.MSG` | `help::tests::not_starting_help_and_stop_help_and_book_wrapping`; `Daventry` `viewer.log` & `gui.log` (`1/24 #127 -> 24/24 #153 [Tab] -> 1/24 #127 -> 2/24 #128 -> close`) |
 
+## B1-F1 2026-11-21: Help popup button order, Portal highlight/click sound, and instant close — core `panels.rs`; viewer `gui_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| F1 Help Book buttons ordered left-to-right `Close` (`#155`), `<<`, `>>` (`IDCTL_POPUP_BTN1..3`); highlight starts on `0` (`Close`) and matches `Portal` (`buyhibtn.pba`, Left/Right arrows move highlight `0..=2` preserved across page turns, Enter presses/activates highlighted button, mouse presses clicked button without moving highlight) | User check in the original (2026-11-20); `world-change.md` rule 26 (`Q151`); `gui-verify.log` (`IDCTL_POPUP_BTN1..3`) | `Daventry` `viewer.log` & `gui.log` (`highlight 0 "Close" -> 1 "<<" -> 2 ">>" -> 1 -> 0` across `1/24 #127 <-> 24/24 #153`, **not yet re-checked by eye**) |
+| Plain one-shot `click.aud` plays when left-clicking anywhere inside the open popup window (`0..360 x 0..200`), when moving button highlight with Left/Right arrows, and when pressing Enter (on `Portal`, `HelpNormal`, and `HelpBook`); modal popups block background bar/map clicks | User check in the original (2026-11-20); `world-change.md` (`Q151`); `MASK/GAME/SOUND/CLICK.AUD` | `Daventry` `sound.log` (`start click.aud` on `help:click`, `help:check`, `help:enter`, `help:left`, `help:right`; **not yet checked by ear**) |
+| `Panel::Popup` shows and hides immediately (`away` snapped `0.0` / `1.0`, no `0.2 s` slide timer) so text, buttons, checkbox, and window vanish on the same frame | User check in the original (2026-11-20) | unit test `panels::tests::popup_shows_and_hides_immediately`; `Daventry` `gui.log` (`popup hidden immediately`, zero empty redraws; **not yet re-checked by eye**) |
+
 
 
 

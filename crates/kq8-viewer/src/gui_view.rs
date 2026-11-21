@@ -171,9 +171,9 @@ fn popup_ok_box(show_checkbox: bool) -> [i32; 4] {
     }
 }
 
-fn popup_book_button_box(k: usize, layout: &PopupLayout) -> [i32; 4] {
+fn popup_book_button_box(k: usize, highlight: usize, layout: &PopupLayout) -> [i32; 4] {
     let [l, r] = layout.btn_x[k];
-    let [t, b] = if k == 1 { POPUP_ROWS_HIGHLIGHTED } else { POPUP_ROWS_OTHER };
+    let [t, b] = if k == highlight { POPUP_ROWS_HIGHLIGHTED } else { POPUP_ROWS_OTHER };
     [l, t, r, b]
 }
 
@@ -212,6 +212,7 @@ const STRETCHED: u32 = 0x8000;
 const BLACK_TAG: i32 = 351;
 const POPUP_HIGHLIGHT_PICTURE: &str = "buyhibtn.pba";
 const POPUP_PRESSED_SHIFT: [i32; 2] = [1, 1];
+const POPUP_CLICK_SOUND: &str = "click.aud";
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PopupKind {
@@ -235,7 +236,9 @@ pub enum PopupKind {
         index: usize,
         text_number: u32,
         close: String,
-        /// 0 = "<<", 1 = Close (highlighted), 2 = ">>".
+        /// 0 = Close, 1 = "<<", 2 = ">>" (starts at 0 = Close, matching Portal Q151).
+        highlight: usize,
+        /// Button held down (mouse or Enter), activated when let go.
         pressed: Option<usize>,
     },
 }
@@ -1000,9 +1003,9 @@ impl Gui {
                             }
                         }
                     }
-                    PopupKind::HelpBook { close, pressed, .. } => {
-                        for (k, label) in ["<<", close.as_str(), ">>"].into_iter().enumerate() {
-                            push_button(popup_book_button_box(k, &layout), label, k == 1, *pressed == Some(k));
+                    PopupKind::HelpBook { close, highlight, pressed, .. } => {
+                        for (k, label) in [close.as_str(), "<<", ">>"].into_iter().enumerate() {
+                            push_button(popup_book_button_box(k, *highlight, &layout), label, *highlight == k, *pressed == Some(k));
                         }
                     }
                 }
@@ -1041,9 +1044,7 @@ impl Gui {
             .collect()
     }
 
-    /// The popup's button or checkbox under window point `at` (6e-6 / Batch 1 B1-7).
-    fn popup_hit_at(&self, frame: [f32; 4], at: Vec2) -> Option<PopupHit> {
-        let p = self.popup.as_ref()?;
+    fn popup_local_point(&self, frame: [f32; 4], at: Vec2) -> Option<(f32, f32)> {
         let dialog = self.control(Panel::Popup.layout_id())?;
         let [fl, ft, fw, _] = frame;
         let k = fw / self.screen[0] as f32;
@@ -1053,6 +1054,21 @@ impl Gui {
         // Window pixels -> layout pixels from the panel's top-left.
         let x = ((at.x - fl) / k) / self.scale - dialog.rect[0] as f32;
         let y = ((at.y - ft) / k) / self.scale - dialog.rect[1] as f32;
+        Some((x, y))
+    }
+
+    fn popup_contains(&self, frame: [f32; 4], at: Vec2) -> bool {
+        let Some(dialog) = self.control(Panel::Popup.layout_id()) else { return false };
+        let Some((x, y)) = self.popup_local_point(frame, at) else { return false };
+        let h = (dialog.rect[3] - dialog.rect[1]) as f32;
+        x >= 0.0 && x < POPUP_TEXT_WIDTH as f32 && y >= 0.0 && y < h
+    }
+
+    /// The popup's button or checkbox under window point `at` (6e-6 / Batch 1 B1-7 / B1-F1).
+    fn popup_hit_at(&self, frame: [f32; 4], at: Vec2) -> Option<PopupHit> {
+        let p = self.popup.as_ref()?;
+        let dialog = self.control(Panel::Popup.layout_id())?;
+        let (x, y) = self.popup_local_point(frame, at)?;
         let inside = |r: [i32; 4]| x >= r[0] as f32 && x < r[2] as f32 && y >= r[1] as f32 && y < r[3] as f32;
         let layout = self.popup_layout(dialog);
         match &p.kind {
@@ -1068,8 +1084,8 @@ impl Gui {
                     None
                 }
             }
-            PopupKind::HelpBook { .. } => {
-                (0..3).map(|k| popup_book_button_box(k, &layout)).position(inside).map(PopupHit::Button)
+            PopupKind::HelpBook { highlight, .. } => {
+                (0..3).map(|k| popup_book_button_box(k, *highlight, &layout)).position(inside).map(PopupHit::Button)
             }
         }
     }
@@ -1888,9 +1904,9 @@ pub fn gui_draw(
         } else if y > 60.0 / 480.0 * sh && gui.panels.shown(Panel::Top) && !moving && !gui.panels.top_popped() {
             gui.panels.set(kq8_core::panels::Group::Top, false, "the pointer below y 60 (rule 12)");
         }
-        // inventory.md rules 6, 9, 10: clicks on the bars.
+        // inventory.md rules 6, 9, 10: clicks on the bars (ignored while a modal popup is open).
         for (button, left) in [(MouseButton::Left, true), (MouseButton::Right, false)] {
-            if !buttons.just_pressed(button) {
+            if !buttons.just_pressed(button) || gui.popup.is_some() {
                 continue;
             }
             let hit = places.iter().find(|(_, l, t, w, h)| x >= *l && x < l + w && y >= *t && y < t + h).copied();
@@ -2126,6 +2142,13 @@ fn queue_help_sound(sim: &mut DoorSim) {
     }
 }
 
+fn queue_popup_click(sim: &mut DoorSim, why: &str) {
+    sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(
+        POPUP_CLICK_SOUND,
+        format!("popup click: {why}"),
+    ));
+}
+
 fn sync_help_popup(gui: &mut Gui, sim: &DoorSim, hp: kq8_core::help::HelpPopup, shared: &Shared) {
     use kq8_core::help::{HELP_BOOK_ENTRIES, HelpPopup, expand_key_placeholders, wrap_help_text};
     match hp {
@@ -2158,24 +2181,33 @@ fn sync_help_popup(gui: &mut Gui, sim: &DoorSim, hp: kq8_core::help::HelpPopup, 
             shared.log.lock().unwrap().summary(msg);
         }
         HelpPopup::Book { index } => {
-            if let Some(PopupShown { kind: PopupKind::HelpBook { index: cur, .. }, .. }) = &gui.popup {
-                if *cur == index {
-                    return;
+            let highlight = match &gui.popup {
+                Some(PopupShown { kind: PopupKind::HelpBook { index: cur, highlight, .. }, .. }) => {
+                    if *cur == index {
+                        return;
+                    }
+                    *highlight
                 }
-            }
+                _ => 0,
+            };
             let text_number = HELP_BOOK_ENTRIES[index];
             let raw = message_500(sim, text_number).unwrap_or_else(|| format!("(missing 500.MSG #{text_number})"));
             let key_names = gui.resolve_movekey_names(sim);
             let lines = wrap_help_text(&expand_key_placeholders(&raw, &key_names));
             let close = message_500(sim, 155).unwrap_or_else(|| "Close".into());
+            let btn_name = match highlight {
+                0 => close.as_str(),
+                1 => "<<",
+                _ => ">>",
+            };
             let msg = format!(
-                "help: F1 book page {}/{} (#{text_number}, close={close:?}): {lines:?}; the game pauses (interface.md rule 56)",
+                "help: F1 book page {}/{} (#{text_number}, close={close:?}, highlight={highlight} {btn_name:?}): {lines:?}; the game pauses (interface.md rule 56)",
                 index + 1,
                 HELP_BOOK_ENTRIES.len()
             );
             gui.popup = Some(PopupShown {
                 lines,
-                kind: PopupKind::HelpBook { index, text_number, close, pressed: None },
+                kind: PopupKind::HelpBook { index, text_number, close, highlight, pressed: None },
             });
             gui.panels.set(kq8_core::panels::Group::Popup, true, "F1 help book");
             gui.note(&msg);
@@ -2195,7 +2227,7 @@ fn close_help_popup(gui: &mut Gui, sim: &mut DoorSim, shared: &Shared, how: &str
     shared.log.lock().unwrap().summary(line);
 }
 
-/// Every frame, also while the game is paused (M6 6e-6 / Batch 1 B1-7):
+/// Every frame, also while the game is paused (M6 6e-6 / Batch 1 B1-7 / B1-F1):
 /// the Portal yes/no popup, scripted/built-in `doPopup` tips, and the F1 Help Book.
 #[allow(clippy::too_many_arguments)]
 pub fn popup_step(
@@ -2249,12 +2281,17 @@ pub fn popup_step(
         }
         let cursor = window.single().ok().and_then(|w| w.cursor_position());
         let over = cursor.and_then(|at| gui.popup_hit_at(frame.0, at));
+        let in_popup = cursor.is_some_and(|at| gui.popup_contains(frame.0, at));
         if let Some(PopupShown { kind: PopupKind::Portal { highlight, pressed: p_pressed, .. }, .. }) = gui.popup.as_mut() {
             let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
             if keys.any_just_pressed(enter) {
                 *p_pressed = Some(*highlight);
+                queue_popup_click(&mut sim, "Enter on Portal popup");
             }
             if buttons.just_pressed(MouseButton::Left) {
+                if in_popup {
+                    queue_popup_click(&mut sim, "mouse click on Portal popup");
+                }
                 if let Some(PopupHit::Button(k)) = over {
                     *p_pressed = Some(k);
                 }
@@ -2276,12 +2313,19 @@ pub fn popup_step(
             let Some(PopupShown { kind: PopupKind::Portal { yes, no, highlight, .. }, .. }) = gui.popup.as_mut() else { break };
             let answer = match what {
                 "left" | "right" => {
-                    *highlight = if what == "left" { 0 } else { 1 };
+                    let next = if what == "left" { 0 } else { 1 };
+                    if next != *highlight {
+                        *highlight = next;
+                        queue_popup_click(&mut sim, "arrow key on Portal popup");
+                    }
                     let line = format!("popup: {how}: {} highlighted", if *highlight == 0 { yes } else { no });
                     gui.note(&line);
                     None
                 }
-                "enter" => Some(*highlight == 0),
+                "enter" => {
+                    queue_popup_click(&mut sim, "test --key popup:enter");
+                    Some(*highlight == 0)
+                }
                 "yes" => Some(true),
                 "no" => Some(false),
                 "escape" if sim.active.world.connor_hands_off => {
@@ -2353,6 +2397,7 @@ pub fn popup_step(
     sync_help_popup(gui, &sim, was_open, &shared);
     let cursor = window.single().ok().and_then(|w| w.cursor_position());
     let over = cursor.and_then(|at| gui.popup_hit_at(frame.0, at));
+    let in_popup = cursor.is_some_and(|at| gui.popup_contains(frame.0, at));
     let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
     let test_lower = test_key.as_deref().map(str::to_ascii_lowercase);
     let f1_close = keys.just_pressed(KeyCode::F1) || test_lower.as_deref() == Some("f1");
@@ -2362,19 +2407,27 @@ pub fn popup_step(
         keys.clear_just_pressed(KeyCode::Escape);
     }
 
-    let mut check_note = None;
+    let mut note_line = None;
     let mut close_how = None;
+    let mut page_delta = None;
     match gui.popup.as_mut().map(|p| &mut p.kind) {
         Some(PopupKind::HelpNormal { show_checkbox, checked, pressed_ok, .. }) => {
             if keys.any_just_pressed(enter) {
                 *pressed_ok = true;
+                queue_popup_click(&mut sim, "Enter on help popup");
             }
-            if buttons.just_pressed(MouseButton::Left) && over == Some(PopupHit::Button(0)) {
-                *pressed_ok = true;
+            if buttons.just_pressed(MouseButton::Left) {
+                if in_popup {
+                    queue_popup_click(&mut sim, "mouse click on help popup");
+                }
+                if over == Some(PopupHit::Button(0)) {
+                    *pressed_ok = true;
+                }
             }
             let check_how = if *show_checkbox && buttons.just_pressed(MouseButton::Left) && over == Some(PopupHit::Checkbox) {
                 Some("click checkbox")
             } else if *show_checkbox && test_lower.as_deref() == Some("help:check") {
+                queue_popup_click(&mut sim, "test --key help:check");
                 Some("test --key help:check")
             } else {
                 None
@@ -2382,7 +2435,10 @@ pub fn popup_step(
             if let Some(how) = check_how {
                 let mode = sim.active.world.help.toggle_starting_help();
                 *checked = mode != 0;
-                check_note = Some(format!("help: {how} -> notStartingHelp={mode} (interface.md rule 55)"));
+                note_line = Some(format!("help: {how} -> notStartingHelp={mode} (interface.md rule 55)"));
+            }
+            if test_lower.as_deref() == Some("help:click") {
+                queue_popup_click(&mut sim, "test --key help:click");
             }
             let ok_released = (keys.any_just_released(enter) && *pressed_ok)
                 || (buttons.just_released(MouseButton::Left) && *pressed_ok && over == Some(PopupHit::Button(0)));
@@ -2395,69 +2451,102 @@ pub fn popup_step(
                 Some("F1")
             } else if esc_close {
                 Some("Escape")
-            } else if matches!(test_lower.as_deref(), Some("help:ok" | "help:close")) {
-                Some("test --key help:ok")
+            } else if matches!(test_lower.as_deref(), Some("help:enter" | "help:ok" | "help:close")) {
+                queue_popup_click(&mut sim, "test --key help:enter");
+                Some("test --key help:enter")
             } else {
                 None
             };
         }
-        Some(PopupKind::HelpBook { pressed, .. }) => {
+        Some(PopupKind::HelpBook { close, highlight, pressed, .. }) => {
             if keys.any_just_pressed(enter) {
-                *pressed = Some(1);
+                *pressed = Some(*highlight);
+                queue_popup_click(&mut sim, "Enter on F1 help book");
             }
             if buttons.just_pressed(MouseButton::Left) {
+                if in_popup {
+                    queue_popup_click(&mut sim, "mouse click on F1 help book");
+                }
                 if let Some(PopupHit::Button(k)) = over {
                     if k < 3 {
                         *pressed = Some(k);
                     }
                 }
             }
-            let mut released_btn = None;
+            let mut activated = None;
             if keys.any_just_released(enter) {
-                if *pressed == Some(1) {
-                    released_btn = Some(1);
+                if *pressed == Some(*highlight) {
+                    activated = Some(*highlight);
                 }
                 *pressed = None;
             }
             if buttons.just_released(MouseButton::Left) {
                 if let Some(k) = pressed.filter(|k| over == Some(PopupHit::Button(*k))) {
-                    released_btn = Some(k);
+                    activated = Some(k);
                 }
                 *pressed = None;
             }
-            let delta = if keys.just_pressed(KeyCode::ArrowLeft) || released_btn == Some(0) || test_lower.as_deref() == Some("help:prev") {
-                Some(-1)
-            } else if keys.just_pressed(KeyCode::ArrowRight) || released_btn == Some(2) || test_lower.as_deref() == Some("help:next") {
-                Some(1)
+            let move_dir = if keys.just_pressed(KeyCode::ArrowLeft) || test_lower.as_deref() == Some("help:left") {
+                Some((-1isize, if keys.just_pressed(KeyCode::ArrowLeft) { "left key" } else { "test --key help:left" }))
+            } else if keys.just_pressed(KeyCode::ArrowRight) || test_lower.as_deref() == Some("help:right") {
+                Some((1isize, if keys.just_pressed(KeyCode::ArrowRight) { "right key" } else { "test --key help:right" }))
             } else {
                 None
             };
-            if let Some(d) = delta {
-                sim.active.world.help.page_book(d);
-                if let Some(hp) = sim.active.world.help.open {
-                    sync_help_popup(gui, &sim, hp, &shared);
+            if let Some((dir, how)) = move_dir {
+                let next = if dir < 0 { highlight.saturating_sub(1) } else { (*highlight + 1).min(2) };
+                if next != *highlight {
+                    *highlight = next;
+                    queue_popup_click(&mut sim, how);
+                    let label = match next {
+                        0 => close.as_str(),
+                        1 => "<<",
+                        _ => ">>",
+                    };
+                    note_line = Some(format!("help: F1 book highlight ({how}) -> {next} {label:?} (B1-F1)"));
                 }
-                return;
             }
-            close_how = if released_btn == Some(1) {
-                Some("Close / Enter")
-            } else if f1_close {
-                Some("F1")
-            } else if esc_close {
-                Some("Escape")
-            } else if matches!(test_lower.as_deref(), Some("help:close" | "help:ok")) {
-                Some("test --key help:close")
-            } else {
-                None
-            };
+            match test_lower.as_deref() {
+                Some("help:click") => queue_popup_click(&mut sim, "test --key help:click"),
+                Some("help:enter") => {
+                    queue_popup_click(&mut sim, "test --key help:enter");
+                    activated = Some(*highlight);
+                }
+                Some("help:prev") => {
+                    queue_popup_click(&mut sim, "test --key help:prev");
+                    activated = Some(1);
+                }
+                Some("help:next") => {
+                    queue_popup_click(&mut sim, "test --key help:next");
+                    activated = Some(2);
+                }
+                Some("help:close" | "help:ok") => {
+                    queue_popup_click(&mut sim, "test --key help:close");
+                    activated = Some(0);
+                }
+                _ => {}
+            }
+            match activated {
+                Some(1) => page_delta = Some(-1),
+                Some(2) => page_delta = Some(1),
+                Some(0) => close_how = Some("Close / Enter"),
+                _ if f1_close => close_how = Some("F1"),
+                _ if esc_close => close_how = Some("Escape"),
+                _ => {}
+            }
         }
         _ => {}
     }
-    if let Some(note) = check_note {
+    if let Some(note) = note_line {
         gui.note(&note);
         shared.log.lock().unwrap().summary(note);
     }
-    if let Some(how) = close_how {
+    if let Some(d) = page_delta {
+        sim.active.world.help.page_book(d);
+        if let Some(hp) = sim.active.world.help.open {
+            sync_help_popup(gui, &sim, hp, &shared);
+        }
+    } else if let Some(how) = close_how {
         close_help_popup(gui, &mut sim, &shared, how);
     }
 }

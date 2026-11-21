@@ -218,6 +218,9 @@ impl Panels {
             let s = &mut self.slides[p.index()];
             if s.shown != on {
                 s.shown = on;
+                if p == Panel::Popup {
+                    s.away = if on { 0.0 } else { 1.0 };
+                }
                 moved.push(p.name());
                 let sound = match (p, on) {
                     (Panel::Top, true) => Some("intrup.aud"),
@@ -241,6 +244,9 @@ impl Panels {
         if moved.is_empty() {
             self.note(format!("{} {verb} ({why}): already {}; left alone (rule 9)", group.name(), if on { "shown or sliding in" } else { "hidden or sliding out" }));
             false
+        } else if group == Group::Popup {
+            self.note(format!("{} {verb} ({why}): {} {} immediately", group.name(), moved.join(", "), if on { "shown" } else { "hidden" }));
+            true
         } else {
             self.note(format!("{} {verb} ({why}): {} start to slide {} (0.2 s)", group.name(), moved.join(", "), if on { "in" } else { "out" }));
             true
@@ -510,5 +516,18 @@ mod tests {
         assert_eq!(place(Panel::Slots, [240.0, 520.0, 560.0, 582.5], screen, 0.5), (240.0, 560.0));
         // Map 400 wide: its right edge ends at -62.5.
         assert_eq!(place(Panel::Map, [0.0, 80.0, 400.0, 520.0], screen, 1.0), (-462.5, 80.0));
+    }
+
+    #[test]
+    fn popup_shows_and_hides_immediately() {
+        let mut p = start();
+        assert!(!p.visible(Panel::Popup));
+        assert_eq!(p.away(Panel::Popup), 1.0);
+        assert!(p.set(Group::Popup, true, "test"));
+        assert_eq!(p.away(Panel::Popup), 0.0);
+        assert!(p.visible(Panel::Popup));
+        assert!(p.set(Group::Popup, false, "test"));
+        assert_eq!(p.away(Panel::Popup), 1.0);
+        assert!(!p.visible(Panel::Popup));
     }
 }

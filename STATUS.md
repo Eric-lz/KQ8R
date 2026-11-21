@@ -32,23 +32,25 @@ B finished Dead City polish (`Q197`–`Q198`) and Script Coverage Batch 1
     exit by eye, but needs follow-up `B1-F2` for `H`-key bounding box
     and severe per-frame FPS drop / terminal spam from updating `4,347`
     materials on every ramp move).
-  - **Help popups & F1 Help Book (`B1-7`):** `doPopup`, `notStartingHelp`,
+  - **Help popups & F1 Help Book (`B1-7` + `B1-F1`):** `doPopup`, `notStartingHelp`,
     `stopHelp`, `movekeys.kq` -> `500.MSG` expansion, `38×7` wrap,
-    `intrface.aud`, game pause, and 24-page F1 Help Book; checked by eye
-    (both work, need follow-up `B1-F1`: F1 button order `Close, <<, >>`,
-    Portal-matching highlight & Left/Right arrow animations, `click.aud`
-    on any click inside the popup window & highlight moves, and instant
-    close without `0.2 s` blank-box linger).
+    `intrface.aud`, game pause, and 24-page F1 Help Book; user visual
+    check on 2026-11-20 found F1 button order/highlight/click-sound and
+    0.2 s close-linger issues, which were fixed in `B1-F1` (`Close, <<, >>`
+    order, Portal-style highlight/arrow/Enter/mouse animations, `click.aud`
+    on popup clicks, arrows, and Enter, instant `Panel::Popup` show/hide;
+    778 workspace unit tests + Daventry logs pass, **not yet re-checked
+    by eye**).
   - **Script coverage regenerated (`B1-8`):** `docs/SCRIPT-COVERAGE.md`
     updated (`37 -> 20` distinct missing commands, `0` stubs remaining
     across all worlds; `CastleD` now `0` missing, `Daventry` `2`,
     `DeadCity` `1`).
-  - **Next:** Await user approval on Batch 1 follow-up fixes (`B1-F1` help
-    popups and `B1-F2` shared GPU haze buffer + logging + `H`-key box),
-    then Build Session (B) for **Batch 3 (Swamp)** (`Tile2`, `KQSwampTile`,
-    Mandragore tree/roots, `KQConner::pay`, `setRelDamage`, `preSpecial`,
-    `setFirstPerson`, `addImmunity`) or Study Session (A) for Batch 4
-    (Gnome).
+  - **Next:** User re-check of `B1-F1` help popups in game and decision on
+    `B1-F2` (`litehaze` shared GPU haze buffer vs. throttle + wireframe
+    with rings on `H`), then Build Session (B) for **Batch 3 (Swamp)**
+    (`Tile2`, `KQSwampTile`, Mandragore tree/roots, `KQConner::pay`,
+    `setRelDamage`, `preSpecial`, `setFirstPerson`, `addImmunity`) or Study
+    Session (A) for Batch 4 (Gnome).
 
 - **2026-11-20 (A): Batch 3 (Swamp) studied** (traced in `Mask.exe` via
   Ghidra and checked against `MASK/` data; **not checked by hand in the
