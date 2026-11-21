@@ -784,6 +784,10 @@ pub fn spawn_doors(
     let river_controls = std::mem::take(&mut objects.river_controls);
     main_log.summary(format!("river controls: {} RiverControl boxes", river_controls.len()));
     active.add_river_controls(river_controls);
+    active.world.current_haze_distance = light.haze.start;
+    let hazers = std::mem::take(&mut objects.hazers);
+    main_log.summary(format!("hazers: {} KQHazer proximity haze zone(s) (initial hazeDistance {:.0})", hazers.len(), light.haze.start));
+    active.add_hazers(hazers);
     // fighting.md rule 3 (M5 5c-10): the combat level, before the
     // characters enter the world.
     if let Some(level) = combat {

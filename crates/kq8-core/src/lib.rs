@@ -28,6 +28,7 @@ pub mod events;
 pub mod fight;
 pub mod ground_anim;
 pub mod gui_draw;
+pub mod hazer;
 pub mod inventory;
 pub mod item;
 pub mod journey;

@@ -1655,6 +1655,8 @@ pub struct Objects {
     pub damage_timers: Vec<(String, String)>,
     /// U-10 (`objects.md` "River controls"): Dead City's river-dipping boxes.
     pub river_controls: Vec<kq8_core::active::RiverControl>,
+    /// `KQHazer` proximity haze zones (`object-lighting.md` rules 23a–23e).
+    pub hazers: Vec<kq8_core::hazer::Hazer>,
     /// `alias` definitions from `newWorld.cs` passed to runtime scripts (`script-commands.md` rule 9).
     pub aliases: Vec<(String, String)>,
 }
@@ -2077,6 +2079,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         catchers: Vec::new(),
         traps: Vec::new(),
         river_controls: Vec::new(),
+        hazers: Vec::new(),
         conv_infos: Vec::new(),
         audibles: Vec::new(),
         music: None,
@@ -2405,6 +2408,7 @@ struct Placer<'a> {
     catchers: Vec<(String, kq8_data::effects::CatcherSettings)>,
     traps: Vec<kq8_core::trap::TrapSettings>,
     river_controls: Vec<kq8_core::active::RiverControl>,
+    hazers: Vec<kq8_core::hazer::Hazer>,
     rusted_rivers: Vec<String>,
     conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     audibles: Vec<kq8_core::sound::Audible>,
@@ -3560,6 +3564,46 @@ impl Placer<'_> {
                 l.drawn = Drawn::Marker(self.markers.len() - 1);
             }
             *self.by_class.entry("RiverControl (river dip, U-10)".into()).or_default() += 1;
+            return;
+        }
+        // `KQHazer` proximity haze zone (`object-lighting.md` rules 23a–23e).
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(kq8_core::hazer::CLASS)) {
+            let num = |key: &str| s.number(key).and_then(Result::ok).map(|v| v as f32);
+            let mut pos = p.position;
+            if pos[2] == -1.0 {
+                if let Some(g) = self.terrain.ground_at(kq8_data::terrain::Level::Surface, pos[0], pos[1]) {
+                    self.log.detail(format!("hazer [{}]: locZ -1 -> surface height {:.0}", p.name, g.height));
+                    pos[2] = g.height;
+                }
+            }
+            let radius = num("radius").unwrap_or(1.0);
+            let inner_radius = num("innerRadius").unwrap_or(1.0);
+            let haze_center_factor = num("hazeCenterFactor").unwrap_or(0.0);
+            let (mask, problem) = collider_value(s, "colliderMask", kq8_core::hazer::DEFAULT_COLLIDER_MASK);
+            if let Some(problem) = problem {
+                self.log.detail(format!("hazer [{}]: {problem}", p.name));
+            }
+            self.log.detail(format!(
+                "hazer {label}[{}] at ({:.0}, {:.0}, {:.0}): radius {radius:.0}, innerRadius {inner_radius:.0}, hazeCenterFactor {haze_center_factor:.2}, colliderMask {mask:#x}",
+                p.name, pos[0], pos[1], pos[2]
+            ));
+            self.hazers.push(kq8_core::hazer::Hazer::new(p.name.clone(), pos, radius, inner_radius, haze_center_factor, mask));
+            self.located.insert(p.name.to_ascii_lowercase(), Located { position: pos, angles: p.angles, drawn: Drawn::Nothing });
+            self.markers.push(Marker {
+                name: p.name.clone(),
+                class: kq8_core::hazer::CLASS.into(),
+                script: None,
+                kind: MarkerKind::OtherBox,
+                position: pos,
+                angles: [0.0; 3],
+                rotated: false,
+                bounds: Some(([-radius, -radius, -radius], [radius, radius, radius])),
+                anm: false,
+            });
+            if let Some(l) = self.located.get_mut(&p.name.to_ascii_lowercase()) {
+                l.drawn = Drawn::Marker(self.markers.len() - 1);
+            }
+            *self.by_class.entry("KQHazer (haze zone, Batch 1)".into()).or_default() += 1;
             return;
         }
         // A conversation info object (M4 4e-3, conversation.md rule 3): no
@@ -5275,6 +5319,12 @@ impl Placer<'_> {
                 r.placement = kq8_core::collide::Placement { rotation: kq8_data::objects::rotation(l.angles), position: l.position };
             }
         }
+        let mut hazers = self.hazers;
+        for h in &mut hazers {
+            if let Some(l) = self.located.get(&h.name.to_ascii_lowercase()) {
+                h.position = l.position;
+            }
+        }
         // Monsters where the start-up scripts' `move` left them.
         let mut monsters = self.monsters;
         for m in &mut monsters {
@@ -5353,6 +5403,7 @@ impl Placer<'_> {
             max_monsters: None,
             damage_timers: Vec::new(),
             river_controls,
+            hazers,
             aliases: Vec::new(),
         }
     }

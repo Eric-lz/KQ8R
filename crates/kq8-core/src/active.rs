@@ -716,6 +716,10 @@ pub struct WorldState {
     /// The other animated objects (3i-4), in the viewer's order.
     pub anims: Vec<AnimObject>,
     pub traps: Vec<Trap>,
+    /// Proximity haze zones (`classType=KQHazer`, `object-lighting.md` rules 23a–23e).
+    pub hazers: Vec<crate::hazer::Hazer>,
+    /// Current terrain `hazeDistance` (default `20,000`), tracked for `KQHazer` activation and ramps.
+    pub current_haze_distance: f32,
     pub clickables: Vec<Clickable>,
     /// The buildings, in the caller's order (3g-2).
     pub buildings: Vec<ActiveBuilding>,
@@ -3027,6 +3031,8 @@ impl WorldState {
             self.connor_at.map(|p| Placement { rotation: kq8_data::objects::rotation([0.0, 0.0, self.connor_heading]), position: p })
         } else if let Some(i) = self.river_control_index(who) {
             (!self.river_controls[i].gone).then_some(self.river_controls[i].placement)
+        } else if let Some(h) = self.hazers.iter().find(|h| !h.gone && h.name.eq_ignore_ascii_case(who)) {
+            Some(Placement::at(h.position))
         } else {
             // A box object (a barrel; M5 5c fix 5).
             self.clickables.iter().find(|c| !c.gone && c.name.eq_ignore_ascii_case(who)).map(|c| c.placement)
@@ -3074,6 +3080,25 @@ impl WorldState {
                 new.position[2],
                 note.map_or(String::new(), |n| format!("; {n}"))
             ));
+            return "0".into();
+        }
+        if let Some(i) = self.hazers.iter().position(|h| !h.gone && h.name.eq_ignore_ascii_case(&who)) {
+            let old = self.hazers[i].position;
+            let (new, note) = moved_placement(Placement::at(old), flags, position, turn);
+            self.hazers[i].position = new.position;
+            self.note(format!(
+                "{at}: move {who} {flags}: hazer ({:.0}, {:.0}, {:.0}) -> ({:.0}, {:.0}, {:.0}){}",
+                old[0],
+                old[1],
+                old[2],
+                new.position[0],
+                new.position[1],
+                new.position[2],
+                note.map_or(String::new(), |n| format!("; {n}"))
+            ));
+            if let Some(c) = self.connor_at {
+                self.hazers_check(c, "KQHazer moved");
+            }
             return "0".into();
         }
         let known = who.eq_ignore_ascii_case("Connor") || who.eq_ignore_ascii_case("KQCamera") || self.known.contains(&who.to_ascii_lowercase());
@@ -3609,6 +3634,17 @@ impl WorldState {
         } else if let Some(i) = self.river_control_index(name) {
             self.river_controls[i].gone = true;
             "river control"
+        } else if let Some(i) = self.hazers.iter().position(|h| !h.gone && same(&h.name)) {
+            if let Some(orig) = self.hazers[i].remove() {
+                if (orig - self.current_haze_distance).abs() >= 0.5 {
+                    self.current_haze_distance = orig;
+                    self.requests.push(Request::SetHaze {
+                        haze: orig,
+                        at: format!("{at}: deleteObject {name}: hazer restores origHazeEdge {orig:.0} (object-lighting.md rule 23d)"),
+                    });
+                }
+            }
+            "hazer"
         } else if let Some(b) = self.buildings.iter_mut().find(|b| same(&b.name)) {
             b.collision_type = 0;
             "building (not clicked any more; its solid space for Connor and the camera stays: not built)"
@@ -4211,6 +4247,7 @@ impl ScriptHost for WorldState {
                 match words {
                     [_, n] => {
                         let haze = number_value(n) as f32;
+                        self.current_haze_distance = haze;
                         self.note(format!("{at}: setHaze {n}: haze {haze:.0}, visible {:.0}: handed to the viewer (object-lighting.md rule 33a)", 1.5 * haze));
                         self.requests.push(Request::SetHaze { haze, at: at.to_string() });
                     }
@@ -4344,6 +4381,56 @@ impl ScriptHost for WorldState {
     }
 }
 
+impl WorldState {
+    /// Evaluates Connor at `pos` against all `KQHazer` zones (`object-lighting.md` rules 23a–23d).
+    pub(crate) fn hazers_check(&mut self, pos: [f32; 3], why: &str) {
+        use crate::hazer::HazerEvent;
+        for i in 0..self.hazers.len() {
+            let current = self.current_haze_distance;
+            let Some(ev) = self.hazers[i].step(pos, current) else { continue };
+            let name = self.hazers[i].name.clone();
+            match ev {
+                HazerEvent::Entered(h) => {
+                    let orig = self.hazers[i].orig_haze_edge;
+                    self.note(format!(
+                        "hazer {name}: entered ({why}) at ({:.0}, {:.0}, {:.0}); saved origHazeEdge {orig:.0}, target haze {h:.0} (object-lighting.md rule 23b)",
+                        pos[0], pos[1], pos[2]
+                    ));
+                    if (h - self.current_haze_distance).abs() >= 0.5 {
+                        self.current_haze_distance = h;
+                        self.requests.push(Request::SetHaze {
+                            haze: h,
+                            at: format!("hazer {name} entered (object-lighting.md rule 23b)"),
+                        });
+                    }
+                }
+                HazerEvent::Updated(h) => {
+                    if (h - self.current_haze_distance).abs() >= 1.0 {
+                        self.current_haze_distance = h;
+                        self.requests.push(Request::SetHaze {
+                            haze: h,
+                            at: format!("hazer {name} ramp ({why}) -> {h:.0} (object-lighting.md rule 23c)"),
+                        });
+                    }
+                }
+                HazerEvent::Exited(orig) => {
+                    self.note(format!(
+                        "hazer {name}: exited ({why}) at ({:.0}, {:.0}, {:.0}); restored origHazeEdge {orig:.0} (object-lighting.md rule 23c)",
+                        pos[0], pos[1], pos[2]
+                    ));
+                    if (orig - self.current_haze_distance).abs() >= 0.5 {
+                        self.current_haze_distance = orig;
+                        self.requests.push(Request::SetHaze {
+                            haze: orig,
+                            at: format!("hazer {name} exited -> {orig:.0} (object-lighting.md rule 23c)"),
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// The scripts and the world they act on.
 pub struct Active {
     pub scripts: Scripts,
@@ -4373,6 +4460,8 @@ impl Active {
                 objects: Vec::new(),
                 anims: Vec::new(),
                 traps: Vec::new(),
+                hazers: Vec::new(),
+                current_haze_distance: crate::hazer::DEFAULT_HAZE_DISTANCE,
                 clickables,
                 buildings: Vec::new(),
                 known,
@@ -5344,6 +5433,14 @@ impl Active {
         }
     }
 
+    /// Adds `KQHazer` proximity haze zones (`object-lighting.md` rules 23a–23e).
+    pub fn add_hazers(&mut self, hazers: impl IntoIterator<Item = crate::hazer::Hazer>) {
+        for h in hazers {
+            self.world.known.insert(h.name.to_ascii_lowercase());
+            self.world.hazers.push(h);
+        }
+    }
+
     /// Runs trap `i`'s script with `args` (`$1` is the trap's name); its
     /// lines go to the trap log.
     fn call_trap(&mut self, i: usize, args: &[&str]) {
@@ -5366,7 +5463,9 @@ impl Active {
     /// it and runs its script for `On`, `Off` or `Cue` (traps.md rules
     /// 6-9). Returns the calls made, as `<trap> <args>`.
     pub fn connor_moved(&mut self, v: &Visitor) -> Vec<String> {
-        self.traps_check(v, false)
+        let calls = self.traps_check(v, false);
+        self.world.hazers_check(v.position, "moved");
+        calls
     }
 
     /// After a script's `move Connor` (traps.md rule 5 "Placed by a
@@ -5374,7 +5473,9 @@ impl Active {
     /// new spot, so the one he was taken out of gets `Off` (or `Cue 302`)
     /// now; no trap is entered (that waits for his next ordinary move).
     pub fn connor_placed(&mut self, v: &Visitor) -> Vec<String> {
-        self.traps_check(v, true)
+        let calls = self.traps_check(v, true);
+        self.world.hazers_check(v.position, "placed");
+        calls
     }
 
     fn traps_check(&mut self, v: &Visitor, placed: bool) -> Vec<String> {
@@ -10875,5 +10976,47 @@ mod talk_tests {
         assert_eq!(w.world_command(&words("KQCamera::shake 2 .02"), "t"), Some("0".into()));
         assert!(w.requests.is_empty());
         assert!(w.log.iter().any(|l| l.contains("usage: KQCamera::shake")));
+    }
+
+    #[test]
+    fn hazer_zone_ramps_haze_on_move_and_restores_on_exit_and_delete() {
+        let mut a = active("", &[]);
+        a.world.current_haze_distance = 9_000.0;
+        a.add_hazers([crate::hazer::Hazer::new("litehaze", [96_069.0, 168_737.0, 13_890.0], 15_000.0, 3_000.0, 2.0, 4)]);
+        assert!(a.world.place_of("litehaze").is_some());
+
+        let balls = crate::collide::BallStack::from_box([-200.0, -200.0, 0.0], [200.0, 200.0, 1300.0]);
+        let visit = |pos: [f32; 3]| Visitor {
+            name: "Connor",
+            collision_type: CONNOR_TYPE,
+            from: pos,
+            position: pos,
+            min: [-200.0, -200.0, 0.0],
+            max: [200.0, 200.0, 1300.0],
+            balls: &balls,
+        };
+
+        // Enter inner zone -> 18,000.
+        a.connor_moved(&visit([96_069.0, 168_737.0, 13_890.0]));
+        assert!((a.world.current_haze_distance - 18_000.0).abs() < 1e-3);
+        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, .. }) if (haze - 18_000.0).abs() < 1e-3));
+
+        // Midpoint d = 9,000 -> 13,500.
+        a.connor_moved(&visit([96_069.0, 177_737.0, 13_890.0]));
+        assert!((a.world.current_haze_distance - 13_500.0).abs() < 1e-3);
+        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, .. }) if (haze - 13_500.0).abs() < 1e-3));
+
+        // Exit cube -> restores 9,000.
+        a.connor_placed(&visit([96_069.0, 190_000.0, 13_890.0]));
+        assert!((a.world.current_haze_distance - 9_000.0).abs() < 1e-3);
+        assert!(matches!(a.world.requests.pop(), Some(Request::SetHaze { haze, .. }) if (haze - 9_000.0).abs() < 1e-3));
+
+        // Re-enter then deleteObject restores origHazeEdge = 9,000.
+        a.connor_moved(&visit([96_069.0, 168_737.0, 13_890.0]));
+        a.world.requests.clear();
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(a.world.world_command(&words("deleteObject litehaze"), "t"), Some("0".into()));
+        assert!((a.world.current_haze_distance - 9_000.0).abs() < 1e-3);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::SetHaze { haze, .. } if (*haze - 9_000.0).abs() < 1e-3)));
     }
 }

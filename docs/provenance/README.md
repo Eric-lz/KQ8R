@@ -4200,6 +4200,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `KQCamera::shake <dur> <xMax> <xPeriod> <zMax> <zPeriod>`: 6 words, smooth tent envelope `1 - |t / half - 1|` (`dur <= 0` cancels), `x` wave `sin(period * (elapsed + period / 2) * pi) * xMax`, `z` wave `sin(period * elapsed * pi) * zMax` | `camera.md` "Shake and cutscene cameras" | unit tests `camera_shake_envelope_wave_and_reset`, `camera_shake_parses_six_words_and_checks_usage` |
 | Follow camera sets `tilt = -0.200 + pitch` and adds yaw through `aim_view`, guards `MOVE_RESETS_TILT` while shaking, and restores `-0.200` tilt / `0` yaw when finished; fixed camera adds deltas without undo; first-person helper `first_person_angles` adds `zWave` / `xWave` | `camera.md` "Shake and cutscene cameras" | unit tests; Daventry `doors.log` & `camera.log` (`update 10`..`41`: 30 active `shake` ticks, `shake_end` clean restore) |
 
+## B1-6 2026-11-20: `KQHazer` proximity haze zones — core `hazer.rs`, `active.rs`; viewer `load.rs`, `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQHazer` `.kq` keys (`radius`, `innerRadius`, `hazeCenterFactor`, `colliderMask` default `0x221f`, `locZ == -1` surface snap) and `[-radius, +radius]` cube / `move` / `deleteObject` support | `object-lighting.md` rules 23a, 23d; `MASK/DeadCity/kq/litehaze.kq` (`15000`, `3000`, `2.00`, `mask=4`) | unit tests in `hazer.rs` and `active.rs`; `DeadCity` `viewer.log` (`1 KQHazer`, `30000 x 30000 x 30000` marker) |
+| 3D distance `<= radius` enters and saves terrain `hazeDistance` (default `20,000`) as `origHazeEdge`/`hazeEdge`; 2D XY distance ramps linearly over `innerRadius.min(radius)..radius` between `hazeEdge * factor` and `hazeEdge`, setting `h` and `1.5 * h` (`visibleDistance`); leaving cube restores `origHazeEdge` | `object-lighting.md` rules 23b–23c | unit tests; `DeadCity` `viewer.log` & `doors.log` (`9000 -> 18000 -> 13500 -> 9000`) |
+
 
 
 
