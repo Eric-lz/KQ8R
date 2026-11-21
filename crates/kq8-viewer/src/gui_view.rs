@@ -161,6 +161,43 @@ fn popup_button_box(k: usize, highlight: usize) -> [i32; 4] {
     [l, t, r, b]
 }
 
+/// `HelpNormal` OK button (`world-change.md` Q151): row 142 (25 high) with
+/// the "turn off help" checkbox, else 145–183.
+fn popup_ok_box(show_checkbox: bool) -> [i32; 4] {
+    if show_checkbox {
+        [136, 142, 224, 167]
+    } else {
+        [136, POPUP_ROWS_HIGHLIGHTED[0], 224, POPUP_ROWS_HIGHLIGHTED[1]]
+    }
+}
+
+fn popup_book_button_box(k: usize, layout: &PopupLayout) -> [i32; 4] {
+    let [l, r] = layout.btn_x[k];
+    let [t, b] = if k == 1 { POPUP_ROWS_HIGHLIGHTED } else { POPUP_ROWS_OTHER };
+    [l, t, r, b]
+}
+
+fn popup_checkbox_hit_box(layout: &PopupLayout) -> [i32; 4] {
+    [
+        layout.checkbox_rect[0].min(layout.checkbox_text_rect[0]),
+        layout.checkbox_rect[1].min(layout.checkbox_text_rect[1]),
+        layout.checkbox_rect[2].max(layout.checkbox_text_rect[2]),
+        layout.checkbox_rect[3].max(layout.checkbox_text_rect[3]),
+    ]
+}
+
+struct PopupLayout {
+    btn_x: [[i32; 2]; 3],
+    popup_font: Option<String>,
+    text_font: Option<String>,
+    checkbox_rect: [i32; 4],
+    checkbox_file: String,
+    checkbox_x_rect: [i32; 4],
+    checkbox_text_rect: [i32; 4],
+    checkbox_text_font: Option<String>,
+    checkbox_text_just: u32,
+}
+
 /// The popup's buttons' looks (Q151 e, traced): plain `yesbtn.pba` frame
 /// 0; highlighted `buyhibtn.pba` (the layout's BTN1 picture, the gold
 /// outline; 88 x 25) stretched to the button; held down (mouse button or
@@ -176,17 +213,45 @@ const BLACK_TAG: i32 = 351;
 const POPUP_HIGHLIGHT_PICTURE: &str = "buyhibtn.pba";
 const POPUP_PRESSED_SHIFT: [i32; 2] = [1, 1];
 
-/// The question shown in the popup (M6 6e-6).
+#[derive(Debug, Clone, PartialEq)]
+pub enum PopupKind {
+    Portal {
+        yes: String,
+        no: String,
+        /// 0 = Yes, 1 = No.
+        highlight: usize,
+        /// The button held down (mouse or Enter), answered when let go.
+        pressed: Option<usize>,
+    },
+    HelpNormal {
+        text_number: u32,
+        ok: String,
+        show_checkbox: bool,
+        checkbox_label: String,
+        checked: bool,
+        pressed_ok: bool,
+    },
+    HelpBook {
+        index: usize,
+        text_number: u32,
+        close: String,
+        /// 0 = "<<", 1 = Close (highlighted), 2 = ">>".
+        pressed: Option<usize>,
+    },
+}
+
+/// The question or help dialog shown in `IDCTL_POPUP` (M6 6e-6 / Batch 1 B1-7).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PopupShown {
-    /// Up to 7 lines (rule 26).
+    /// Up to 7 lines (rule 26 / `interface.md` rule 55).
     pub lines: Vec<String>,
-    pub yes: String,
-    pub no: String,
-    /// 0 = Yes, 1 = No.
-    pub highlight: usize,
-    /// The button held down (mouse or Enter), answered when let go.
-    pub pressed: Option<usize>,
+    pub kind: PopupKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PopupHit {
+    Button(usize),
+    Checkbox,
 }
 
 /// The map window's parts (`magic-map.md` rule 5).
@@ -331,6 +396,8 @@ pub struct Gui {
     space_key: Option<KeyCode>,
     /// The map key (`movekeys.kq` row 8, rule 10; `magic-map.md` rule 30).
     map_key: Option<KeyCode>,
+    /// `movekeys.kq` `KeyName0..KeyName12` pairs (`500.MSG` condition number, fallback `KeyWord`; `interface.md` rule 55).
+    movekey_names: Vec<(Option<u32>, String)>,
     /// The magic map (M6 6d-3); `None` while the world has none.
     map: Option<MapShown>,
     /// 4c-11 (not in the original, the user's idea): the bottom bar's
@@ -450,6 +517,17 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
     };
     let (space_key, key_line) = row(12, KeyCode::Space, "Space");
     let (map_key, map_key_line) = row(8, KeyCode::Tab, "Tab");
+    let movekey_names: Vec<(Option<u32>, String)> = (0..=12)
+        .map(|n| match &keys_file {
+            Some(file) => {
+                let s = file.first();
+                let num = s.and_then(|s| s.get(&format!("KeyName{n}"))).and_then(|v| v.trim().strip_prefix('#')).and_then(|v| v.parse::<u32>().ok());
+                let word = s.and_then(|s| s.get(&format!("KeyWord{n}"))).unwrap_or("").trim().to_string();
+                (num, word)
+            }
+            None => (None, String::new()),
+        })
+        .collect();
     let mut log = match Log::create("gui") {
         Ok(l) => Some(l),
         Err(e) => {
@@ -496,6 +574,7 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
         level_flame: None,
         space_key,
         map_key,
+        movekey_names,
         map: None,
         corners: false,
         stats_events: None,
@@ -507,6 +586,13 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
 }
 
 impl Gui {
+    fn resolve_movekey_names(&self, sim: &DoorSim) -> Vec<String> {
+        self.movekey_names
+            .iter()
+            .map(|(num, fallback)| num.and_then(|n| message_500(sim, n)).unwrap_or_else(|| fallback.clone()))
+            .collect()
+    }
+
     fn note(&mut self, line: impl AsRef<str>) {
         if let Some(l) = &mut self.log {
             l.detail(line);
@@ -634,6 +720,51 @@ impl Gui {
             "IDCTL_INVBAR_ROCKS" => self.inv.rocks.as_ref().map(|(n, ..)| n.clone()),
             _ => None,
         }
+    }
+
+    fn popup_layout(&self, dialog: &kq8_data::gui::Control) -> PopupLayout {
+        let mut out = PopupLayout {
+            btn_x: [[25, 113], [136, 224], [247, 335]],
+            popup_font: None,
+            text_font: None,
+            checkbox_rect: [17, 168, 33, 184],
+            checkbox_file: "buybtndn.pbm".into(),
+            checkbox_x_rect: [17, 168, 33, 184],
+            checkbox_text_rect: [40, 168, 360, 184],
+            checkbox_text_font: None,
+            checkbox_text_just: 0x9,
+        };
+        for (c, rect) in self.controls(dialog) {
+            let name = self.name_of(c);
+            if let Some(k) = POPUP_BUTTONS.iter().position(|b| *b == name) {
+                out.btn_x[k] = [rect[0], rect[2]];
+                if k == 0 {
+                    if let Kind::Text { text, .. } = &c.kind {
+                        out.popup_font = self.tags.string(text.font).map(str::to_string);
+                    }
+                }
+            } else if name == "IDCTL_POPUP_TEXT1" {
+                if let Kind::Text { text, .. } = &c.kind {
+                    out.text_font = self.tags.string(text.font).map(str::to_string);
+                }
+            } else if name == "IDCTL_POPUP_CHECKBOX" {
+                out.checkbox_rect = rect;
+                if let Kind::Bitmap(p) = &c.kind {
+                    if let Some(f) = self.tags.string(p.bitmap) {
+                        out.checkbox_file = f.to_string();
+                    }
+                }
+            } else if name == "IDCTL_POPUP_CHECKBOX_X" {
+                out.checkbox_x_rect = rect;
+            } else if name == "IDCTL_POPUP_CHECKBOX_TEXT" {
+                out.checkbox_text_rect = rect;
+                if let Kind::Text { text, .. } = &c.kind {
+                    out.checkbox_text_font = self.tags.string(text.font).map(str::to_string);
+                    out.checkbox_text_just = text.justification;
+                }
+            }
+        }
+        out
     }
 
     /// What drawn picture `d` is made of now (its layout size and the
@@ -834,25 +965,49 @@ impl Gui {
         // look; on top of everything else (first in the list).
         if d == Drawn::Panel(Panel::Popup) {
             if let Some(p) = &self.popup {
+                let layout = self.popup_layout(dialog);
+                let btn_font = layout.popup_font.as_deref().or(popup_font.as_deref());
                 let mut buttons = Vec::new();
-                for (k, label) in [&p.yes, &p.no].into_iter().enumerate() {
-                    let rect = popup_button_box(k, p.highlight);
-                    let down = p.pressed == Some(k);
-                    if let Some(font) = &popup_font {
+                let mut push_button = |rect: [i32; 4], label: &str, highlighted: bool, down: bool| {
+                    if let Some(font) = btn_font {
                         let [dx, dy] = if down { POPUP_PRESSED_SHIFT } else { [0, 0] };
                         let at = [rect[0] + dx, rect[1] + dy, rect[2] + dx, rect[3] + dy];
-                        buttons.push(Spec::Text { rect: at, font: font.clone(), justification: 0xC, text: label.clone() });
+                        buttons.push(Spec::Text { rect: at, font: font.to_string(), justification: 0xC, text: label.to_string() });
                     }
-                    buttons.push(if p.highlight == k {
+                    buttons.push(if highlighted {
                         Spec::Stretch { rect, file: POPUP_HIGHLIGHT_PICTURE.to_string(), frame: usize::from(down) }
-                    } else if down {
-                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 1, stretch: true, see_through: None }
                     } else {
-                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: 0, stretch: true, see_through: None }
+                        Spec::Pic { rect, file: POPUP_BUTTON_PICTURE.to_string(), frame: usize::from(down), stretch: true, see_through: None }
                     });
+                };
+                match &p.kind {
+                    PopupKind::Portal { yes, no, highlight, pressed } => {
+                        for (k, label) in [yes, no].into_iter().enumerate() {
+                            push_button(popup_button_box(k, *highlight), label, *highlight == k, *pressed == Some(k));
+                        }
+                    }
+                    PopupKind::HelpNormal { ok, show_checkbox, checkbox_label, checked, pressed_ok, .. } => {
+                        push_button(popup_ok_box(*show_checkbox), ok, true, *pressed_ok);
+                        if *show_checkbox {
+                            if *checked {
+                                if let Some(font) = btn_font {
+                                    buttons.push(Spec::Text { rect: layout.checkbox_x_rect, font: font.to_string(), justification: 0xC, text: "X".into() });
+                                }
+                            }
+                            buttons.push(Spec::Pic { rect: layout.checkbox_rect, file: layout.checkbox_file.clone(), frame: 0, stretch: true, see_through: None });
+                            if let Some(font) = layout.checkbox_text_font.as_deref().or(btn_font) {
+                                buttons.push(Spec::Text { rect: layout.checkbox_text_rect, font: font.to_string(), justification: layout.checkbox_text_just, text: checkbox_label.clone() });
+                            }
+                        }
+                    }
+                    PopupKind::HelpBook { close, pressed, .. } => {
+                        for (k, label) in ["<<", close.as_str(), ">>"].into_iter().enumerate() {
+                            push_button(popup_book_button_box(k, &layout), label, k == 1, *pressed == Some(k));
+                        }
+                    }
                 }
-                // The lines (Q151 d), each centred in its box.
-                if let Some(font) = popup_text_font.clone().or_else(|| popup_font.clone()) {
+                // The lines (Q151 d / interface.md rule 55), each centred in its box.
+                if let Some(font) = popup_text_font.clone().or(layout.text_font).or_else(|| btn_font.map(str::to_string)) {
                     for (k, line) in p.lines.iter().enumerate() {
                         buttons.push(Spec::Text { rect: popup_line_box(p.lines.len(), k), font: font.clone(), justification: 0xC, text: line.clone() });
                     }
@@ -886,16 +1041,37 @@ impl Gui {
             .collect()
     }
 
-    /// The popup's button under window point `at` (6e-6): 0 Yes, 1 No.
-    fn popup_button_at(&self, frame: [f32; 4], at: Vec2) -> Option<usize> {
+    /// The popup's button or checkbox under window point `at` (6e-6 / Batch 1 B1-7).
+    fn popup_hit_at(&self, frame: [f32; 4], at: Vec2) -> Option<PopupHit> {
+        let p = self.popup.as_ref()?;
         let dialog = self.control(Panel::Popup.layout_id())?;
         let [fl, ft, fw, _] = frame;
         let k = fw / self.screen[0] as f32;
+        if k <= 0.0 {
+            return None;
+        }
         // Window pixels -> layout pixels from the panel's top-left.
         let x = ((at.x - fl) / k) / self.scale - dialog.rect[0] as f32;
         let y = ((at.y - ft) / k) / self.scale - dialog.rect[1] as f32;
-        let highlight = self.popup.as_ref().map_or(0, |p| p.highlight);
-        (0..2).map(|k| popup_button_box(k, highlight)).position(|r| x >= r[0] as f32 && x < r[2] as f32 && y >= r[1] as f32 && y < r[3] as f32)
+        let inside = |r: [i32; 4]| x >= r[0] as f32 && x < r[2] as f32 && y >= r[1] as f32 && y < r[3] as f32;
+        let layout = self.popup_layout(dialog);
+        match &p.kind {
+            PopupKind::Portal { highlight, .. } => {
+                (0..2).map(|k| popup_button_box(k, *highlight)).position(inside).map(PopupHit::Button)
+            }
+            PopupKind::HelpNormal { show_checkbox, .. } => {
+                if inside(popup_ok_box(*show_checkbox)) {
+                    Some(PopupHit::Button(0))
+                } else if *show_checkbox && inside(popup_checkbox_hit_box(&layout)) {
+                    Some(PopupHit::Checkbox)
+                } else {
+                    None
+                }
+            }
+            PopupKind::HelpBook { .. } => {
+                (0..3).map(|k| popup_book_button_box(k, &layout)).position(inside).map(PopupHit::Button)
+            }
+        }
     }
 
     /// The control under screen point (`x`, `y`) of drawn picture `d`
@@ -1125,9 +1301,11 @@ pub fn gui_step(
     let (Some(mut gui), Some(mut sim)) = (gui, sim) else { return };
     let gui = &mut *gui;
     let updates = sim.active.world.updates;
-    // Test keys (`--key NAME,N`); `popup:` ones are the popup step's
-    // (M6 6e-6).
-    let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut key_at.0).into_iter().partition(|(name, n)| updates >= *n && !name.starts_with("popup:"));
+    // Test keys (`--key NAME,N`); `popup:`, `help:`, and `f1` are the popup step's
+    // (M6 6e-6 / Batch 1 B1-7).
+    let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut key_at.0)
+        .into_iter()
+        .partition(|(name, n)| updates >= *n && !name.starts_with("popup:") && !name.starts_with("help:") && !name.eq_ignore_ascii_case("f1"));
     key_at.0 = later;
     for (name, _) in due {
         let how = format!("test --key {name} before update {updates}");
@@ -1939,18 +2117,91 @@ fn message_500(sim: &DoorSim, n: u32) -> Option<String> {
     sim.active.world.talk.book.files.get(&500).and_then(|(_, f)| f.lines.iter().find(|l| l.tuple.noun == 0 && l.tuple.verb == 0 && l.tuple.case as u32 == n)).map(|l| l.raw.clone())
 }
 
-/// Every frame, also while the game is paused (M6 6e-6,
-/// `world-change.md` rules 2, 26): the Portal state's question. Opens the
-/// popup when Connor enters the Portal state; Left / Right move the
-/// highlight, Enter chooses it, Escape is No (and would open the main
-/// menu: not built, logged), a click on a button chooses it; other keys
-/// do nothing (Space still moves the bottom bar: `gui_draw`). Test keys
-/// `--key popup:yes|no|left|right|enter|escape,N`.
+fn queue_help_sound(sim: &mut DoorSim) {
+    if std::mem::take(&mut sim.active.world.help.just_opened) {
+        sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(
+            "intrface.aud",
+            "help popup opened (interface.md rule 55)".into(),
+        ));
+    }
+}
+
+fn sync_help_popup(gui: &mut Gui, sim: &DoorSim, hp: kq8_core::help::HelpPopup, shared: &Shared) {
+    use kq8_core::help::{HELP_BOOK_ENTRIES, HelpPopup, expand_key_placeholders, wrap_help_text};
+    match hp {
+        HelpPopup::Normal { text_number, show_checkbox } => {
+            if let Some(p) = gui.popup.as_mut() {
+                if let PopupKind::HelpNormal { text_number: tn, show_checkbox: sc, checked, .. } = &mut p.kind {
+                    if *tn == text_number && *sc == show_checkbox {
+                        *checked = sim.active.world.help.not_starting_help != 0;
+                        return;
+                    }
+                }
+            }
+            let raw = message_500(sim, text_number).unwrap_or_else(|| format!("(missing 500.MSG #{text_number})"));
+            let key_names = gui.resolve_movekey_names(sim);
+            let lines = wrap_help_text(&expand_key_placeholders(&raw, &key_names));
+            let ok = message_500(sim, 148).unwrap_or_else(|| "OK".into());
+            let checkbox_label = message_500(sim, 147).unwrap_or_else(|| "Turn off Help Getting Started".into());
+            let checked = sim.active.world.help.not_starting_help != 0;
+            let msg = format!(
+                "help: popup #{text_number} shown (checkbox={show_checkbox}, checked={checked}, ok={ok:?}): {lines:?}; the game pauses (interface.md rule 55)"
+            );
+            gui.popup = Some(PopupShown {
+                lines,
+                kind: PopupKind::HelpNormal { text_number, ok, show_checkbox, checkbox_label, checked, pressed_ok: false },
+            });
+            gui.panels.set(kq8_core::panels::Group::Popup, true, "help popup");
+            gui.note(&msg);
+            let places = gui.popup_text_places();
+            gui.note(format!("popup: help text placed (layout px): {places:?}"));
+            shared.log.lock().unwrap().summary(msg);
+        }
+        HelpPopup::Book { index } => {
+            if let Some(PopupShown { kind: PopupKind::HelpBook { index: cur, .. }, .. }) = &gui.popup {
+                if *cur == index {
+                    return;
+                }
+            }
+            let text_number = HELP_BOOK_ENTRIES[index];
+            let raw = message_500(sim, text_number).unwrap_or_else(|| format!("(missing 500.MSG #{text_number})"));
+            let key_names = gui.resolve_movekey_names(sim);
+            let lines = wrap_help_text(&expand_key_placeholders(&raw, &key_names));
+            let close = message_500(sim, 155).unwrap_or_else(|| "Close".into());
+            let msg = format!(
+                "help: F1 book page {}/{} (#{text_number}, close={close:?}): {lines:?}; the game pauses (interface.md rule 56)",
+                index + 1,
+                HELP_BOOK_ENTRIES.len()
+            );
+            gui.popup = Some(PopupShown {
+                lines,
+                kind: PopupKind::HelpBook { index, text_number, close, pressed: None },
+            });
+            gui.panels.set(kq8_core::panels::Group::Popup, true, "F1 help book");
+            gui.note(&msg);
+            let places = gui.popup_text_places();
+            gui.note(format!("popup: F1 book text placed (layout px): {places:?}"));
+            shared.log.lock().unwrap().summary(msg);
+        }
+    }
+}
+
+fn close_help_popup(gui: &mut Gui, sim: &mut DoorSim, shared: &Shared, how: &str) {
+    sim.active.world.help.close();
+    gui.popup = None;
+    gui.panels.set(kq8_core::panels::Group::Popup, false, "help closed");
+    let line = format!("help: closed ({how}); the game unpauses (interface.md rule 55)");
+    gui.note(&line);
+    shared.log.lock().unwrap().summary(line);
+}
+
+/// Every frame, also while the game is paused (M6 6e-6 / Batch 1 B1-7):
+/// the Portal yes/no popup, scripted/built-in `doPopup` tips, and the F1 Help Book.
 #[allow(clippy::too_many_arguments)]
 pub fn popup_step(
     gui: Option<ResMut<Gui>>,
     sim: Option<ResMut<DoorSim>>,
-    keys: Res<ButtonInput<KeyCode>>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
     buttons: Res<ButtonInput<MouseButton>>,
     window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     frame: Res<ScreenFrame>,
@@ -1959,115 +2210,254 @@ pub fn popup_step(
 ) {
     let (Some(mut gui), Some(mut sim)) = (gui, sim) else { return };
     let gui = &mut *gui;
-    let asking = sim.active.world.portal_asking();
-    if !asking {
-        if gui.popup.take().is_some() {
-            gui.panels.set(kq8_core::panels::Group::Popup, false, "the question is answered");
+    if sim.active.world.portal_asking() {
+        if !matches!(gui.popup.as_ref().map(|p| &p.kind), Some(PopupKind::Portal { .. })) {
+            gui.popup = None;
+        }
+        if gui.popup.is_none() {
+            let text = message_500(&sim, 114).unwrap_or_else(|| "You are about to load a new region. Are you sure you want to do that?".into());
+            let yes = message_500(&sim, 29).unwrap_or_else(|| "Yes".into());
+            let no = message_500(&sim, 14).unwrap_or_else(|| "No".into());
+            let line = format!("popup: the Portal state's question opens: {:?}, buttons {:?} (left) and {:?} (right), {:?} highlighted (Q151); the game pauses, the sounds go on (world-change.md rule 26)", kq8_core::portal::popup_lines(&text), yes, no, yes);
+            gui.popup = Some(PopupShown {
+                lines: kq8_core::portal::popup_lines(&text),
+                kind: PopupKind::Portal { yes, no, highlight: 0, pressed: None },
+            });
+            gui.panels.set(kq8_core::panels::Group::Popup, true, "the Portal state's question");
+            gui.note(&line);
+            let places = gui.popup_text_places();
+            gui.note(format!("popup: text placed (layout px from the panel's top left; line boxes by Q151 d): {places:?}"));
+            shared.log.lock().unwrap().summary(line);
+        }
+        let updates = sim.active.world.updates;
+        // What was pressed: (what, how).
+        let mut pressed: Vec<(&str, String)> = Vec::new();
+        // `--key popup:...` (the updates don't move while paused).
+        let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut key_at.0).into_iter().partition(|(name, n)| name.starts_with("popup:") && updates >= *n);
+        key_at.0 = later;
+        let mut test_words: Vec<String> = Vec::new();
+        for (name, _) in due {
+            test_words.push(name.trim_start_matches("popup:").to_ascii_lowercase());
+        }
+        for w in &test_words {
+            pressed.push((w.as_str(), format!("test --key popup:{w}")));
+        }
+        for (key, what) in [(KeyCode::ArrowLeft, "left"), (KeyCode::ArrowRight, "right"), (KeyCode::Escape, "escape")] {
+            if keys.just_pressed(key) {
+                pressed.push((what, format!("{what} key")));
+            }
+        }
+        let cursor = window.single().ok().and_then(|w| w.cursor_position());
+        let over = cursor.and_then(|at| gui.popup_hit_at(frame.0, at));
+        if let Some(PopupShown { kind: PopupKind::Portal { highlight, pressed: p_pressed, .. }, .. }) = gui.popup.as_mut() {
+            let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
+            if keys.any_just_pressed(enter) {
+                *p_pressed = Some(*highlight);
+            }
+            if buttons.just_pressed(MouseButton::Left) {
+                if let Some(PopupHit::Button(k)) = over {
+                    *p_pressed = Some(k);
+                }
+            }
+            if keys.any_just_released(enter) {
+                if *p_pressed == Some(*highlight) {
+                    pressed.push(if *highlight == 0 { ("yes", "Enter let go on Yes".into()) } else { ("no", "Enter let go on No".into()) });
+                }
+                *p_pressed = None;
+            }
+            if buttons.just_released(MouseButton::Left) {
+                if let Some(k) = p_pressed.filter(|k| over == Some(PopupHit::Button(*k))) {
+                    pressed.push(if k == 0 { ("yes", "click on Yes (let go)".into()) } else { ("no", "click on No (let go)".into()) });
+                }
+                *p_pressed = None;
+            }
+        }
+        for (what, how) in pressed {
+            let Some(PopupShown { kind: PopupKind::Portal { yes, no, highlight, .. }, .. }) = gui.popup.as_mut() else { break };
+            let answer = match what {
+                "left" | "right" => {
+                    *highlight = if what == "left" { 0 } else { 1 };
+                    let line = format!("popup: {how}: {} highlighted", if *highlight == 0 { yes } else { no });
+                    gui.note(&line);
+                    None
+                }
+                "enter" => Some(*highlight == 0),
+                "yes" => Some(true),
+                "no" => Some(false),
+                "escape" if sim.active.world.connor_hands_off => {
+                    gui.note("popup: Escape: nothing (handsOff; Q151 b)");
+                    None
+                }
+                "escape" => {
+                    gui.note("popup: Escape: No, and the main menu (not built yet: not opened) (rule 26)");
+                    Some(false)
+                }
+                _ => None,
+            };
+            if let Some(yes) = answer {
+                let lines = sim.active.portal_answer(yes, &how);
+                let mut log = shared.log.lock().unwrap();
+                for l in lines {
+                    log.summary(format!("popup: {l}"));
+                }
+                drop(log);
+                gui.popup = None;
+                gui.panels.set(kq8_core::panels::Group::Popup, false, "answered");
+                break;
+            }
         }
         return;
     }
-    if gui.popup.is_none() {
-        let text = message_500(&sim, 114).unwrap_or_else(|| "You are about to load a new region. Are you sure you want to do that?".into());
-        let shown = PopupShown {
-            lines: kq8_core::portal::popup_lines(&text),
-            yes: message_500(&sim, 29).unwrap_or_else(|| "Yes".into()),
-            no: message_500(&sim, 14).unwrap_or_else(|| "No".into()),
-            // Q151: Yes is highlighted when it opens; nothing pressed.
-            highlight: 0,
-            pressed: None,
-        };
-        let line = format!("popup: the Portal state's question opens: {:?}, buttons {:?} (left) and {:?} (right), {:?} highlighted (Q151); the game pauses, the sounds go on (world-change.md rule 26)", shown.lines, shown.yes, shown.no, if shown.highlight == 0 { &shown.yes } else { &shown.no });
-        gui.popup = Some(shown);
-        gui.panels.set(kq8_core::panels::Group::Popup, true, "the Portal state's question");
-        gui.note(&line);
-        let places = gui.popup_text_places();
-        gui.note(format!("popup: text placed (layout px from the panel's top left; line boxes by Q151 d): {places:?}"));
-        shared.log.lock().unwrap().summary(line);
+
+    if matches!(gui.popup.as_ref().map(|p| &p.kind), Some(PopupKind::Portal { .. })) {
+        gui.popup = None;
+        gui.panels.set(kq8_core::panels::Group::Popup, false, "portal closed");
     }
+
+    queue_help_sound(&mut sim);
     let updates = sim.active.world.updates;
-    // What was pressed: (what, how).
-    let mut pressed: Vec<(&str, String)> = Vec::new();
-    // `--key popup:...` (the updates don't move while paused).
-    let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut key_at.0).into_iter().partition(|(name, n)| name.starts_with("popup:") && updates >= *n);
-    key_at.0 = later;
-    let mut test_words: Vec<String> = Vec::new();
-    for (name, _) in due {
-        test_words.push(name.trim_start_matches("popup:").to_ascii_lowercase());
-    }
-    for w in &test_words {
-        pressed.push((w.as_str(), format!("test --key popup:{w}")));
-    }
-    for (key, what) in [(KeyCode::ArrowLeft, "left"), (KeyCode::ArrowRight, "right"), (KeyCode::Escape, "escape")] {
-        if keys.just_pressed(key) {
-            pressed.push((what, format!("{what} key")));
+    let mut test_key: Option<String> = None;
+    let mut rest = Vec::with_capacity(key_at.0.len());
+    for (name, n) in std::mem::take(&mut key_at.0) {
+        let is_help = name.eq_ignore_ascii_case("f1") || name.to_ascii_lowercase().starts_with("help:");
+        if test_key.is_none() && is_help && updates >= n {
+            test_key = Some(name);
+        } else {
+            rest.push((name, n));
         }
     }
-    // The user's look at the original: a button goes down while the mouse
-    // button or Enter is held, and answers when let go (Enter: on the
-    // highlighted one; the mouse: if still on the same button).
-    let cursor = window.single().ok().and_then(|w| w.cursor_position());
-    let over = cursor.and_then(|at| gui.popup_button_at(frame.0, at));
-    if let Some(p) = gui.popup.as_mut() {
-        let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
-        if keys.any_just_pressed(enter) {
-            p.pressed = Some(p.highlight);
+    key_at.0 = rest;
+
+    let Some(was_open) = sim.active.world.help.open else {
+        if gui.popup.take().is_some() {
+            gui.panels.set(kq8_core::panels::Group::Popup, false, "help closed");
         }
-        // Q151 e: a mouse press shows that button pressed; the highlight
-        // stays.
-        if buttons.just_pressed(MouseButton::Left) {
-            if let Some(k) = over {
-                p.pressed = Some(k);
-            }
-        }
-        if keys.any_just_released(enter) {
-            if p.pressed == Some(p.highlight) {
-                pressed.push(if p.highlight == 0 { ("yes", "Enter let go on Yes".into()) } else { ("no", "Enter let go on No".into()) });
-            }
-            p.pressed = None;
-        }
-        if buttons.just_released(MouseButton::Left) {
-            if let Some(k) = p.pressed.filter(|k| over == Some(*k)) {
-                pressed.push(if k == 0 { ("yes", "click on Yes (let go)".into()) } else { ("no", "click on No (let go)".into()) });
-            }
-            p.pressed = None;
-        }
-    }
-    for (what, how) in pressed {
-        let Some(p) = gui.popup.as_mut() else { break };
-        let answer = match what {
-            "left" | "right" => {
-                // Two buttons: either key moves to the other one.
-                p.highlight = if what == "left" { 0 } else { 1 };
-                let line = format!("popup: {how}: {} highlighted", if p.highlight == 0 { &p.yes } else { &p.no });
-                gui.note(&line);
-                None
-            }
-            "enter" => Some(p.highlight == 0),
-            "yes" => Some(true),
-            "no" => Some(false),
-            // Q151 b: nothing in handsOff; else No (the original answers the
-            // button that is not highlighted: "Do not reproduce") and the
-            // main menu.
-            "escape" if sim.active.world.connor_hands_off => {
-                gui.note("popup: Escape: nothing (handsOff; Q151 b)");
-                None
-            }
-            "escape" => {
-                gui.note("popup: Escape: No, and the main menu (not built yet: not opened) (rule 26)");
-                Some(false)
-            }
-            _ => None,
+        let open_f1 = if keys.just_pressed(KeyCode::F1) {
+            Some("F1 key")
+        } else if test_key.as_deref().is_some_and(|k| k.eq_ignore_ascii_case("f1")) {
+            Some("test --key f1")
+        } else {
+            None
         };
-        if let Some(yes) = answer {
-            let lines = sim.active.portal_answer(yes, &how);
-            let mut log = shared.log.lock().unwrap();
-            for l in lines {
-                log.summary(format!("popup: {l}"));
+        if let Some(how) = open_f1 {
+            sim.active.world.help.open_book();
+            queue_help_sound(&mut sim);
+            gui.note(format!("help: F1 help book opened via {how} (interface.md rule 56)"));
+            if let Some(hp) = sim.active.world.help.open {
+                sync_help_popup(gui, &sim, hp, &shared);
             }
-            drop(log);
-            gui.popup = None;
-            gui.panels.set(kq8_core::panels::Group::Popup, false, "answered");
-            break;
         }
+        return;
+    };
+
+    sync_help_popup(gui, &sim, was_open, &shared);
+    let cursor = window.single().ok().and_then(|w| w.cursor_position());
+    let over = cursor.and_then(|at| gui.popup_hit_at(frame.0, at));
+    let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
+    let test_lower = test_key.as_deref().map(str::to_ascii_lowercase);
+    let f1_close = keys.just_pressed(KeyCode::F1) || test_lower.as_deref() == Some("f1");
+    let esc_close = keys.just_pressed(KeyCode::Escape);
+    if esc_close {
+        // Prevent `terrain_view::fly_input` from exiting on the same frame Escape closes help.
+        keys.clear_just_pressed(KeyCode::Escape);
+    }
+
+    let mut check_note = None;
+    let mut close_how = None;
+    match gui.popup.as_mut().map(|p| &mut p.kind) {
+        Some(PopupKind::HelpNormal { show_checkbox, checked, pressed_ok, .. }) => {
+            if keys.any_just_pressed(enter) {
+                *pressed_ok = true;
+            }
+            if buttons.just_pressed(MouseButton::Left) && over == Some(PopupHit::Button(0)) {
+                *pressed_ok = true;
+            }
+            let check_how = if *show_checkbox && buttons.just_pressed(MouseButton::Left) && over == Some(PopupHit::Checkbox) {
+                Some("click checkbox")
+            } else if *show_checkbox && test_lower.as_deref() == Some("help:check") {
+                Some("test --key help:check")
+            } else {
+                None
+            };
+            if let Some(how) = check_how {
+                let mode = sim.active.world.help.toggle_starting_help();
+                *checked = mode != 0;
+                check_note = Some(format!("help: {how} -> notStartingHelp={mode} (interface.md rule 55)"));
+            }
+            let ok_released = (keys.any_just_released(enter) && *pressed_ok)
+                || (buttons.just_released(MouseButton::Left) && *pressed_ok && over == Some(PopupHit::Button(0)));
+            if keys.any_just_released(enter) || buttons.just_released(MouseButton::Left) {
+                *pressed_ok = false;
+            }
+            close_how = if ok_released {
+                Some("OK / Enter")
+            } else if f1_close {
+                Some("F1")
+            } else if esc_close {
+                Some("Escape")
+            } else if matches!(test_lower.as_deref(), Some("help:ok" | "help:close")) {
+                Some("test --key help:ok")
+            } else {
+                None
+            };
+        }
+        Some(PopupKind::HelpBook { pressed, .. }) => {
+            if keys.any_just_pressed(enter) {
+                *pressed = Some(1);
+            }
+            if buttons.just_pressed(MouseButton::Left) {
+                if let Some(PopupHit::Button(k)) = over {
+                    if k < 3 {
+                        *pressed = Some(k);
+                    }
+                }
+            }
+            let mut released_btn = None;
+            if keys.any_just_released(enter) {
+                if *pressed == Some(1) {
+                    released_btn = Some(1);
+                }
+                *pressed = None;
+            }
+            if buttons.just_released(MouseButton::Left) {
+                if let Some(k) = pressed.filter(|k| over == Some(PopupHit::Button(*k))) {
+                    released_btn = Some(k);
+                }
+                *pressed = None;
+            }
+            let delta = if keys.just_pressed(KeyCode::ArrowLeft) || released_btn == Some(0) || test_lower.as_deref() == Some("help:prev") {
+                Some(-1)
+            } else if keys.just_pressed(KeyCode::ArrowRight) || released_btn == Some(2) || test_lower.as_deref() == Some("help:next") {
+                Some(1)
+            } else {
+                None
+            };
+            if let Some(d) = delta {
+                sim.active.world.help.page_book(d);
+                if let Some(hp) = sim.active.world.help.open {
+                    sync_help_popup(gui, &sim, hp, &shared);
+                }
+                return;
+            }
+            close_how = if released_btn == Some(1) {
+                Some("Close / Enter")
+            } else if f1_close {
+                Some("F1")
+            } else if esc_close {
+                Some("Escape")
+            } else if matches!(test_lower.as_deref(), Some("help:close" | "help:ok")) {
+                Some("test --key help:close")
+            } else {
+                None
+            };
+        }
+        _ => {}
+    }
+    if let Some(note) = check_note {
+        gui.note(&note);
+        shared.log.lock().unwrap().summary(note);
+    }
+    if let Some(how) = close_how {
+        close_help_popup(gui, &mut sim, &shared, how);
     }
 }

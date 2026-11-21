@@ -739,6 +739,9 @@ pub fn spawn_doors(
         sources,
     );
     active.scripts.aliases.extend(std::mem::take(&mut objects.aliases));
+    let start_help = objects.not_starting_help.unwrap_or(0);
+    active.world.help.set_not_starting_help(start_help);
+    main_log.summary(format!("help: Options.cs notStartingHelp={:?} -> {} (interface.md rule 57)", objects.not_starting_help, start_help));
     // Traps (3d-2): loaded where the start-up scripts left them.
     let mut trap_log = match Log::create("traps") {
         Ok(l) => Some(l),
@@ -2334,13 +2337,33 @@ pub fn door_step(
     sim.flush_conversation(&shared);
     let item_lines = sim.flush_items(&shared);
     sim.flush_rope(&shared);
+    let wait_or_move = connor.as_ref().is_some_and(|c| {
+        c.may_ready().is_ok()
+            && c.swing.is_none()
+            && c.tile.is_none()
+            && c.scales.is_none()
+            && c.rock.is_none()
+            && c.choice.is_none()
+            && c.shot.is_none()
+            && c.throw.is_none()
+            && c.rope.is_none()
+    }) && !sim.active.world.connor_roping
+        && !sim.active.world.connor_in_talk()
+        && !sim.active.world.connor_dying;
+    sim.active.tick_help(hands_off || sim.active.world.connor_hands_off, wait_or_move);
     let lines = sim.active.take_log();
     if !lines.is_empty() {
         let mut main = shared.log.lock().unwrap();
         for line in lines {
-            // The main log gets the clicks, door events and finished
-            // movements; item lines it already has (`flush_items`).
-            let wanted = line.contains(": click ") || line.contains("KQDoorEvent") || line.contains("finished;");
+            // The main log gets the clicks, door events, finished
+            // movements and help events; item lines it already has (`flush_items`).
+            let wanted = line.contains(": click ")
+                || line.contains("KQDoorEvent")
+                || line.contains("finished;")
+                || line.starts_with("help:")
+                || line.contains("doPopup")
+                || line.contains("notStartingHelp")
+                || line.contains("stopHelp");
             if wanted && !item_lines.contains(&line) {
                 main.summary(format!("doors: {line}"));
             }

@@ -240,6 +240,22 @@ pub fn set800mode(game: &GameDir) -> bool {
     })
 }
 
+/// Reads the last `notStartingHelp <0|1|2>` setting from `Options.cs` (`interface.md` rule 55).
+pub fn not_starting_help(game: &GameDir) -> Option<u8> {
+    let bytes = std::fs::read(game.find("Options.cs")?).ok()?;
+    let text: String = bytes.iter().map(|&b| b as char).collect();
+    let mut out = None;
+    for line in text.lines() {
+        let mut w = line.split('#').next().unwrap_or("").split_whitespace();
+        if w.next().is_some_and(|c| c.eq_ignore_ascii_case("notStartingHelp")) {
+            if let Some(v) = w.next().and_then(|s| s.parse::<f64>().ok()) {
+                out = Some((v.max(0.0) as u32).min(2) as u8);
+            }
+        }
+    }
+    out
+}
+
 /// The first of `names` (paths under the install) that exists.
 fn first_found(game: &GameDir, names: &[String]) -> Option<(String, Vec<u8>)> {
     names.iter().find_map(|n| Some((n.clone(), std::fs::read(game.find(n)?).ok()?)))

@@ -1659,6 +1659,8 @@ pub struct Objects {
     pub hazers: Vec<kq8_core::hazer::Hazer>,
     /// `alias` definitions from `newWorld.cs` passed to runtime scripts (`script-commands.md` rule 9).
     pub aliases: Vec<(String, String)>,
+    /// `Options.cs` `notStartingHelp <0|1|2>` (`interface.md` rule 57).
+    pub not_starting_help: Option<u8>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -5405,6 +5407,7 @@ impl Placer<'_> {
             river_controls,
             hazers,
             aliases: Vec::new(),
+            not_starting_help: crate::talk_view::not_starting_help(self.game),
         }
     }
 }

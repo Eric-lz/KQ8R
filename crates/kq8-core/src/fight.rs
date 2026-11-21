@@ -679,16 +679,20 @@ impl crate::active::WorldState {
         // interface.md rule 24: the bars follow his stats.
         self.connor_stats_events += 1;
         self.fight_note("Connor", format!("hit by {from}, {}: {} (roll 25-100 %, rule 16); health {before} -> {after}{temple}", kind.name(), dmg.describe()));
-        // Rule 29: two one-off tips (logged only; their texts are another
-        // study). The first needs a character or a projectile (Q188 c).
         let by_character = kind == HitKind::Projectile || self.character_index(from).is_some();
-        if !self.connor_tips[0] && by_character {
+        if !self.connor_tips[0] && by_character && self.weapon_mode == crate::weapons::WeaponMode::None {
             self.connor_tips[0] = true;
-            self.fight_note("Connor", "first hit by a character: a one-off tip would come here (rule 29; not traced further)");
+            let now = self.now();
+            if let Some(note) = self.help.queue_builtin_tip(crate::help::TIP_EMPTY_HAND_HIT, 140, now, crate::help::DELAY_SECS, "first empty-handed combat hit") {
+                self.fight_note("Connor", format!("first empty-handed hit by {from}: {note} (fighting.md rule 29; interface.md rule 58)"));
+            }
         }
         if !self.connor_tips[1] && after * 2 < 10 * c.level {
             self.connor_tips[1] = true;
-            self.fight_note("Connor", "health below half his maximum for the first time: a one-off tip would come here (rule 29; not traced further)");
+            let now = self.now();
+            if let Some(note) = self.help.queue_builtin_tip(crate::help::TIP_HEALTH_LOW, 130, now, crate::help::DELAY_SECS, "health below half maximum") {
+                self.fight_note("Connor", format!("health below half maximum: {note} (fighting.md rule 29; interface.md rule 58)"));
+            }
         }
         let at = format!("hit by {from}");
         if after < 0 {
@@ -1489,7 +1493,9 @@ impl crate::active::WorldState {
         // Rule 33.
         if !self.kill_tip && !NO_KILL_TIP.iter().any(|t| t.eq_ignore_ascii_case(&type_name)) {
             self.kill_tip = true;
-            self.fight_note(&name, format!("first kill (type {type_name}): a one-off tip would come at {:.2} (rule 33; not followed further)", now + KILL_TIP_DELAY));
+            if let Some(note) = self.help.queue_builtin_tip(crate::help::TIP_FIRST_KILL, 137, now, KILL_TIP_DELAY, &format!("first kill ({type_name})")) {
+                self.fight_note(&name, format!("first kill (type {type_name}): {note} (fighting.md rule 33; interface.md rule 58)"));
+            }
         }
     }
 }

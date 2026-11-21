@@ -70,6 +70,9 @@ pub struct Journey {
     pub helps_asked: std::collections::BTreeSet<&'static str>,
     pub connor_tips: [bool; 2],
     pub kill_tip: bool,
+    /// `Options.cs` `notStartingHelp` mode (`0|1|2`) and 7-bit built-in tip suppression mask (`0x7f` = `stopHelp`).
+    pub not_starting_help: u8,
+    pub tip_bits: u8,
     pub god_mode: bool,
     pub ai_off: bool,
     pub allow_shadows: bool,
@@ -113,6 +116,8 @@ impl Journey {
             helps_asked: w.helps_asked.clone(),
             connor_tips: w.connor_tips,
             kill_tip: w.kill_tip,
+            not_starting_help: w.help.not_starting_help,
+            tip_bits: w.help.tip_bits,
             god_mode: w.god_mode,
             ai_off: w.ai_off,
             allow_shadows: w.allow_shadows,
@@ -173,6 +178,8 @@ impl Journey {
         w.helps_asked = self.helps_asked.clone();
         w.connor_tips = self.connor_tips;
         w.kill_tip = self.kill_tip;
+        w.help.not_starting_help = self.not_starting_help;
+        w.help.tip_bits |= self.tip_bits;
         w.god_mode = self.god_mode;
         w.ai_off = self.ai_off;
         if !w.allow_shadows_from_world {
@@ -205,7 +212,7 @@ impl Journey {
             out.push(format!("  potion {} ({}) {} of {} s left, next second in {until} updates, icon place {:?}", r.item, r.kind, r.left, r.duration, r.place));
         }
         out.push(format!("  flags {:?}; InTemple4 {}; map marks {:?}; other maps {:?}", self.flags, self.in_temple4, self.map_marks, self.other_maps.keys().collect::<Vec<_>>()));
-        out.push(format!("  combat level x{}; next NoName {}; god {}, AI off {}; {} game-wide variables", self.combat_level, self.next_no_name, self.god_mode, self.ai_off, self.vars.len()));
+        out.push(format!("  combat level x{}; next NoName {}; god {}, AI off {}; notStartingHelp {}, tipBits {:#x}; {} game-wide variables", self.combat_level, self.next_no_name, self.god_mode, self.ai_off, self.not_starting_help, self.tip_bits, self.vars.len()));
         out
     }
 }

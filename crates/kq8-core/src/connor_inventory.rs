@@ -106,11 +106,17 @@ fn category(w: &WorldState, kind: &str) -> String {
 /// Connor's stats changed by `d` (`interface.md` rule 24: one stats
 /// event); logged with before and after.
 pub(crate) fn connor_add(w: &mut WorldState, d: Stats, why: &str) -> String {
+    let now = w.now();
     let Some(c) = w.connor_stats.as_mut() else { return "Connor's stats unknown".into() };
     let before = *c;
     let level = c.change(d);
     let after = *c;
     w.connor_stats_events += 1;
+    if before.level < 2 && after.level == 2 {
+        if let Some(note) = w.help.queue_builtin_tip(crate::help::TIP_LEVEL_TWO, 138, now, crate::help::DELAY_SECS, "reached level 2") {
+            w.item_note(note);
+        }
+    }
     format!(
         "{why}: stats {:?} level {} -> {:?} level {}{}",
         before.stats.0,
@@ -219,16 +225,22 @@ fn added_extras(w: &mut WorldState, kind: &str, category: &str) {
         }
     }
     let help = match category {
-        "HealthItem" => Some(("0x83", 3.0, "the first health item or potion")),
-        "QuestItem" => Some(("0x84", 0.0, "the first quest item")),
+        "HealthItem" => Some(("0x83", crate::help::TIP_HEALTH_ITEM, 131u32, 3.0, "the first health item or potion")),
+        "QuestItem" => Some(("0x84", crate::help::TIP_QUEST_ITEM, 132u32, 0.0, "the first quest item")),
         _ => None,
     };
-    if let Some((id, after, what)) = help.filter(|(id, ..)| !w.helps_asked.contains(id)) {
+    if let Some((id, bit, text, after, what)) = help.filter(|(id, ..)| !w.helps_asked.contains(id)) {
         w.helps_asked.insert(id);
-        w.item_note(format!("{what} ({kind}): help pop-up {id} asked for{} (potions.md rule 41; pop-ups not studied: logged only)", if after > 0.0 { format!(" {after} s later") } else { String::new() }));
+        let now = w.now();
+        if let Some(note) = w.help.queue_builtin_tip(bit, text, now, after, what) {
+            w.item_note(format!("{what} ({kind}): help pop-up {id} (#{text}): {note} (potions.md rule 41; interface.md rule 58)"));
+        }
     }
     if kind.eq_ignore_ascii_case("INVITEM_RopeAndHook") {
-        w.item_note("INVITEM_RopeAndHook added: help pop-up 0x80 asked for 4.5 s later (potions.md rule 41; logged only)");
+        let now = w.now();
+        if let Some(note) = w.help.queue_builtin_tip(crate::help::TIP_ROPE, 128, now, 4.5, "INVITEM_RopeAndHook added") {
+            w.item_note(format!("INVITEM_RopeAndHook added: help pop-up 0x80 (#128): {note} (potions.md rule 41; interface.md rule 58)"));
+        }
     }
 }
 

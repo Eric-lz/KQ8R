@@ -174,7 +174,7 @@ pub fn playing(change: Res<WorldChange>) -> bool {
 /// is not open (`world-change.md` rule 26: the game pauses; the panels
 /// and the sounds go on).
 pub fn running(change: Res<WorldChange>, sim: Option<Res<crate::door_view::DoorSim>>) -> bool {
-    matches!(change.step, Step::Playing) && !sim.is_some_and(|s| s.active.world.portal_asking())
+    matches!(change.step, Step::Playing) && !sim.is_some_and(|s| s.active.world.portal_asking() || s.active.world.help_open())
 }
 
 /// For systems that keep values from frame to frame (`Local`): true the

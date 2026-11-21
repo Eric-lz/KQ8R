@@ -823,6 +823,8 @@ pub struct WorldState {
     pub pickup_experience: Vec<(f64, i64, String)>,
     /// The help pop-ups of rule 41 already asked for (logged only).
     pub helps_asked: BTreeSet<&'static str>,
+    /// Help popups (`doPopup`, `notStartingHelp`, `stopHelp`, F1 help book; `interface.md` rules 53–58).
+    pub help: crate::help::HelpState,
     /// The objects whose `groupsAlways` has bit 2048 (`potions.md` rule
     /// 31), set by the loader (M5 5g-7).
     pub reveal_objects: Vec<String>,
@@ -2874,6 +2876,48 @@ impl WorldState {
         "0".into()
     }
 
+    /// `doPopup <textNumber>` (`interface.md` rule 53): schedules a help popup from `500.MSG`
+    /// after 1.5 game seconds.
+    fn do_popup(&mut self, words: &[String], at: &str) -> String {
+        let Some(v) = words.get(1).filter(|w| looks_like_number(w)) else {
+            self.note(format!("{at}: usage: doPopup <textNumber>; nothing"));
+            return "0".into();
+        };
+        let n = number_value(v);
+        if n < 0.0 || !n.is_finite() {
+            self.note(format!("{at}: doPopup {v}: negative/invalid number; nothing"));
+            return "0".into();
+        }
+        let num = n as u32;
+        let now = self.now();
+        self.help.queue(num, now, crate::help::DELAY_SECS, at);
+        self.note(format!(
+            "{at}: doPopup {num} queued in {:.1} s at t={:.2} (interface.md rule 53)",
+            crate::help::DELAY_SECS,
+            now + crate::help::DELAY_SECS,
+        ));
+        "0".into()
+    }
+
+    /// `notStartingHelp <0|1|2>` (`interface.md` rule 55): beginner-help mode toggle.
+    fn not_starting_help_cmd(&mut self, words: &[String], at: &str) -> String {
+        let Some(v) = words.get(1).filter(|w| looks_like_number(w)) else {
+            self.note(format!("{at}: usage: notStartingHelp <0|1|2>; nothing"));
+            return "0".into();
+        };
+        let mode = (number_value(v).max(0.0) as u32).min(2) as u8;
+        self.help.set_not_starting_help(mode);
+        self.note(format!("{at}: notStartingHelp {mode} (interface.md rule 55)"));
+        "0".into()
+    }
+
+    /// `stopHelp` (`interface.md` rule 58): sets all 7 built-in tip bits (`0x7f`).
+    fn stop_help_cmd(&mut self, at: &str) -> String {
+        self.help.stop_help();
+        self.note(format!("{at}: stopHelp -> tip_bits={:#x} (interface.md rule 58)", self.help.tip_bits));
+        "0".into()
+    }
+
     fn gold_coin_persists(&mut self, words: &[String], at: &str) -> String {
         let Some(v) = words.get(1).filter(|v| looks_like_number(v)) else {
             self.note(format!("{at}: usage: goldCoinPersists 0|1; nothing"));
@@ -4343,6 +4387,9 @@ impl ScriptHost for WorldState {
             "mouseAction" => Some(self.mouse_action(words, at)),
             "KQGame::selectScreen" => Some(self.select_screen(words, at)),
             "allowShadows" => Some(self.allow_shadows_cmd(words, at)),
+            "doPopup" => Some(self.do_popup(words, at)),
+            "notStartingHelp" => Some(self.not_starting_help_cmd(words, at)),
+            "stopHelp" | "stophelp" => Some(self.stop_help_cmd(at)),
             "preloadShape"
             | "preloadResource"
             | "KQObject::preloadResources"
@@ -4382,6 +4429,11 @@ impl ScriptHost for WorldState {
 }
 
 impl WorldState {
+    /// Whether any help popup (`doPopup` or F1 help book) is open (`interface.md` rules 55–56).
+    pub fn help_open(&self) -> bool {
+        self.help.is_open()
+    }
+
     /// Evaluates Connor at `pos` against all `KQHazer` zones (`object-lighting.md` rules 23a–23d).
     pub(crate) fn hazers_check(&mut self, pos: [f32; 3], why: &str) {
         use crate::hazer::HazerEvent;
@@ -4512,6 +4564,7 @@ impl Active {
                 reveal_objects: Vec::new(),
                 pickup_experience: Vec::new(),
                 helps_asked: BTreeSet::new(),
+                help: crate::help::HelpState::default(),
                 reveal_calls: Vec::new(),
                 dithered: BTreeMap::new(),
                 bmp_swaps: BTreeMap::new(),
@@ -7112,6 +7165,17 @@ impl Active {
         }
     }
 
+    /// Advances queued help popups for this update (`interface.md` rules 53–58).
+    pub fn tick_help(&mut self, hands_off: bool, wait_or_move: bool) {
+        let now = self.world.now();
+        let speaking = self.world.talk.is_talking(crate::talk::CONNOR);
+        let portal = self.world.portal_asking();
+        let logs = self.world.help.tick(now, hands_off, wait_or_move, speaking, portal);
+        for line in logs {
+            self.world.note(line);
+        }
+    }
+
     /// Lines for the log since the last call.
     pub fn take_log(&mut self) -> Vec<String> {
         std::mem::take(&mut self.world.log)
@@ -8980,7 +9044,8 @@ endif
 ");
         assert!(log.contains("Do (Attack at phase 0.5333): hits Connor: distance") && log.contains("hand damage 15, Normal"), "{log}");
         assert!(log.contains("Connor: hit by gob, Normal: D 15, R "), "{log}");
-        assert!(log.contains("first hit by a character: a one-off tip"), "{log}");
+        assert!(log.contains("first empty-handed hit by gob: help: built-in tip #140"), "{log}");
+        assert_ne!(a.world.help.tip_bits & crate::help::TIP_EMPTY_HAND_HIT, 0);
         assert!(log.contains("is below 0: his dying state, kind Normal"), "{log}");
         assert!(a.world.connor_stats.unwrap().stats.0[0] < 0);
         assert!(a.world.connor_dying);
@@ -11018,5 +11083,38 @@ mod talk_tests {
         assert_eq!(a.world.world_command(&words("deleteObject litehaze"), "t"), Some("0".into()));
         assert!((a.world.current_haze_distance - 9_000.0).abs() < 1e-3);
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::SetHaze { haze, .. } if (*haze - 9_000.0).abs() < 1e-3)));
+    }
+
+    #[test]
+    fn do_popup_not_starting_help_and_stop_help() {
+        let mut a = active("", &[]);
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(a.world.world_command(&words("notStartingHelp 1"), "t"), Some("0".into()));
+        assert_eq!(a.world.help.not_starting_help, 1);
+        assert_eq!(a.world.world_command(&words("doPopup 133"), "t"), Some("0".into()));
+        for _ in 0..40 {
+            if a.world.now() >= 1.55 {
+                break;
+            }
+            a.update();
+        }
+        assert!(a.world.now() >= 1.5);
+        a.tick_help(false, true);
+        assert!(!a.world.help_open());
+
+        assert_eq!(a.world.world_command(&words("notStartingHelp 0"), "t"), Some("0".into()));
+        assert_eq!(a.world.world_command(&words("doPopup 133"), "t"), Some("0".into()));
+        let due = a.world.now() + 1.55;
+        for _ in 0..40 {
+            if a.world.now() >= due {
+                break;
+            }
+            a.update();
+        }
+        a.tick_help(false, true);
+        assert_eq!(a.world.help.open, Some(crate::help::HelpPopup::Normal { text_number: 133, show_checkbox: true }));
+
+        assert_eq!(a.world.world_command(&words("stopHelp"), "t"), Some("0".into()));
+        assert_eq!(a.world.help.tip_bits, crate::help::STOP_HELP_MASK);
     }
 }

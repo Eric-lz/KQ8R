@@ -60,8 +60,7 @@ use kq8_data::world_script::Vars;
 /// `checkSave`, ...) are not stubs: they stay unknown (error line,
 /// result 1) until they are studied; `getloc` and `checkDistance` are
 /// handled by the world.
-pub const STUBS: [&str; 2] = [
-    "doPopup",
+pub const STUBS: [&str; 1] = [
     "KQObject::setGroupsAlways",
 ];
 
@@ -757,7 +756,7 @@ endif
 
     #[test]
     fn console_return_and_if_on_any_command() {
-        let (s, _) = run("test a == b\nset Saved $Console::Return\nif doPopup 3\nset Inv zero\nendif\n", &[], &[]);
+        let (s, _) = run("test a == b\nset Saved $Console::Return\nif KQObject::setGroupsAlways x 1\nset Inv zero\nendif\n", &[], &[]);
         assert_eq!(s.vars.get("Saved"), Some("-1"), "a false text == with the left word first (Q54)");
         assert_eq!(s.vars.get("Inv"), Some("zero"), "a stub leaves 0, so the branch is taken");
         // An unknown command fails; its `if` branch is skipped.
