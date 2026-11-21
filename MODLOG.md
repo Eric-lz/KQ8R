@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-21 Batch 1 fix B1-F1 user check: visuals verified, popup click sound open (Q199)
+- **Changed:** `docs/behaviour/QUESTIONS.md` (`Q199`), `MODLOG.md`, `docs/DESIGN.md`, `STATUS.md`, `docs/FEATURES.md`, `README.md` (documentation only; no Rust code changed).
+- **Why:** Record the user's 2026-11-21 interactive check of `B1-F1` and ask Study Session (A) for the exact popup click sound file instead of guessing.
+- **Tested how:** Played in the viewer by the user (F1 Help Book and starting help popup).
+- **Result:** All `B1-F1` visuals and interactions verified working as expected (button order `Close, <<, >>`, Portal-style highlight/arrow/Enter/mouse animations, instant show/hide). Only the click sound (`click.aud`) is wrong — original plays a short stone-y sound (`Q199` filed; `MASK/GAME/SOUND/button1.aud` noted as unreferenced data candidate).
+- **Still broken / not tested:** Popup click sound filename pending `Q199` (or user audition of `button1.aud`); `B1-F2` (`litehaze` shared GPU haze buffer, quiet ramp log, `KQHazer` wireframe+rings `H`-key marker) still awaiting user go-ahead.
+- **Next:** Await user confirmation on whether to audition `button1.aud` / wait for Session A's `Q199` answer, and whether to proceed with `B1-F2`.
+
 ## 2026-11-21 Batch 1 fix B1-F1: Help popup button order, Portal highlight/click sound, and instant close
 - **Changed:** `crates/kq8-core/src/panels.rs` (`Panels::set` snaps `Panel::Popup` `away` immediately to `0.0` / `1.0` without `0.2 s` slide delay; added `popup_shows_and_hides_immediately` unit test), `crates/kq8-viewer/src/gui_view.rs` (`POPUP_CLICK_SOUND = "click.aud"`, reordered `HelpBook` buttons to `[Close, "<<", ">>"]` with `highlight` starting at `0` (`Close`) and preserved across page turns, Portal-style Left/Right highlight moves + Enter press/release + mouse click press/release without moving gold highlight, `popup_local_point`/`popup_contains` playing `click.aud` on any left-click in the popup window, arrow move, or Enter press across `Portal`/`HelpNormal`/`HelpBook`, skipped bar/map clicks behind modal popup, added `help:click`/`help:left`/`help:right`/`help:enter` test keys), `MODLOG.md`, `docs/DESIGN.md`, `STATUS.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md`.
 - **Why:** Fix the three help-popup bugs from the user's 2026-11-20 visual check: F1 Help Book button order (`Close`, `<<`, `>>`), Portal-matching highlight/arrow/Enter/mouse animations with `click.aud` on popup clicks, arrows, and Enter, and text/buttons vanishing ~0.2 s before the popup box on close.

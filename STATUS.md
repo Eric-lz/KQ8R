@@ -1,19 +1,20 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-11-20 after
-B finished Dead City polish (`Q197`–`Q198`) and Script Coverage Batch 1
-(steps `B1-1` to `B1-8`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+Hand-over in case the chat is lost. Brought up to date 2026-11-21 after
+B recorded the user's `B1-F1` visual check (`Q199` open for popup click
+sound) following Dead City polish (`Q197`–`Q198`) and Script Coverage Batch 1
+(steps `B1-1` to `B1-8`, `B1-F1`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-11-20)
+## Where we are (2026-11-21)
 
-- **2026-11-20 (B): `Q197`–`Q198` + Script Coverage Batch 1 built (steps B1-1 to B1-8)**
-  (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1"; 777 workspace
-  unit tests; headless `--sound off` viewer logs across `DeadCity`,
-  `Snowexit`, `Daventry`, `CastleD`, `Swamp`; user visual checks on
-  2026-11-20 for `B1-2`, `B1-3`, `B1-5`, `B1-6`, `B1-7`; `B1-1` and `B1-4`
-  still not checked by eye):
+- **2026-11-20/21 (B): `Q197`–`Q198` + Script Coverage Batch 1 + `B1-F1` built**
+  (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1" and "Batch 1 follow-up fixes";
+  778 workspace unit tests; headless `--sound off` viewer logs across `DeadCity`,
+  `Snowexit`, `Daventry`, `CastleD`, `Swamp`; user checks on
+  2026-11-20 for `B1-2`, `B1-3`, `B1-5`, `B1-6` and 2026-11-21 for `B1-F1`;
+  `B1-1` and `B1-4` still not checked by eye):
   - **Dead City polish (`B1-1`, `Q197`–`Q198`):** added `Tile2`/`Tile3`/
     `Scales`/`Fall` state numbers, Scales of Justice six instant cuts and
     `walkTo` exit + post-`onscale2`/`offscale2` remembered-input reset,
@@ -34,23 +35,25 @@ B finished Dead City polish (`Q197`–`Q198`) and Script Coverage Batch 1
     materials on every ramp move).
   - **Help popups & F1 Help Book (`B1-7` + `B1-F1`):** `doPopup`, `notStartingHelp`,
     `stopHelp`, `movekeys.kq` -> `500.MSG` expansion, `38×7` wrap,
-    `intrface.aud`, game pause, and 24-page F1 Help Book; user visual
-    check on 2026-11-20 found F1 button order/highlight/click-sound and
-    0.2 s close-linger issues, which were fixed in `B1-F1` (`Close, <<, >>`
-    order, Portal-style highlight/arrow/Enter/mouse animations, `click.aud`
-    on popup clicks, arrows, and Enter, instant `Panel::Popup` show/hide;
-    778 workspace unit tests + Daventry logs pass, **not yet re-checked
-    by eye**).
+    `intrface.aud`, game pause, and 24-page F1 Help Book; `B1-F1` fixed the
+    2026-11-20 visual check findings (`Close, <<, >>` order, Portal-style
+    highlight/arrow/Enter/mouse animations, instant `Panel::Popup` show/hide,
+    and `click.aud` stand-in on popup clicks, arrows, and Enter). **User
+    visual check on 2026-11-21:** all visuals, button order, animations,
+    and instant close work as expected; only `click.aud` is the wrong sound
+    file (original plays a short stone-y click; `Q199` open for Session A,
+    `button1.aud` noted as data candidate).
   - **Script coverage regenerated (`B1-8`):** `docs/SCRIPT-COVERAGE.md`
     updated (`37 -> 20` distinct missing commands, `0` stubs remaining
     across all worlds; `CastleD` now `0` missing, `Daventry` `2`,
     `DeadCity` `1`).
-  - **Next:** User re-check of `B1-F1` help popups in game and decision on
-    `B1-F2` (`litehaze` shared GPU haze buffer vs. throttle + wireframe
-    with rings on `H`), then Build Session (B) for **Batch 3 (Swamp)**
-    (`Tile2`, `KQSwampTile`, Mandragore tree/roots, `KQConner::pay`,
-    `setRelDamage`, `preSpecial`, `setFirstPerson`, `addImmunity`) or Study
-    Session (A) for Batch 4 (Gnome).
+  - **Next:** `Q199` (popup click sound, Session A or user ear check of
+    `button1.aud`) and user decision on `B1-F2` (`litehaze` shared GPU haze
+    buffer + quiet ramp log + wireframe-with-rings on `H`), then Build
+    Session (B) for **Batch 3 (Swamp)** (`Tile2`, `KQSwampTile`, Mandragore
+    tree/roots, `KQConner::pay`, `setRelDamage`, `preSpecial`,
+    `setFirstPerson`, `addImmunity`) or Study Session (A) for Batch 4
+    (Gnome).
 
 - **2026-11-20 (A): Batch 3 (Swamp) studied** (traced in `Mask.exe` via
   Ghidra and checked against `MASK/` data; **not checked by hand in the
