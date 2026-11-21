@@ -2486,6 +2486,140 @@ impl WorldState {
         "0".into()
     }
 
+    /// `loadAnim` (`script-commands.md` rule 11, Edge cases): spawns a live
+    /// `KQAnimOnce` (`deleteWhenDone = 0` initially), sets `$ObjectName`,
+    /// snaps `z == -1 / -2` synchronously via `heights`, and asks the viewer
+    /// to draw it.
+    fn load_anim(&mut self, words: &[String], at: &str) -> String {
+        let Some(raw_name) = words.get(1) else {
+            self.note(format!("{at}: usage: loadAnim <name> <file> ...; nothing"));
+            return "1".into();
+        };
+        let Some(file) = words.get(2) else {
+            self.note(format!("{at}: usage: loadAnim <name> <file> ...; nothing"));
+            return "1".into();
+        };
+        let key = file.rsplit(['/', '\\']).next().unwrap_or(file).to_ascii_lowercase();
+        let ext = key.rsplit_once('.').map_or("", |(_, e)| e);
+        enum Form {
+            Shape { anim_pos: f32, time_scale: f32, cyclic: bool, interruptable: bool, rest_start: usize },
+            Anm { loop_name: String, rest_start: usize },
+        }
+        let form = match ext {
+            "kqs" | "dts" => {
+                if !(7..=13).contains(&words.len()) {
+                    self.note(format!("{at}: usage: loadAnim <name> <file.kqs|.dts> <animPos> <timeScale> <cyclic> <interruptable> [x y z [rx ry rz]]; nothing"));
+                    return "1".into();
+                }
+                Form::Shape {
+                    anim_pos: number_value(&words[3]) as f32,
+                    time_scale: number_value(&words[4]) as f32,
+                    cyclic: number_value(&words[5]) != 0.0,
+                    interruptable: number_value(&words[6]) != 0.0,
+                    rest_start: 7,
+                }
+            }
+            "anm" => {
+                if !(4..=10).contains(&words.len()) {
+                    self.note(format!("{at}: usage: loadAnim <name> <file.anm> <loopName> [x y z [rx ry rz]]; nothing"));
+                    return "1".into();
+                }
+                Form::Anm { loop_name: words[3].clone(), rest_start: 4 }
+            }
+            _ => {
+                self.note(format!("{at}: loadAnim {raw_name} {file}: expected .kqs, .dts or .anm; nothing"));
+                return "1".into();
+            }
+        };
+        let name = if raw_name == "@" { self.items.next_name() } else { raw_name.clone() };
+        let lower = name.to_ascii_lowercase();
+        let live = self.known.contains(&lower) && !self.deleted.contains(&lower);
+        if live || self.deleted_this_event.contains(&lower) {
+            let why = if live { "a live object already has that name" } else { "its name was deleted in this same event and is not free yet" };
+            self.note(format!("{at}: ERROR loadAnim {file}: {why} ({name}): refused"));
+            return "1".into();
+        }
+        let rest_start = match &form {
+            Form::Shape { rest_start, .. } | Form::Anm { rest_start, .. } => *rest_start,
+        };
+        let rest = &words[rest_start..];
+        let num = |k: usize| rest.get(k).filter(|w| looks_like_number(w)).map_or(0.0, |w| number_value(w) as f32);
+        let mut position = [num(0), num(1), num(2)];
+        if position[2] == -1.0 || position[2] == -2.0 {
+            match self.heights.as_ref().and_then(|h| h(position[0], position[1], position[2] == -1.0)) {
+                Some(g) => position[2] = g,
+                None => self.note(format!("{at}: loadAnim {name}: z {} at ({:.0}, {:.0}): no ground height known; kept", position[2], position[0], position[1])),
+            }
+        }
+        let angles = [num(3), num(4), num(5)];
+        let placement = Placement { rotation: kq8_data::objects::rotation(angles), position };
+        let template_player = self.templates.get(&key).and_then(|t| match &t.kind {
+            TemplateKind::Anim(p) => Some((**p).clone()),
+            TemplateKind::Still { .. } => None,
+        });
+        let fallback = |mov_name: &str, start: f32, speed: f32, repeat: bool, cut_short: bool| {
+            let mut p = NamedAnimPlayer::new(
+                &name,
+                vec![crate::door::DoorMovement {
+                    name: mov_name.to_string(),
+                    start,
+                    speed,
+                    repeat,
+                    cut_short,
+                    play_time: 1.0,
+                    frame_steps: vec![crate::door::identity(); 15],
+                    first_in_file: true,
+                    frame_parts: Vec::new(),
+                    cues: Vec::new(),
+                    transitions: Vec::new(),
+                }],
+                0,
+                placement,
+            );
+            p.started_this_update = true;
+            p
+        };
+        let mut player = match form {
+            Form::Shape { anim_pos, time_scale, cyclic, interruptable, .. } => {
+                let mut p = template_player.unwrap_or_else(|| fallback(crate::named_anim::STOP_NAME, anim_pos, time_scale, cyclic, interruptable));
+                if let Some(m) = p.movements.first_mut() {
+                    m.name = crate::named_anim::STOP_NAME.to_string();
+                    m.start = anim_pos;
+                    m.speed = time_scale;
+                    m.repeat = cyclic;
+                    m.cut_short = interruptable;
+                }
+                p.current = 0;
+                p.current_name = crate::named_anim::STOP_NAME.to_string();
+                p.phase = anim_pos;
+                p.playing = time_scale != 0.0;
+                p.cut_short = interruptable;
+                p
+            }
+            Form::Anm { loop_name, .. } => {
+                let mut p = template_player.unwrap_or_else(|| fallback(&loop_name, 0.0, 1.0, false, false));
+                p.start(&loop_name);
+                p
+            }
+        };
+        player.name = name.clone();
+        player.base = placement;
+        player.once = true;
+        player.delete_when_done = false;
+        player.waiting = None;
+        player.started_this_update = true;
+        self.deleted.remove(&lower);
+        self.known.insert(lower);
+        self.anims.push(AnimObject { player, script: None, gone: false, character: None, translucency: None });
+        self.vars_out.push(("ObjectName".into(), name.clone()));
+        self.note(format!(
+            "{at}: loadAnim {name} {file}: KQAnimOnce at ({:.0}, {:.0}, {:.0}) turned ({:.3}, {:.3}, {:.3}) (script-commands.md rule 11)",
+            position[0], position[1], position[2], angles[0], angles[1], angles[2]
+        ));
+        self.requests.push(Request::Spawn { file: key, name, placement, at: at.to_string() });
+        "0".into()
+    }
+
     /// Spawns a copy of prepared template `file` named `name` at `placement`
     /// (`false` if no such template exists; U-11 chain pieces also call this).
     pub(crate) fn spawn_template(&mut self, file: &str, name: &str, placement: Placement, at: &str) -> bool {
@@ -4132,6 +4266,7 @@ impl ScriptHost for WorldState {
                 Some("0".into())
             }
             "loadKQ" => Some(self.load_kq(words, at)),
+            "loadAnim" => Some(self.load_anim(words, at)),
             "pauseAnim" | "setAnimPos" => Some(self.anim_pos(words, at)),
             "setActiveCamera" => Some(self.set_active_camera(words, at)),
             "makeActive" => Some(self.make_active(words, at)),
@@ -10655,5 +10790,52 @@ mod talk_tests {
         assert_eq!(w.world_command(&words("allowShadows"), "t"), Some("0".into()));
         assert!(w.allow_shadows);
         assert!(w.requests.is_empty());
+    }
+
+    #[test]
+    fn load_anim_spawns_kq_anim_once_for_shape_and_anm_forms() {
+        let script = "if test $2 == Trigger\n loadAnim @ swmpgas.kqs 0.0 1.0 0 0 100 200 -1\n setDeleteWhenDone $ObjectName 1\n move $ObjectName 3 0 0 1000\nendif\n";
+        let mut a = Active::new(
+            Vars::default(),
+            vec![],
+            vec![],
+            ["Connor".to_string()],
+            [("trigger.cs".to_string(), script.as_bytes().to_vec())],
+        );
+        a.world.heights = Some(Box::new(|x, y, floor| Some(if floor { x + y + 50.0 } else { 999.0 })));
+
+        assert!(a.run_script("trigger.cs", &["obj".into(), "Trigger".into()]));
+        let obj_name = a.scripts.vars.get("ObjectName").unwrap().to_string();
+        assert_eq!(obj_name, "NoName0");
+        let idx = a.world.anims.iter().position(|o| o.player.name == "NoName0").expect("KQAnimOnce in anims");
+        assert!(a.world.anims[idx].player.once);
+        assert!(a.world.anims[idx].player.delete_when_done);
+        // z = -1 snapped to floor (100 + 200 + 50 = 350), then moved +1000 -> 1350.
+        assert_eq!(a.world.anims[idx].player.base.position, [100.0, 200.0, 1350.0]);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::Spawn { file, name, .. } if file == "swmpgas.kqs" && name == "NoName0")));
+
+        // Runs to completion and auto-deletes when movement finishes.
+        for _ in 0..25 {
+            a.update();
+        }
+        assert!(a.world.anims[idx].gone && a.world.is_deleted("NoName0"));
+
+        // .anm form & bad argument count checks.
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        let template_player = crate::named_anim::tests::still_then_open("tpl");
+        a.world.set_templates([("demo.anm".to_string(), Template {
+            name: "tpl".into(),
+            script: None,
+            placement: Placement::at([0.0; 3]),
+            kind: TemplateKind::Anim(Box::new(template_player)),
+            dithered: 0,
+            class: "KQAnimOnce".into(),
+        })]);
+        assert_eq!(a.world.world_command(&words("loadAnim anm1 demo.anm open 10 20 30"), "t"), Some("0".into()));
+        let anm_idx = a.world.anims.iter().position(|o| o.player.name == "anm1").unwrap();
+        assert_eq!(a.world.anims[anm_idx].player.current_name, "open");
+        assert_eq!(a.world.anims[anm_idx].player.base.position, [10.0, 20.0, 30.0]);
+        assert_eq!(a.world.world_command(&words("loadAnim bad swmpgas.kqs 0 1"), "t"), Some("1".into()));
+        assert_eq!(a.world.world_command(&words("loadAnim bad bad.txt a b"), "t"), Some("1".into()));
     }
 }

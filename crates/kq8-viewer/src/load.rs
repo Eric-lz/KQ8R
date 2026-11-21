@@ -2198,6 +2198,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         .map(|l| l.file.rsplit(['/', '\\']).next().unwrap_or(&l.file).to_ascii_lowercase())
         .collect();
     playing_templates(&mut placer, &script.loads);
+    placer.prepare_load_anims();
     for (name, label, bytes) in world.entries_ending(".kq") {
         if loaded_files.contains(&name.to_ascii_lowercase()) || placer.list_files.contains(&name.to_ascii_lowercase()) {
             continue;
@@ -2796,6 +2797,136 @@ fn connor_inventory(file: &[kq8_data::kq_text::Section], connor: &kq8_data::kq_t
 }
 
 impl Placer<'_> {
+    /// Preloads `.kqs`, `.dts` and `.anm` targets named by `loadAnim` across
+    /// world and `GAME/Kq` scripts as animated templates so `Request::Spawn`
+    /// draws them dynamically (`script-commands.md` rule 11).
+    fn prepare_load_anims(&mut self) {
+        let mut targets: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let scan_text = |text: &str, out: &mut std::collections::BTreeSet<String>| {
+            for raw in text.lines() {
+                let clean = raw.split('#').next().unwrap_or("");
+                for stmt in clean.split(';') {
+                    let mut w = stmt.split_whitespace();
+                    let Some(cmd) = w.next() else { continue };
+                    if !cmd.eq_ignore_ascii_case("loadanim") {
+                        continue;
+                    }
+                    let Some(_name) = w.next() else { continue };
+                    let Some(file) = w.next() else { continue };
+                    let file = file.trim_matches(|c| c == '"' || c == '\'');
+                    if file.starts_with('$') {
+                        continue;
+                    }
+                    let base = file.rsplit(['/', '\\']).next().unwrap_or(file).to_ascii_lowercase();
+                    if base.ends_with(".kqs") || base.ends_with(".dts") || base.ends_with(".anm") {
+                        out.insert(base);
+                    }
+                }
+            }
+        };
+        for (_, text) in &self.all_scripts {
+            scan_text(text, &mut targets);
+        }
+        if let Some(dir) = self.game.find("GAME/Kq") {
+            let paths: Vec<_> = std::fs::read_dir(dir).map(|d| d.filter_map(|e| e.ok()).map(|e| e.path()).collect()).unwrap_or_default();
+            for p in paths {
+                if p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("cs")) {
+                    if let Ok(bytes) = std::fs::read(&p) {
+                        let text: String = bytes.iter().map(|&b| b as char).collect();
+                        scan_text(&text, &mut targets);
+                    }
+                }
+            }
+        }
+        let mut loaded = Vec::new();
+        for key in targets {
+            if self.template_files.iter().any(|(f, _)| *f == key) {
+                continue;
+            }
+            let (movements, shape_name): (Vec<(String, kq8_data::objects::CurrentLoop, usize)>, String) = if key.ends_with(".anm") {
+                let Ok(list) = self.read_anm(&key) else { continue };
+                let file = kq8_data::kq_text::parse(&list.bytes);
+                let head = kq8_data::kq_text::Section { name: "loadAnim".into(), entries: vec![("animLoops".into(), list.list.name.clone())] };
+                let Ok(Some(listed)) = kq8_data::objects::movement_loops(&file, &head) else { continue };
+                let mut movements = Vec::new();
+                for (mname, l) in listed {
+                    if let Some(idx) = self.movement_animation("loadAnim", &mname, &l, None) {
+                        movements.push((mname, l, idx));
+                    }
+                }
+                let Some(shape_name) = movements.first().map(|(_, l, _)| l.shape.clone()) else { continue };
+                (movements, shape_name)
+            } else {
+                if find_model(self.game, self.world, &key).is_err() {
+                    continue;
+                }
+                let stem = key.strip_suffix(".kqs").or_else(|| key.strip_suffix(".dts")).unwrap_or(&key);
+                let cl = kq8_data::objects::CurrentLoop {
+                    movement: 0,
+                    fell_back: false,
+                    shape: key.clone(),
+                    sequence: stem.to_string(),
+                    start: 0.0,
+                    speed: 1.0,
+                    repeat: false,
+                    unknown: 0,
+                    transitions: Vec::new(),
+                    transition_problems: Vec::new(),
+                    cues: Vec::new(),
+                    cue_problems: Vec::new(),
+                };
+                let Some(anim_idx) = self.movement_animation("loadAnim", kq8_core::named_anim::STOP_NAME, &cl, None) else { continue };
+                (vec![(kq8_core::named_anim::STOP_NAME.to_string(), cl, anim_idx)], key.clone())
+            };
+            let model_key = shape_name.to_ascii_lowercase();
+            let slot = match self.index_of.get(&model_key) {
+                Some(&slot) => slot,
+                None => {
+                    let s = self.load_shape(&shape_name, None, None);
+                    self.index_of.insert(model_key, s);
+                    s
+                }
+            };
+            let Some(shape_idx) = slot else { continue };
+            let placed_idx = self.placed.len();
+            let mut p = kq8_data::objects::Placement::from_section(&kq8_data::kq_text::Section { name: format!("__loadanim_{key}"), ..Default::default() });
+            p.class = Some("KQAnimOnce".into());
+            p.shape = Some(shape_name.clone());
+            p.hidden = true;
+            self.placed.push((p, shape_idx, true));
+            self.collision.push(CollisionInfo {
+                shape: shape_name,
+                collider_type: kq8_core::collide::DEFAULT_TYPE,
+                collider_mask: 0,
+                script: None,
+                accepts_inventory: None,
+                accept_all_items: false,
+                too_far_away_action: 0,
+                do_not_point_at: false,
+                footsound_type: None,
+                ball_stack: false,
+                character_box: None,
+            });
+            self.animated.push(AnimatedAssets {
+                placed: placed_idx,
+                movements,
+                current: 0,
+                anim_names: (None, None),
+                anim_pos: None,
+                random: false,
+                script: None,
+                once: true,
+                lip_looks: Vec::new(),
+                character: None,
+            });
+            self.template_files.push((key.clone(), placed_idx));
+            loaded.push(key);
+        }
+        if !loaded.is_empty() {
+            self.log.summary(format!("loadAnim templates: {} preloaded: {loaded:?}", loaded.len()));
+        }
+    }
+
     /// `KQObject::setScript <character> <file>` in a start-up script
     /// (Daventry's `newWorld.cs`: "sprigan by knights tomb is in
     /// monsters.kq but needs a special cs file"): the character placed

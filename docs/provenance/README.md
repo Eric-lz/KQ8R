@@ -4186,5 +4186,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `world.cs` sets initial `allowShadows 0\|1` per world (`0` in CastleD, Gnome, Temple1–4; `1` else); explicit `world.cs` setting takes precedence over `Journey` carry | `characters.md` rule 36; `MASK/*/kq/world.cs` | unit test `taken_and_given_back_unchanged`; `CastleD` `viewer.log` (`allowShadows 0 (world.cs)`) |
 | Live `allowShadows 0\|1` toggles plain-object, Connor, and character shadows cleanly off and back on | `characters.md` rules 36–37 | unit test `allow_shadows_toggles_state_and_queues_request`; `DeadCity` `doors.log`, `shadows.log`, `characters.log` |
 
+## B1-4 2026-11-20: `loadAnim` dynamic `KQAnimOnce` spawning — core `active.rs`; viewer `load.rs`; cli `script_coverage.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `loadAnim` spawns live `KQAnimOnce` (`once = true`, `deleteWhenDone = 0` initially), sets `$ObjectName` (`@` -> `NoName<n>`), snaps `z == -1/-2` synchronously, supports `.kqs`/`.dts` (`animPos`, `timeScale`, `cyclic`, `interruptable`) and `.anm` (`loopName`) forms | `script-commands.md` rule 11 & Edge cases; `anim-scripts.md` rule 11 | unit test `load_anim_spawns_kq_anim_once_for_shape_and_anm_forms`; Swamp `doors.log` & `viewer.log` (`swmpgas.kqs`) |
+| Script-targeted `.kqs`/`.dts`/`.anm` files preloaded from world and `GAME/Kq` scripts as animated `Template`s; `loadAnim` removed from `LOADING_HINTS` | `script-commands.md` rule 11; `MASK/swamp/kq/fienfir*.cs`, `MASK/GAME/Kq/swmpfrbl.cs` | Swamp `viewer.log` (`loadAnim templates: 2 preloaded: ["endfrbl.kqs", "swmpgas.kqs"]`) & `anim.log` |
+
+
 
 

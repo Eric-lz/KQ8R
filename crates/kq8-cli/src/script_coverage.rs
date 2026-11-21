@@ -58,7 +58,7 @@ const LOADER: [&str; 14] = [
 
 /// Names that look like loading or memory hints (by name only: to be
 /// confirmed by session A).
-const LOADING_HINTS: [&str; 12] = [
+const LOADING_HINTS: [&str; 11] = [
     "lockShape",
     "preloadShape",
     "purgeResource",
@@ -68,7 +68,6 @@ const LOADING_HINTS: [&str; 12] = [
     "lockResource",
     "loadVolume",
     "activatePersistMgr",
-    "loadAnim",
     "setLoadProgress",
     "loadPalette",
 ];
