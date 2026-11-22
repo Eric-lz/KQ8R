@@ -1664,6 +1664,8 @@ pub struct Objects {
     pub swamp_tiles: Vec<kq8_core::swamp_tile::SwampTile>,
     /// Objects with `projectileFile` that fire on `KQCueEvent 500` (`ranged-weapons.md` rules 34–37).
     pub object_launchers: Vec<kq8_core::fight::ObjectLauncher>,
+    /// Explicit `ouchSound=` from placed `.kq` files (`sound.md` rule 41, Q201).
+    pub object_ouch_sounds: BTreeMap<String, String>,
     /// `alias` definitions from `newWorld.cs` passed to runtime scripts (`script-commands.md` rule 9).
     pub aliases: Vec<(String, String)>,
     /// `Options.cs` `notStartingHelp <0|1|2>` (`interface.md` rule 57).
@@ -2096,6 +2098,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         hazers: Vec::new(),
         swamp_tiles: Vec::new(),
         object_launchers: Vec::new(),
+        object_ouch_sounds: BTreeMap::new(),
         conv_infos: Vec::new(),
         audibles: Vec::new(),
         music: None,
@@ -2428,6 +2431,7 @@ struct Placer<'a> {
     hazers: Vec<kq8_core::hazer::Hazer>,
     swamp_tiles: Vec<kq8_core::swamp_tile::SwampTile>,
     object_launchers: Vec<kq8_core::fight::ObjectLauncher>,
+    object_ouch_sounds: BTreeMap<String, String>,
     rusted_rivers: Vec<String>,
     conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     audibles: Vec<kq8_core::sound::Audible>,
@@ -3758,6 +3762,9 @@ impl Placer<'_> {
         let key = p.name.to_ascii_lowercase();
         if let Some(v) = s.get("stats").filter(|_| !unused) {
             self.object_stats.push((p.name.clone(), v.to_string()));
+        }
+        if let Some(snd) = s.get("ouchSound").map(str::trim).filter(|v| !v.is_empty() && !unused) {
+            self.object_ouch_sounds.insert(key.clone(), snd.to_string());
         }
         // A character prepared for a script's loadKQ (not placed now): it
         // joins the speakers when loaded (2026-10-22, the Castle's Lucreto).
@@ -5496,6 +5503,7 @@ impl Placer<'_> {
             hazers,
             swamp_tiles: self.swamp_tiles,
             object_launchers,
+            object_ouch_sounds: self.object_ouch_sounds,
             aliases: Vec::new(),
             not_starting_help: crate::talk_view::not_starting_help(self.game),
         }

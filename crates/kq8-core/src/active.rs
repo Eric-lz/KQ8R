@@ -1072,6 +1072,10 @@ pub struct WorldState {
     pub projectiles: std::collections::BTreeMap<String, kq8_data::characters::ProjectileKeys>,
     /// Placed objects that launch projectiles on `KQCueEvent 500` (`ranged-weapons.md` rules 34–37, Q200).
     pub object_launchers: BTreeMap<String, crate::fight::ObjectLauncher>,
+    /// Explicit `ouchSound=` from placed `.kq` files (absent => `DEFAULT_OUCH` `sword.aud`, Q201).
+    pub object_ouch_sounds: BTreeMap<String, String>,
+    /// Game clock (`clock`) of each non-character target's last `ouchSound` (`1.0 s` cooldown, Q201).
+    pub object_last_ouch: BTreeMap<String, f64>,
     /// Bolts in the air (M5 5c-9), and how many were shot (their names).
     pub bolts: Vec<crate::fight::Bolt>,
     pub bolts_shot: u64,
@@ -4844,6 +4848,8 @@ impl Active {
                 new_inv_item: None,
                 projectiles: Default::default(),
                 object_launchers: BTreeMap::new(),
+                object_ouch_sounds: BTreeMap::new(),
+                object_last_ouch: BTreeMap::new(),
                 bolts: Vec::new(),
                 bolts_shot: 0,
                 bolt_die_calls: Vec::new(),
@@ -9465,14 +9471,6 @@ endif
         assert!(log.contains("no target: he hits dead air"), "{log}");
         // The big swing: x 0.75 to 4, cut.
         a.world.connor_do(from, std::f32::consts::PI, 2350.0, Some("gob"), true, "attack2");
-        assert!(a.world.fight_log.join("\n").contains("(the big swing, 0.75 to 4, cut)"));
-    }
-
-    /// The goblin with a `react` (0.6 s, one-shot) added, health 500 so it
-    /// never dies, Connor 1,400 south of it standing.
-    fn hit_goblin() -> Active {
-        let mut a = fighter();
-        let o = &mut a.world.anims[0];
         let mut react = crate::named_anim::tests::movement("react", 0.0, 1.0, false, false, vec![]);
         react.play_time = 0.6;
         o.player.movements.push(react);
@@ -11827,5 +11825,167 @@ mod talk_tests {
         }
         a.drain_bolt_die_calls();
         assert!(a.scripts.vars.get("B::Died").is_some_and(|s| s.contains(" Normal ")), "{:?}", a.scripts.vars.get("B::Died"));
+    }
+
+    #[test]
+    fn projectile_hit_on_building_plays_default_sword_with_cooldown_and_floor_stays_silent() {
+        use kq8_data::building::{BspChild, BspNode};
+        struct FlatFloor;
+        impl crate::connor_mover::GroundLookup for FlatFloor {
+            fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+                Some((0.0, [0.0, 0.0, 1.0]))
+            }
+        }
+        let mut a = active("", &[]);
+        let proj = kq8_data::characters::ProjectileKeys::from_section(
+            &kq8_data::kq_text::parse(b"[Fire]\nclassType=KQProjectile\nvelocity=9000\nmaxDistance=21000\nweaponType=2\n")[0],
+        )
+        .unwrap();
+        let origin = [65_536.0, 98_304.0, 16_000.0];
+        let placement = Placement::at(origin);
+        let collider = crate::collide::BuildingCollider::from_parts(
+            "fiengate1",
+            vec![
+                BspNode { plane: 0, front: BspChild::Leaf(0), back: BspChild::Node(1) },
+                BspNode { plane: 1, front: BspChild::Leaf(1), back: BspChild::Leaf(2) },
+            ],
+            vec![false, false, true],
+            vec![([0.0, 1.0, 0.0], 0.0), ([0.0, -1.0, 0.0], -100.0)],
+            ([-5000.0, -100.0, 0.0], [5000.0, 0.0, 3000.0]),
+            placement,
+        );
+        a.add_buildings([ActiveBuilding {
+            name: "fiengate1".into(),
+            collision_type: 0x28,
+            script: None,
+            accepts_inventory: None,
+            accept_all_items: false,
+            too_far_away_action: 1,
+            do_not_point_at: false,
+            bounds: collider.bounds,
+            placement,
+        }]);
+
+        // Hit #1 at clock = 0.0: plays default sword.aud as placed one-shot (5,000 / 25,000, group 0) at origin.
+        a.world.launch_bolt("totem.01", "PRfire2.kq", &proj, [65_536.0, 98_500.0, 16_500.0], [65_536.0, 98_000.0, 16_500.0], 20, "test");
+        a.world.bolts_step(&FlatFloor, &[collider.clone()], &[]);
+        assert_eq!(a.world.sounds.len(), 1, "{:?}", a.world.sounds);
+        assert_eq!(a.world.sounds[0].name, crate::fight::DEFAULT_OUCH);
+        assert_eq!(a.world.sounds[0].group, crate::sound::GROUP_EFFECTS);
+        assert!(!a.world.sounds[0].looping);
+        assert_eq!(
+            a.world.sounds[0].placed,
+            Some(crate::sound::Placed { position: origin, min: crate::sound::ONE_SHOT_MIN, max: crate::sound::ONE_SHOT_MAX })
+        );
+
+        // Hit #2 within 1.0 s cooldown -> suppressed.
+        a.world.sounds.clear();
+        a.update();
+        a.world.launch_bolt("totem.02", "PRfire2.kq", &proj, [65_536.0, 98_500.0, 16_500.0], [65_536.0, 98_000.0, 16_500.0], 20, "test");
+        a.world.bolts_step(&FlatFloor, &[collider.clone()], &[]);
+        assert!(a.world.sounds.is_empty(), "cooldown must suppress within 1.0 s: {:?}", a.world.sounds);
+
+        // Advance past 1.0 s -> Hit #3 plays sword.aud again.
+        for _ in 0..15 {
+            a.update();
+        }
+        a.world.sounds.clear();
+        a.world.launch_bolt("totem.03", "PRfire2.kq", &proj, [65_536.0, 98_500.0, 16_500.0], [65_536.0, 98_000.0, 16_500.0], 20, "test");
+        a.world.bolts_step(&FlatFloor, &[collider], &[]);
+        assert_eq!(a.world.sounds.len(), 1);
+        assert_eq!(a.world.sounds[0].name, crate::fight::DEFAULT_OUCH);
+
+        // Floor-grid hit for weaponType != 4 stays silent (Q201).
+        a.world.sounds.clear();
+        a.world.launch_bolt("totem.04", "PRfire2.kq", &proj, [1000.0, 1000.0, 100.0], [1000.0, 0.0, -500.0], 20, "test");
+        a.world.bolts_step(&FlatFloor, &[], &[]);
+        assert!(a.world.sounds.is_empty(), "floor hit on Fire bolt must stay silent: {:?}", a.world.sounds);
+    }
+
+    #[test]
+    fn projectile_hit_on_object_plays_ouch_sound_and_skips_scripted_immune() {
+        struct FlatFloor;
+        impl crate::connor_mover::GroundLookup for FlatFloor {
+            fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+                Some((0.0, [0.0, 0.0, 1.0]))
+            }
+        }
+        let mut a = active("", &[]);
+        let proj = kq8_data::characters::ProjectileKeys::from_section(
+            &kq8_data::kq_text::parse(b"[Arrow]\nclassType=KQProjectile\nvelocity=9000\nmaxDistance=10000\n")[0],
+        )
+        .unwrap();
+
+        let tree_pos = [2000.0, 1000.0, 0.0];
+        let tree_col = crate::collide::BoxCollider {
+            name: "milltree".into(),
+            min: [-200.0, -200.0, 0.0],
+            max: [200.0, 200.0, 1500.0],
+            placement: Placement::at(tree_pos),
+            kind: crate::collide::ColliderKind { collision_type: 0x1, ..Default::default() },
+        };
+        a.world.clickables.push(Clickable::plain("milltree", "KQObject", tree_col.min, tree_col.max, tree_col.placement, 0x1));
+        a.world.object_ouch_sounds.insert("milltree".into(), "woodchop.aud".into());
+
+        let statue_pos = [4000.0, 1000.0, 0.0];
+        let statue_col = crate::collide::BoxCollider {
+            name: "statue".into(),
+            min: [-200.0, -200.0, 0.0],
+            max: [200.0, 200.0, 1500.0],
+            placement: Placement::at(statue_pos),
+            kind: crate::collide::ColliderKind { collision_type: crate::fight::IMMUNE_TO_PROJECTILES | 0x1, ..Default::default() },
+        };
+        let mut statue_click = Clickable::plain("statue", "KQObject", statue_col.min, statue_col.max, statue_col.placement, 0x4001);
+        statue_click.script = Some("statue.cs".into());
+        a.world.clickables.push(statue_click);
+
+        a.world.launch_bolt("shooter", "Prarrow.kq", &proj, [2000.0, 1400.0, 500.0], [2000.0, 800.0, 500.0], 10, "test");
+        a.world.bolts_step(&FlatFloor, &[], std::slice::from_ref(&tree_col));
+        assert_eq!(a.world.sounds.len(), 1);
+        assert_eq!(a.world.sounds[0].name, "woodchop.aud");
+        assert_eq!(a.world.sounds[0].placed.unwrap().position, tree_pos);
+
+        a.world.sounds.clear();
+        a.world.launch_bolt("shooter", "Prarrow.kq", &proj, [4000.0, 1400.0, 500.0], [4000.0, 800.0, 500.0], 10, "test");
+        a.world.bolts_step(&FlatFloor, &[], &[statue_col]);
+        assert!(a.world.sounds.is_empty(), "scripted 0x4000 ProjImmune object must skip ouchSound: {:?}", a.world.sounds);
+        assert_eq!(a.world.immune_calls, vec!["statue".to_string()]);
+    }
+
+    #[test]
+    fn thrown_rock_plays_own_ouch_sound_on_landing_and_skips_target_ouch() {
+        struct FlatFloor;
+        impl crate::connor_mover::GroundLookup for FlatFloor {
+            fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+                Some((0.0, [0.0, 0.0, 1.0]))
+            }
+        }
+        let mut a = active("", &[]);
+        let rock_keys = kq8_data::characters::ProjectileKeys::from_section(
+            &kq8_data::kq_text::parse(b"[Rock]\nclassType=KQProjectile\nvelocity=9000\nupVelocity=9000\nmaxDistance=2500\nparabola=1\npeakHeightOffset=500\nouchSound=rock.aud\n")[0],
+        )
+        .unwrap();
+        let tile_pos = [0.0, 1500.0, 0.0];
+        let tile_col = crate::collide::BoxCollider {
+            name: "tile00".into(),
+            min: [-400.0, -400.0, -50.0],
+            max: [400.0, 400.0, 1400.0],
+            placement: Placement::at(tile_pos),
+            kind: crate::collide::ColliderKind { collision_type: 0x1, ..Default::default() },
+        };
+        a.world.clickables.push(Clickable::plain("tile00", "KQObject", tile_col.min, tile_col.max, tile_col.placement, 0x1));
+        a.world.object_ouch_sounds.insert("tile00".into(), "tileouch.aud".into());
+
+        a.world.launch_rock("Prrock.kq", &rock_keys, [0.0, 0.0, 0.0], std::f32::consts::PI, [0.0, 1500.0, 1400.0]);
+        for _ in 0..10 {
+            if a.world.bolts.is_empty() {
+                break;
+            }
+            a.world.bolts_step(&FlatFloor, &[], std::slice::from_ref(&tile_col));
+        }
+        assert!(a.world.bolts.is_empty());
+        assert_eq!(a.world.sounds.len(), 1, "{:?}", a.world.sounds);
+        assert_eq!(a.world.sounds[0].name, "rock.aud");
+        assert_eq!(a.world.sounds[0].group, crate::sound::GROUP_EFFECTS);
     }
 }

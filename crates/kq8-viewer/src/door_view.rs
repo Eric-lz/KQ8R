@@ -879,6 +879,12 @@ pub fn spawn_doors(
     if !active.world.object_launchers.is_empty() {
         main_log.summary(format!("projectiles: {} object launcher(s) for KQCueEvent 500 (ranged-weapons.md rules 34–37)", active.world.object_launchers.len()));
     }
+    active.world.object_ouch_sounds = std::mem::take(&mut objects.object_ouch_sounds);
+    main_log.summary(format!(
+        "sounds: {} placed object(s) override ouchSound (others default to {} per Q201)",
+        active.world.object_ouch_sounds.len(),
+        kq8_core::fight::DEFAULT_OUCH,
+    ));
     active.world.connor_immunities = objects.connor_immunities;
     match &objects.connor_stats {
         Some((line, level)) => {

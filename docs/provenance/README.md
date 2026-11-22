@@ -4278,6 +4278,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | Added `GROUP_MENU = 1` + `Start::menu_one_shot` in `crates/kq8-core/src/sound.rs` (`setSfxVol`, unaffected by speech ducking); switched `queue_help_sound` (`button1.aud` for normal/starting-help open, `intrface.aud` only for F1 Help Book) and `queue_popup_click` in `crates/kq8-viewer/src/gui_view.rs` to `menu_one_shot` | `interface.md` rules 55–56 (`Q199` b) | unit test `sound::tests::menu_one_shot_plays_in_group_1_follows_sfx_vol_and_ignores_speech_ducking` (ear check pending) |
 
+## B3-F4 2026-11-22: Projectile impact & `KQObject` `ouchSound` rules (`Q201`) — data `characters.rs`; core `active.rs`, `fight.rs`; viewer `load.rs`, `door_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Parse `ouchSound=` on `ProjectileKeys` (`crates/kq8-data/src/characters.rs`) and load placed `.kq` `ouchSound=` overrides into `Objects`/`WorldState::object_ouch_sounds` (`crates/kq8-viewer/src/load.rs`, `door_view.rs`) | `ranged-weapons.md` rules 30 & 36, `sound.md` rule 41 (`Q201`) | unit test `shoot_offsets_and_weep_bolt_keys_are_read`; Swamp `viewer.log` (`132 placed object(s) override ouchSound (others default to sword.aud per Q201)`) |
+| `WorldState::play_object_ouch` + unified `bolt_hits_non_character` & `connor_hits_object`: buildings/doors/objects play `ouchSound` (default `sword.aud`) as group-`0` placed one-shot (`5,000 / 25,000`, `1.0 s` cooldown) at target origin unless `weaponType == 4` or scripted `0`-damage/`0x4000` (`ProjImmune`); bare terrain/range expiry silent | `ranged-weapons.md` rule 30, `sound.md` rule 41 (`Q201`) | unit tests `projectile_hit_on_building_plays_default_sword_with_cooldown_and_floor_stays_silent`, `projectile_hit_on_object_plays_ouch_sound_and_skips_scripted_immune`; Swamp `fight.log` & `sound.log` (`fiengate1` starts `GAME/SOUND/SWORD.AUD` at `(65536, 98304, 16320)`) |
+| `RockFlight.ouch_sound` (`prrock.kq` = `rock.aud`): played as group-`0` placed one-shot (`5,000 / 25,000`) at landing position on removal (`rock_step`), skipping non-character target `ouchSound` | `ranged-weapons.md` rule 30, `sound.md` rule 41 (`Q201`) | unit test `thrown_rock_plays_own_ouch_sound_on_landing_and_skips_target_ouch` |
+
 
 
 

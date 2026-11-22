@@ -423,6 +423,7 @@ pub struct RockFlight {
     /// Dropping straight down at this speed (after a side touch or the
     /// range's end).
     pub falling: Option<f32>,
+    pub ouch_sound: String,
     pub script: Option<String>,
 }
 
@@ -834,7 +835,26 @@ impl crate::active::WorldState {
         };
         let kind = if self.weapon_ready.as_deref().is_some_and(|w| w.eq_ignore_ascii_case(FLAME_SWORD)) { HitKind::Fire } else { HitKind::Normal };
         let line = self.object_takes(name, d, kind);
-        self.fight_note("Connor", format!("Do ({movement}): hits object {name}: distance {:.0}, reach {:.0}, {:.0} deg off his facing; {line}", t.distance, t.reach, t.angle));
+        let snd = self.play_object_ouch(name, at, "Connor hit object (sound.md rule 41, Q201)");
+        self.fight_note("Connor", format!("Do ({movement}): hits object {name}: distance {:.0}, reach {:.0}, {:.0} deg off his facing; {line}; {snd}", t.distance, t.reach, t.angle));
+    }
+
+    /// `sound.md` rule 41 (`Q201`): plays a non-character object or
+    /// building's `ouchSound` (default `sword.aud`) as a placed one-shot
+    /// (`5,000 / 25,000`, group `0`) at its origin, at most once per
+    /// `OUCH_EVERY` (`1.0 s`) per target.
+    pub(crate) fn play_object_ouch(&mut self, name: &str, at: [f32; 3], why: &str) -> String {
+        let key = name.to_ascii_lowercase();
+        let now = self.now();
+        if let Some(&last) = self.object_last_ouch.get(&key) {
+            if now + 1e-6 < last + OUCH_EVERY {
+                return format!("no ouch sound, the last was {:.2} s ago (sound.md rule 41)", now - last);
+            }
+        }
+        self.object_last_ouch.insert(key.clone(), now);
+        let ouch = self.object_ouch_sounds.get(&key).cloned().unwrap_or_else(|| DEFAULT_OUCH.to_string());
+        self.sounds.push(crate::sound::Start::placed_one_shot(&ouch, at, format!("{name}'s ouch sound ({why})")));
+        format!("ouch sound {ouch}")
     }
 
     /// A hit of damage `d` on object `name` (M5 5c fix 5, **stand-in**,
@@ -1868,7 +1888,14 @@ impl crate::active::WorldState {
             return;
         }
         match what {
-            Touched::Building(n) => self.fight_note(&shooter, at.replace("{}", &format!("building {n}")) + ": no damage"),
+            Touched::Building(n) => {
+                let (t, has_script, origin) = self
+                    .buildings
+                    .iter()
+                    .find(|x| x.name.eq_ignore_ascii_case(&n))
+                    .map_or((0, false, b.position), |x| (x.collision_type, x.script.is_some(), x.placement.position));
+                self.bolt_hits_non_character("building", &n, t, origin, has_script, b, at);
+            }
             Touched::Connor => {
                 self.fight_note(&shooter, at.replace("{}", "Connor") + &format!(": a hit of {}, {} (fighting.md rule 29)", b.damage, b.kind.name()));
                 self.hit_connor_full(&shooter, b.damage, b.kind, b.must_react, false);
@@ -1889,17 +1916,38 @@ impl crate::active::WorldState {
                 if self.swamp_tiles.contains_key(&n.to_ascii_lowercase()) {
                     self.swamp_tile_hits.push((n.clone(), shooter.clone()));
                 }
-                if t & IMMUNE_TO_PROJECTILES != 0 {
-                    self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + &format!(": its type 0x{t:X} has the immune bit 0x4000: a hit of 0, its script gets ProjImmune"));
-                    self.immune_calls.push(n);
-                } else if self.object_at(&n).is_some() {
-                    self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + &format!(": a hit of {}, {}", b.damage, b.kind.name()));
-                    let line = self.object_takes(&n, b.damage, b.kind);
-                    self.fight_note(&shooter, format!("{}: {line}", b.name));
-                } else {
-                    self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + ": no script: nothing (how objects take damage: Q139 e)");
-                }
+                let has_script = self.object_at(&n).is_some();
+                let origin = self.place_of(&n).map_or(b.position, |p| p.position);
+                self.bolt_hits_non_character("object", &n, t, origin, has_script, b, at);
             }
+        }
+    }
+
+    /// Base `KQObject::onAttack` hit handling shared by `KQInterior`
+    /// buildings, `KQDoor`s, and `KQObject`/`KQAnimObject` props
+    /// (`ranged-weapons.md` rule 30, `sound.md` rule 41, `Q201`).
+    #[allow(clippy::too_many_arguments)]
+    fn bolt_hits_non_character(&mut self, kind_label: &str, name: &str, t: u32, origin: [f32; 3], has_script: bool, b: &Bolt, at: &str) {
+        let shooter = b.shooter.clone();
+        let target = format!("{kind_label} {name}");
+        if t & IMMUNE_TO_PROJECTILES != 0 && has_script {
+            self.fight_note(&shooter, at.replace("{}", &target) + &format!(": its type 0x{t:X} has the immune bit 0x4000: a hit of 0, its script gets ProjImmune"));
+            self.immune_calls.push(name.to_string());
+            return;
+        }
+        let snd = if b.rock.is_some() {
+            "thrown rock skips target ouch sound (sound.md rule 41, Q201)".to_string()
+        } else if b.damage == 0 && has_script {
+            "a hit of 0 (scripted): no ouch sound (Q201)".to_string()
+        } else {
+            self.play_object_ouch(name, origin, &format!("projectile hit {kind_label} (ranged-weapons.md rule 30, Q201)"))
+        };
+        if has_script {
+            self.fight_note(&shooter, at.replace("{}", &target) + &format!(": a hit of {}, {}; {snd}", b.damage, b.kind.name()));
+            let line = self.object_takes(name, b.damage, b.kind);
+            self.fight_note(&shooter, format!("{}: {line}", b.name));
+        } else {
+            self.fight_note(&shooter, at.replace("{}", &target) + &format!(": no script (type 0x{t:X}); {snd}"));
         }
     }
 }
@@ -1913,7 +1961,17 @@ impl crate::active::WorldState {
         let (dx, dy) = (aim[0] - start[0], aim[1] - start[1]);
         let flat = (dx * dx + dy * dy).sqrt();
         let dir = if flat > 1e-3 { [dx / flat, dy / flat] } else { facing };
-        let rock = RockFlight { start, dir, range: flat.min(p.max_distance), flown: 0.0, up_speed: p.up_velocity.unwrap_or(p.speed), peak: p.peak_height_offset, falling: None, script: p.script.clone() };
+        let rock = RockFlight {
+            start,
+            dir,
+            range: flat.min(p.max_distance),
+            flown: 0.0,
+            up_speed: p.up_velocity.unwrap_or(p.speed),
+            peak: p.peak_height_offset,
+            falling: None,
+            ouch_sound: p.ouch_sound.clone().unwrap_or_else(|| DEFAULT_OUCH.to_string()),
+            script: p.script.clone(),
+        };
         let at = rock.at(0.0);
         // 8c: its damage on a top touch: Connor's ranged damage, kind 4
         // (treated as Normal, fighting.md rule 32a "Do not reproduce").
@@ -2254,13 +2312,16 @@ impl crate::active::WorldState {
             } else {
                 self.bolt_hits(&b, what, &at);
             }
+            self.sounds.push(crate::sound::Start::placed_one_shot(&r.ouch_sound, p, format!("{} landed (ranged-weapons.md rule 30, Q201)", b.name)));
+            self.fight_note("Connor", format!("{}: ouch sound {} at ({:.0}, {:.0}, {:.0}) (Q201)", b.name, r.ouch_sound, p[0], p[1], p[2]));
             self.rock_landings.push((b.name.clone(), p, r.script.clone()));
             return None;
         }
         if let Some(h) = ground.ground(to[0], to[1]).map(|(h, _)| h).filter(|h| to[2] <= *h) {
             let p = [to[0], to[1], h];
             self.rock_moves.push((b.name.clone(), from, p));
-            self.fight_note("Connor", format!("{head}: at ({:.0}, {:.0}, {:.0}) reaches the floor grid ({h:.0}): put on it, dies there (8c)", to[0], to[1], to[2]));
+            self.fight_note("Connor", format!("{head}: at ({:.0}, {:.0}, {:.0}) reaches the floor grid ({h:.0}): put on it, dies there, ouch sound {} (8c, Q201)", to[0], to[1], to[2], r.ouch_sound));
+            self.sounds.push(crate::sound::Start::placed_one_shot(&r.ouch_sound, p, format!("{} landed (ranged-weapons.md rule 30, Q201)", b.name)));
             self.rock_landings.push((b.name.clone(), p, r.script.clone()));
             return None;
         }

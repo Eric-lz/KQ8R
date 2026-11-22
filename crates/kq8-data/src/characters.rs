@@ -1111,6 +1111,8 @@ pub struct ProjectileKeys {
     pub script: Option<String>,
     /// `mustReact=1`: forces victim flinch regardless of roll (`ranged-weapons.md` rule 36).
     pub must_react: bool,
+    /// `ouchSound=`: sound played on rock removal (`prrock.kq` = `rock.aud`, `Q201`).
+    pub ouch_sound: Option<String>,
     /// `classType=KQWeepBolt` (U-11, `ranged-weapons.md` 9): Dead City's
     /// weeper draining bolt (`PRweeper.kq`).
     pub weep: Option<WeepBoltKeys>,
@@ -1181,6 +1183,7 @@ impl ProjectileKeys {
             up_velocity: number("upVelocity").map(|v| v as f32),
             script: text("script"),
             must_react: number("mustReact").is_some_and(|v| v != 0.0),
+            ouch_sound: text("ouchSound"),
             weep,
         })
     }
@@ -1577,7 +1580,11 @@ useDynamicLighting 1
         );
 
         let plain = kq_text::parse(b"[Arrow]\nclassType=KQProjectile\n");
-        assert!(ProjectileKeys::from_section(&plain[0]).unwrap().weep.is_none());
+        let plain_pk = ProjectileKeys::from_section(&plain[0]).unwrap();
+        assert!(plain_pk.weep.is_none() && plain_pk.ouch_sound.is_none());
+
+        let rock = kq_text::parse(b"[Rock]\nclassType=KQProjectile\nouchSound=rock.aud\nparabola=1\n");
+        assert_eq!(ProjectileKeys::from_section(&rock[0]).unwrap().ouch_sound.as_deref(), Some("rock.aud"));
     }
 
     #[test]
