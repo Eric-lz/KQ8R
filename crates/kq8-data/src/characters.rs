@@ -1107,8 +1107,10 @@ pub struct ProjectileKeys {
     pub parabola: bool,
     pub peak_height_offset: f32,
     pub up_velocity: Option<f32>,
-    /// `script=` (its `Die` call: `rockHit.cs`).
+    /// `script=` (its `Die` call: `rockHit.cs`, `swmpfrbl.cs`).
     pub script: Option<String>,
+    /// `mustReact=1`: forces victim flinch regardless of roll (`ranged-weapons.md` rule 36).
+    pub must_react: bool,
     /// `classType=KQWeepBolt` (U-11, `ranged-weapons.md` 9): Dead City's
     /// weeper draining bolt (`PRweeper.kq`).
     pub weep: Option<WeepBoltKeys>,
@@ -1178,6 +1180,7 @@ impl ProjectileKeys {
             peak_height_offset: number("peakHeightOffset").map_or(0.0, |v| v as f32),
             up_velocity: number("upVelocity").map(|v| v as f32),
             script: text("script"),
+            must_react: number("mustReact").is_some_and(|v| v != 0.0),
             weep,
         })
     }

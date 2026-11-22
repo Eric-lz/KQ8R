@@ -873,6 +873,12 @@ pub fn spawn_doors(
     if !active.world.swamp_tiles.is_empty() {
         main_log.summary(format!("tile2: {} KQSwampTile(s) loaded (tile-puzzle.md rules 36–40)", active.world.swamp_tiles.len()));
     }
+    for l in std::mem::take(&mut objects.object_launchers) {
+        active.world.object_launchers.insert(l.name.to_ascii_lowercase(), l);
+    }
+    if !active.world.object_launchers.is_empty() {
+        main_log.summary(format!("projectiles: {} object launcher(s) for KQCueEvent 500 (ranged-weapons.md rules 34–37)", active.world.object_launchers.len()));
+    }
     active.world.connor_immunities = objects.connor_immunities;
     match &objects.connor_stats {
         Some((line, level)) => {
@@ -1813,6 +1819,8 @@ pub fn character_gravity(
     sim.active.world.characters_ai(&lookup.0, b, o);
     // U-9b: the thrown rocks' moves to the traps, their landings.
     sim.active.rocks_after_flight();
+    // ranged-weapons.md rule 37 (Q200): projectile Die scripts run at impact/range/floor end.
+    sim.active.drain_bolt_die_calls();
     // tile-puzzle.md rule 39 (B3-2): rock/projectile hits on unsafe KQSwampTiles.
     sim.active.drain_swamp_tile_hits();
     sim.active.world.characters_gravity(&lookup.0, b, o);

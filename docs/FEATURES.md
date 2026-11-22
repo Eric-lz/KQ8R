@@ -944,15 +944,18 @@ other Swamp commands and liquid immunity not yet played by hand):
   `KQConner::addImmunity` / `Journey` liquid damage immunity masking (Swamp
   `0x100` vs Poison `0x40`) — still unit/log-verified only.
 - **Swamp gas-tile puzzle (`KQSwampTile` and Connor `Tile2` state — checked
-  live `2026-11-22`; `B3-F2` fix pending visual check):** `Rtswdoor`
+  live `2026-11-22`; `B3-F2` & `B3-F3` fixes pending visual check):** `Rtswdoor`
   (`hmhand`), puzzle cutscene start, 10 × 7 `Tile2` movement/rock throws,
   safe tiles (`fiensafe.cs`), rock throws onto unsafe tiles, and tile flame
   damage on Connor all work (checked by eye `2026-11-22`); **fixed in
   `B3-F2` (logs verified, pending visual re-check):** Clarity's
-  `StaticTexture` swap now strips archive path prefixes so all 24 parts of
-  the 12 safe tiles highlight; **still open:** the 6 side flaming-arrow
-  towers (`totem.01`–`06`, 3 per side) await `B3-F3` (`Q200` answered by
-  Session A).
+  `StaticTexture` swap strips archive path prefixes so all 24 parts of the
+  12 safe tiles highlight; **fixed in `B3-F3` (logs verified, pending visual
+  check):** `KQCueEvent 500` launches object projectiles (`ObjectLauncher`,
+  `shootOffset` rotated + `relAimPoint` world-space aim, `mustReact`,
+  fall-through to script `Cue 500`, `Die Normal` at bolt end position), so
+  all 6 side towers (`totem.01`–`06`) fire `PRfire2.kq` (`swmpfrbl.cs` ->
+  `endfrbl.kqs`) on their 8-second loop.
 - **Mandragore (`KQMandragorTree` and `KQMandragorRoot` — checked live by eye
   `2026-11-22`):** shoulder-linked roots that follow tree turns, knock
   Connor back with `reactback`, sink temporarily when killed while freezing

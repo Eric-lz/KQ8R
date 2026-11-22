@@ -1662,6 +1662,8 @@ pub struct Objects {
     pub hazers: Vec<kq8_core::hazer::Hazer>,
     /// `KQSwampTile` gas-trap/stump tiles (`tile-puzzle.md` rules 36–40).
     pub swamp_tiles: Vec<kq8_core::swamp_tile::SwampTile>,
+    /// Objects with `projectileFile` that fire on `KQCueEvent 500` (`ranged-weapons.md` rules 34–37).
+    pub object_launchers: Vec<kq8_core::fight::ObjectLauncher>,
     /// `alias` definitions from `newWorld.cs` passed to runtime scripts (`script-commands.md` rule 9).
     pub aliases: Vec<(String, String)>,
     /// `Options.cs` `notStartingHelp <0|1|2>` (`interface.md` rule 57).
@@ -2093,6 +2095,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         river_controls: Vec::new(),
         hazers: Vec::new(),
         swamp_tiles: Vec::new(),
+        object_launchers: Vec::new(),
         conv_infos: Vec::new(),
         audibles: Vec::new(),
         music: None,
@@ -2424,6 +2427,7 @@ struct Placer<'a> {
     river_controls: Vec<kq8_core::active::RiverControl>,
     hazers: Vec<kq8_core::hazer::Hazer>,
     swamp_tiles: Vec<kq8_core::swamp_tile::SwampTile>,
+    object_launchers: Vec<kq8_core::fight::ObjectLauncher>,
     rusted_rivers: Vec<String>,
     conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     audibles: Vec<kq8_core::sound::Audible>,
@@ -3771,6 +3775,25 @@ impl Placer<'_> {
                 let keys = kq8_data::characters::CharacterKeys::from_section(s);
                 let (goodbye, welcome_back) = keys.map_or((None, None), |k| (k.goodbye, k.welcome_back));
                 self.monsters.push(kq8_core::active::Monster { name: p.name.clone(), position: p.position, script, goodbye, welcome_back });
+            } else if let Some(proj_file) = s.get("projectileFile").map(|v| v.trim().to_string()).filter(|v| !v.is_empty()) {
+                let num = |k: &str, d: f32| s.number(k).and_then(Result::ok).map_or(d, |v| v as f32);
+                let shoot_offset = [num("shootOffsetX", 0.0), num("shootOffsetY", 0.0), num("shootOffsetZ", 0.0)];
+                let rel_aim_point = [num("relAimPointX", 0.0), num("relAimPointY", 0.0), num("relAimPointZ", 0.0)];
+                let damage = s.number("objProjDamage").and_then(Result::ok).map_or(kq8_core::fight::DEFAULT_OBJ_PROJ_DAMAGE, |v| v.trunc() as i64);
+                if let Some(shape) = self.load_projectile(&proj_file, &p.name) {
+                    self.load_corpse_shape(&shape, &p.name);
+                }
+                self.object_launchers.push(kq8_core::fight::ObjectLauncher {
+                    name: p.name.clone(),
+                    projectile_file: proj_file,
+                    base: kq8_core::collide::Placement {
+                        position: p.position,
+                        rotation: kq8_data::objects::rotation(p.angles),
+                    },
+                    shoot_offset,
+                    rel_aim_point,
+                    damage,
+                });
             }
             // 4d-7a: does it cast a shadow (characters.md rule 36)? The
             // world's mask from Options.cs (else the built-in 1);
@@ -5391,6 +5414,13 @@ impl Placer<'_> {
                 m.position = l.position;
             }
         }
+        let mut object_launchers = self.object_launchers;
+        for l in &mut object_launchers {
+            if let Some(loc) = self.located.get(&l.name.to_ascii_lowercase()) {
+                l.base.position = loc.position;
+                l.base.rotation = kq8_data::objects::rotation(loc.angles);
+            }
+        }
         let mut known: Vec<String> = self.located.keys().cloned().collect();
         known.extend(self.markers.iter().map(|m| m.name.to_ascii_lowercase()));
         let shadow_world_mask = self.shadow_world_mask.unwrap_or_else(|| {
@@ -5465,6 +5495,7 @@ impl Placer<'_> {
             river_controls,
             hazers,
             swamp_tiles: self.swamp_tiles,
+            object_launchers,
             aliases: Vec::new(),
             not_starting_help: crate::talk_view::not_starting_help(self.game),
         }

@@ -1,10 +1,9 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-**Batch 3 fix `B3-F2`** (`StaticTexture` basename fix for Clarity Swamp tile
-highlights) and recording the user's live check of `B3-F1`, following
-Session A's answer to **`Q200`** (`KQCueEvent 500` object projectile
-launchers). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+**Batch 3 fix `B3-F3`** (`KQCueEvent 500` object projectile launchers per
+**`Q200`**) and **`B3-F2`** (`StaticTexture` basename fix for Clarity Swamp
+tile highlights). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
 `MODLOG.md` (newest entries at the top). The short public summary is
 `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
@@ -26,16 +25,16 @@ launchers). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
     (scripts/victims handle sounds), standard `KQProjectile` collision
     (launcher ignored), and `Die` running on contact, `maxDistance`, and
     floor hits (`PRfire2.kq` → `GAME/Kq/swmpfrbl.cs` → `endfrbl.kqs`).
-  - **Next:** Implementation Session (B) implements `KQCueEvent 500`
-    (`B3-F3`, Swamp bug `2e`); `Q199` part (b) and Batch 4 (Gnome) remain
-    for Study Session (A).
+  - **Next:** User checks `B3-F2` (Clarity tile highlights) and `B3-F3` (Swamp
+    shooting totems `totem.01`–`06`) live in Swamp; `Q199` part (b) and
+    Batch 4 (Gnome) remain for Study Session (A).
 
-- **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`/`B3-F2`,
-  `795` workspace unit tests; headless `--sound off` Swamp viewer logs;
+- **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`..`B3-F3`,
+  `796` workspace unit tests; headless `--sound off` Swamp viewer logs;
   live user play check 2026-11-22: `B3-4` Mandragores, safe Swamp tiles,
   rock throws onto unsafe tiles, and tile flame damage confirmed working by
-  eye; `B3-F2` fixes Clarity's `StaticTexture` path-prefix bug — pending
-  re-check by eye; `2e` ready for `B3-F3`; `2b` first-person camera note;
+  eye; `B3-F2` Clarity highlights and `B3-F3` 6 shooting totems built and
+  log-verified — pending visual check by eye; `2b` first-person camera note;
   `B3-1` commands & liquid immunity still unit/log-verified only):**
   - **Swamp script commands & liquid immunity (`B3-1`):** `KQConner::pay`
     (`INVITEM_` fallback, `unapply` + empty hand/ready-weapon when spent),
@@ -67,9 +66,13 @@ launchers). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
     built-in `Tile2` rock throw (`handsOff 1` -> `away` -> `throw` with `Prrock.kq`
     `throw` -> `handsOff 0`, staying in `Tile2`). **Live check 2026-11-22:**
     `Rtswdoor` (`hmhand`), puzzle cutscene start, and `Tile2` play work almost
-    flawlessly; **open bug `2e` (`Q200` queued in `docs/behaviour/QUESTIONS.md`):**
-    the 6 side flaming-arrow towers (`totem.01`–`06`, 3 per side, none in the
-    center row) await Study Session (A)'s trace of `KQCueEvent 500`.
+    flawlessly; **`B3-F3` fix (`Q200`):** `KQCueEvent 500` object projectile
+    launchers (`ObjectLauncher` + rotated `shootOffset` + unrotated world
+    `relAimPoint` + `mustReact` + fall-through to script `Cue 500` + `Die Normal`
+    at dead bolt coords via `KQObject::getLoc`) built and log-verified: all 6
+    side towers (`totem.01`–`06`) fire `PRfire2.kq` (`9000` units/s, range
+    `21000`, `Fire`, damage `20`) every 8 s and `swmpfrbl.cs` spawns
+    auto-deleted `endfrbl.kqs` explosions — pending visual check by eye.
   - **Mandragore (`B3-4`, `KQMandragorTree` & `KQMandragorRoot` — confirmed
     working by eye in play 2026-11-22):** `0x4042` (`ProjImmune`) + `0`-damage
     `Special laugh`, `.kq` `alarmRadius` (`15,000`) override, immediate
@@ -87,10 +90,9 @@ launchers). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
     missing command (only `beep`), `0` missing Connor states (`Tile2` is
     `built`), and `KQSwampTile` / `KQMandragorTree` / `KQMandragorRoot` all
     `named`.
-  - **Next:** User re-checks Clarity highlighting (`2c`) and unsafe tile
-    damage with `F3` off (`2d`) live in Swamp; Study Session (A) traces `Q200`
-    (`KQCueEvent 500` for `2e` / `totem.01`–`06`) plus Batch 4 (Gnome; `Q199`
-    part b still open).
+  - **Next:** User checks `B3-F2` Clarity highlighting (`2c`) and `B3-F3` Swamp
+    shooting totems (`2e`, `totem.01`–`06`) live in Swamp; Study Session (A)
+    studies Batch 4 (Gnome) plus `Q199` part (b).
 
 - **2026-11-20/21 (B): `Q197`–`Q198` + Script Coverage Batch 1 + `B1-F1`/`B1-F1b`/`B1-F2` built**
   (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1" and "Batch 1 follow-up fixes";

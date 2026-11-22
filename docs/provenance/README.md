@@ -4264,6 +4264,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | 0-damage hits send tree (or root's live parent tree without hitting tree) to `Special laugh`; tree alarms immediately (`0.00 s` delay), alerts `mand<N>` roots without sight check (`now > 0`), refreshes team `last_seen`, awards `20,000` XP, and spawns solid `mt_dead.kqs` corpse (`BoxCollider` registered) across all `HitKind`s | `fighting.md` 7b (Batch 3); `MASK/GAME/patch/BOUNDS.KQ` | `mandragore::tests`, `mandragores_link_snap_repel_laugh_sink_rebirth_and_tree_death`; Swamp Run A/B; live check 2026-11-22: projectile laugh, tree kill, and dead trunk transformation confirmed by eye |
 | Roots start visible (`unborn=false`, `"reactback"` added to `CONNOR_MOVEMENTS`), gravity off, link `'l'`/`'r'`->`'t'`, snap to `treePos + treeRot * offset`, repel Connor `< tooClose` by `repelDist` keeping Z + facing tree + `Special reactback` (`c_rctbk.kqs`/`conrowbk.aud`), sink (`rootDownCount`, tree `noTurn=true`) -> `rebirthDelay` -> `Birth` (`0x4042`/`0x201f`, `noTurn=false`), or die permanently (`0` XP) on tree death | `fighting.md` 7b (Batch 3); `MASK/GAME/Kq/Conner.anm` | unit tests; Swamp Run A/B; live check 2026-11-22: shoulder roots, killing roots, and `reactback` knockback animation confirmed by eye |
 
+## B3-F3 2026-11-22: `KQCueEvent 500` object projectile launchers (`Q200`)
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Parse `mustReact != 0.0` in `ProjectileKeys::from_section` (`crates/kq8-data/src/characters.rs`) and pass `b.must_react` on `Touched::Connor` | `ranged-weapons.md` §9 (rules 34–35); `MASK/GAME/Swamp/PRfire2.kq` | `cargo test --workspace` (`796` passed); Swamp headless log |
+| Load `ObjectLauncher` for placed non-unused, non-`Class::of` objects with `projectileFile` (`crates/kq8-viewer/src/load.rs`, `door_view.rs`); `KQCueEvent 500` launches projectile from `base + rot(shootOffset)` toward unrotated `start + relAimPoint` (`n2` in `1..=99_999` else `objProjDamage` = `20`, `bolt_kind` `0`/`2`/`3`/other, no launcher sound) and falls through to script `Cue 500` | `ranged-weapons.md` §9 (rules 34–37); `MASK/GAME/Swamp/totem.cs` | unit tests `cue_500_launches_object_projectile_falls_through_to_script_and_runs_die_script` & `a_door_gets_end_loop_after_open_and_get_end_loop_relays`; Swamp headless run (`totem.01`–`06` firing `PRfire2.kq` on 8 s loop in `doors.log`/`fight.log`) |
+| `WorldState::queue_bolt_die` + `Active::drain_bolt_die_calls` call projectile script `Die Normal` (non-`Weep`) on contact/maxDistance/floor-end with `place_of` / `KQObject::getLoc` returning `dead_bolt_pos` before deletion | `ranged-weapons.md` §9 (rule 36); `MASK/GAME/Swamp/swmpfrbl.cs` | unit test `cue_500_launches_object_projectile_falls_through_to_script_and_runs_die_script`; Swamp headless run (`swmpfrbl.cs` spawning auto-deleted `endfrbl.kqs` copies `NoName63`–`NoName67` at bolt end locations) |
+
 
 
 

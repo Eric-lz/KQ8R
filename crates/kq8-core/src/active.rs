@@ -1070,9 +1070,15 @@ pub struct WorldState {
     /// Projectile files by lower-case name (`fighting.md` rule 36; M5
     /// 5c-9), set by the caller.
     pub projectiles: std::collections::BTreeMap<String, kq8_data::characters::ProjectileKeys>,
+    /// Placed objects that launch projectiles on `KQCueEvent 500` (`ranged-weapons.md` rules 34–37, Q200).
+    pub object_launchers: BTreeMap<String, crate::fight::ObjectLauncher>,
     /// Bolts in the air (M5 5c-9), and how many were shot (their names).
     pub bolts: Vec<crate::fight::Bolt>,
     pub bolts_shot: u64,
+    /// Projectiles that ended on contact/range/floor with a `script=` to call `Die Normal` (`rule 37`).
+    pub bolt_die_calls: Vec<(String, String, [f32; 3])>,
+    /// Final impact/expiry position of the projectile currently running its `Die` script (`KQObject::getLoc`).
+    pub dead_bolt_pos: Option<(String, [f32; 3])>,
     /// U-9b (`ranged-weapons.md` 8c-8d): this update's thrown-rock moves
     /// (for the traps) and landings (for their `Die` script).
     pub rock_moves: Vec<(String, [f32; 3], [f32; 3])>,
@@ -3225,6 +3231,11 @@ impl WorldState {
 
     /// Where an object stands, for `getLoc` and `tossItems`.
     pub fn place_of(&self, who: &str) -> Option<Placement> {
+        if let Some((bolt_name, pos)) = &self.dead_bolt_pos {
+            if bolt_name.eq_ignore_ascii_case(who) {
+                return Some(Placement::at(*pos));
+            }
+        }
         if let Some(i) = self.object_index(who) {
             Some(self.objects[i].player.base)
         } else if let Some(i) = self.anim_index(who) {
@@ -4832,8 +4843,11 @@ impl Active {
                 laid_checks: Vec::new(),
                 new_inv_item: None,
                 projectiles: Default::default(),
+                object_launchers: BTreeMap::new(),
                 bolts: Vec::new(),
                 bolts_shot: 0,
+                bolt_die_calls: Vec::new(),
+                dead_bolt_pos: None,
                 rock_moves: Vec::new(),
                 rock_landings: Vec::new(),
                 connor_was: None,
@@ -6751,6 +6765,16 @@ impl Active {
         }
     }
 
+    /// Calls `Die Normal` on projectiles whose `script=` (`swmpfrbl.cs` etc.)
+    /// ran to impact, `maxDistance`, or floor end (`ranged-weapons.md` rule 37, Q200).
+    pub fn drain_bolt_die_calls(&mut self) {
+        for (name, script, pos) in std::mem::take(&mut self.world.bolt_die_calls) {
+            self.world.dead_bolt_pos = Some((name.clone(), pos));
+            self.run_script(&script, &[name, "Die".into(), "Normal".into()]);
+            self.world.dead_bolt_pos = None;
+        }
+    }
+
     /// Scripts run before `handle_due` (M3 3l-2): a trigger cue must fire
     /// at the very tick it arrives, not wait one frame for delayed handling.
     pub fn update(&mut self) {
@@ -6806,6 +6830,7 @@ impl Active {
             self.world.item_note(format!("clarity: {line} (potions.md rule 31)"));
         }
         self.drain_swamp_tile_hits();
+        self.drain_bolt_die_calls();
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         for i in 0..self.world.doors.len() {
             let a = self.world.doors[i].door.advance(dt);
@@ -7271,8 +7296,9 @@ impl Active {
                     return;
                 }
                 Some(CUE_PROJECTILE) => {
-                    self.world.note(format!("KQCueEvent {CUE_PROJECTILE} to {}{from}: launches its projectile (combat, M5; not done)", e.target));
-                    return;
+                    let n2 = e.data.get(1).and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
+                    self.world.launch_object_projectile(&e.target, n2, &format!("KQCueEvent {CUE_PROJECTILE}{from}"));
+                    // ranged-weapons.md rule 34 (Q200 a): falls through so the object's script receives `Cue 500 ...`.
                 }
                 _ => {}
             }
@@ -7747,9 +7773,9 @@ KQObject::setScript nobody new.cs
         }
         assert_eq!(state(&a), DoorState::Closed);
         assert_eq!(a.scripts.vars.get("D::End"), Some("close"));
-        assert_eq!(a.scripts.vars.get("D::Cue"), Some(""), "no relay after getEndLoop 0, and cue 500 is no Cue call");
+        assert_eq!(a.scripts.vars.get("D::Cue"), Some("500 0"), "no EndLoop relay after getEndLoop 0, while cue 500 falls through (Q200 a)");
         let log = a.take_log().join("\n");
-        assert!(log.contains("KQCueEvent 500 to Condoor") && log.contains("projectile"), "{log}");
+        assert!(log.contains("KQCueEvent 500 0 to Condoor"), "{log}");
     }
 
     #[test]
@@ -11717,5 +11743,89 @@ mod talk_tests {
 
         assert_eq!(a.world.world_command(&words("stopHelp"), "t"), Some("0".into()));
         assert_eq!(a.world.help.tip_bits, crate::help::STOP_HELP_MASK);
+    }
+
+    #[test]
+    fn cue_500_launches_object_projectile_falls_through_to_script_and_runs_die_script() {
+        struct FlatFloor;
+        impl crate::connor_mover::GroundLookup for FlatFloor {
+            fn ground(&self, _x: f32, _y: f32) -> Option<(f32, [f32; 3])> {
+                Some((0.0, [0.0, 0.0, 1.0]))
+            }
+        }
+        let mut a = active("", &[]);
+        let proj = kq8_data::characters::ProjectileKeys::from_section(
+            &kq8_data::kq_text::parse(b"[Fire]\nclassType=KQProjectile\nshapeName=swmpfrbl.kqs\nvelocity=9000\nmaxDistance=3000\nweaponType=2\nmustReact=1\nscript=swmpfrbl.cs\n")[0],
+        )
+        .unwrap();
+        a.world.projectiles.insert("prfire2.kq".into(), proj);
+        a.world.sources.insert(
+            "totem.cs".into(),
+            b"if test $2 == Cue\n set T::Cue $3 $4\n if test $3 == 500\n  sendEvent 1 $1 KQCueEvent 500 0\n endif\nendif\n".to_vec(),
+        );
+        a.world.sources.insert(
+            "swmpfrbl.cs".into(),
+            b"if test $2 == Die\n KQObject::getLoc $1\n set B::Died $1 $3 $KQObject::loc\nendif\n".to_vec(),
+        );
+        let rot = kq8_data::objects::rotation([0.0, 0.0, std::f32::consts::FRAC_PI_2]);
+        let placement = Placement { position: [1000.0, 2000.0, 500.0], rotation: rot };
+        let mut c = Clickable::plain("totem.01", "KQObject", [-100.0; 3], [100.0; 3], placement, 0x1);
+        c.script = Some("totem.cs".into());
+        a.world.clickables.push(c);
+        a.world.known.insert("totem.01".into());
+        a.world.object_launchers.insert(
+            "totem.01".into(),
+            crate::fight::ObjectLauncher {
+                name: "totem.01".into(),
+                projectile_file: "PRfire2.kq".into(),
+                base: placement,
+                // shootOffset rotates with dirZ = +pi/2: local (0, -100, 1075) -> (+100, 0, 1075).
+                shoot_offset: [0.0, -100.0, 1075.0],
+                // relAimPoint stays unrotated in world axes (+X).
+                rel_aim_point: [1000.0, 0.0, 0.0],
+                damage: crate::fight::DEFAULT_OBJ_PROJ_DAMAGE,
+            },
+        );
+        a.world.connor_stats = Some(crate::stats::ConnorStats { stats: Stats([100, 10, 5, 0, 0]), level: 5 });
+        a.world.connor_at = Some([1900.0, 2000.0, 1000.0]);
+
+        // Cue 500 0: launches projectile (default objProjDamage = 20, Fire, mustReact = true) THEN falls through to totem.cs Cue 500 0.
+        a.test_command("sendEvent 0 totem.01 KQCueEvent 500 0", "test");
+        a.update();
+        assert_eq!(a.scripts.vars.get("T::Cue"), Some("500 0"), "Cue 500 must fall through to script (Q200 a)");
+        assert_eq!(a.world.bolts.len(), 1);
+        let b = &a.world.bolts[0];
+        assert!((b.position[0] - 1100.0).abs() < 1e-2 && (b.position[1] - 2000.0).abs() < 1e-2 && (b.position[2] - 1575.0).abs() < 1e-2, "{:?}", b.position);
+        assert!((b.direction[0] - 1.0).abs() < 1e-4 && b.direction[1].abs() < 1e-4 && b.direction[2].abs() < 1e-4, "{:?}", b.direction);
+        assert_eq!((b.damage, b.kind, b.must_react), (20, crate::fight::HitKind::Fire, true));
+
+        // Step bolt into Connor -> hits Connor with forced reaction and triggers swmpfrbl.cs Die Normal with bolt1 pos at contact.
+        a.world.requests.clear();
+        a.world.bolts_step(&FlatFloor, &[], &[]);
+        a.world.bolts_step(&FlatFloor, &[], &[]);
+        assert!(a.world.connor_stats.unwrap().stats.0[0] < 100);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorHurt { roll_over: true, .. })), "mustReact=1 forces Connor flinch");
+        a.drain_bolt_die_calls();
+        let died = a.scripts.vars.get("B::Died").expect("swmpfrbl.cs Die Normal must run").to_string();
+        assert!(died.starts_with("bolt1 Normal 1700 2000 1575 ") && died.split_whitespace().count() == 8, "{died}");
+
+        // Explicit n2 in 1..=99_999 overrides objProjDamage; 1 s repeat from totem.cs uses default 20.
+        a.test_command("sendEvent 0 totem.01 KQCueEvent 500 75", "test");
+        a.update();
+        assert_eq!(a.world.bolts[0].damage, 75);
+        a.world.bolts.clear();
+        a.world.connor_at = None;
+        for _ in 0..14 {
+            a.update();
+        }
+        assert_eq!(a.world.bolts.len(), 1, "totem.cs rescheduled KQCueEvent 500 after 1 s");
+        assert_eq!(a.world.bolts[0].damage, 20);
+        // Step past maxDistance (3000) -> Die Normal still runs with final bolt pos.
+        a.scripts.vars.set("B::Died", String::new());
+        for _ in 0..8 {
+            a.world.bolts_step(&FlatFloor, &[], &[]);
+        }
+        a.drain_bolt_die_calls();
+        assert!(a.scripts.vars.get("B::Died").is_some_and(|s| s.contains(" Normal ")), "{:?}", a.scripts.vars.get("B::Died"));
     }
 }

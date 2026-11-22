@@ -325,6 +325,10 @@ pub struct Bolt {
     pub damage: i64,
     /// `Projectile`, or `Fire` / `Ice` by `weaponType` (rule 30).
     pub kind: HitKind,
+    /// `mustReact=1` (`ranged-weapons.md` rule 36).
+    pub must_react: bool,
+    /// `script=` (`Die` callback on contact, `maxDistance`, or floor hit; rule 37).
+    pub script: Option<String>,
     /// `colliderMask` (rule 29).
     pub mask: u32,
     /// Its own shape: its `BOUNDS.KQ` box as a ball stack (rule 29;
@@ -448,9 +452,24 @@ impl Bolt {
     }
 }
 
-/// Rule 30: the hit's kind by the bolt file's `weaponType`.
+/// Default `objProjDamage` when an object launcher omits it (`ranged-weapons.md` rule 36).
+pub const DEFAULT_OBJ_PROJ_DAMAGE: i64 = 20;
+
+/// Placed object that launches projectiles via `KQCueEvent 500` (`ranged-weapons.md` rules 34–37).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectLauncher {
+    pub name: String,
+    pub projectile_file: String,
+    pub base: crate::collide::Placement,
+    pub shoot_offset: [f32; 3],
+    pub rel_aim_point: [f32; 3],
+    pub damage: i64,
+}
+
+/// Rule 30 / rule 36: the hit's kind by the bolt file's `weaponType`.
 pub fn bolt_kind(weapon_type: Option<i64>) -> HitKind {
     match weapon_type {
+        Some(0) => HitKind::Normal,
         Some(2) => HitKind::Fire,
         Some(3) => HitKind::Ice,
         _ => HitKind::Projectile,
@@ -1632,6 +1651,8 @@ impl crate::active::WorldState {
             damage,
             // azriel-hammer.md rule 8: the hammer's hits are `Projectile`.
             kind: if hammer.is_some() { HitKind::Projectile } else { bolt_kind(p.weapon_type) },
+            must_react: p.must_react,
+            script: p.script.clone(),
             mask: p.collider_mask,
             balls,
             updates: 0,
@@ -1674,6 +1695,40 @@ impl crate::active::WorldState {
             ),
         );
         self.bolts.push(bolt);
+    }
+
+    /// `ranged-weapons.md` rules 34–37 (Q200): `KQCueEvent 500 [<n2>]` on a
+    /// `KQObject` projectile launcher (`totem.kq`, `shooter.kq`, `arrotrp*.kq`,
+    /// `firetrap*.kq`, `skultrap.kq`). `shootOffset` rotates with the launcher;
+    /// `relAimPoint` stays unrotated in world axes; `damage` is `cue_n2` when
+    /// `1..=99_999`, else `objProjDamage` (default `20`).
+    pub fn launch_object_projectile(&mut self, name: &str, cue_n2: i64, why: &str) {
+        let key = name.to_ascii_lowercase();
+        let Some(launcher) = self.object_launchers.get(&key).cloned() else {
+            self.fight_note(name, format!("{why}: no projectileFile on {name}; nothing"));
+            return;
+        };
+        let Some(p) = self.projectiles.get(&launcher.projectile_file.to_ascii_lowercase()).cloned() else {
+            self.fight_note(name, format!("{why}: projectileFile {} not loaded; nothing", launcher.projectile_file));
+            return;
+        };
+        let base = self.place_of(name).unwrap_or(launcher.base);
+        let r = base.rotation;
+        let o = launcher.shoot_offset;
+        let start: [f32; 3] = std::array::from_fn(|k| base.position[k] + o[0] * r[0][k] + o[1] * r[1][k] + o[2] * r[2][k]);
+        let a = launcher.rel_aim_point;
+        let aim: [f32; 3] = std::array::from_fn(|k| start[k] + a[k]);
+        let damage = if (1..=99_999).contains(&cue_n2) { cue_n2 } else { launcher.damage };
+        let detail = format!("{why} (KQCueEvent 500: shootOffset {o:?}, relAimPoint {a:?}, damage {damage})");
+        self.launch_bolt(&launcher.name, &launcher.projectile_file, &p, start, aim, damage, &detail);
+    }
+
+    fn queue_bolt_die(&mut self, b: &Bolt) {
+        if b.weep.is_none() {
+            if let Some(script) = b.script.clone() {
+                self.bolt_die_calls.push((b.name.clone(), script, b.position));
+            }
+        }
     }
 
     /// `ranged-weapons.md` rules 28–30 (M5 5f-1): each update every bolt
@@ -1774,8 +1829,10 @@ impl crate::active::WorldState {
                 let line = format!("{} update {}: at ({:.0}, {:.0}, {:.0}), {:.0} travelled", b.name, b.updates, to[0], to[1], to[2], b.travelled);
                 if let Some(h) = floor.filter(|h| to[2] <= *h) {
                     self.fight_note(&b.shooter, format!("{line}; at or below the floor grid ({h:.0}): removed, no damage (rule 29)"));
+                    self.queue_bolt_die(&b);
                 } else if b.travelled > b.max {
                     self.fight_note(&b.shooter, format!("{line}; more than its range {:.0}: removed (rule 28)", b.max));
+                    self.queue_bolt_die(&b);
                 } else {
                     self.fight_note(&b.shooter, line);
                     kept.push(b);
@@ -1786,6 +1843,7 @@ impl crate::active::WorldState {
             b.position = p;
             let at = format!("{} update {}: touches {{}} at ({:.0}, {:.0}, {:.0}), {:.0} travelled; removed there (rule 30)", b.name, b.updates, p[0], p[1], p[2], b.travelled);
             self.bolt_hits(&b, what, &at);
+            self.queue_bolt_die(&b);
         }
         self.bolts.extend(kept);
         self.weep_drains_step();
@@ -1813,7 +1871,7 @@ impl crate::active::WorldState {
             Touched::Building(n) => self.fight_note(&shooter, at.replace("{}", &format!("building {n}")) + ": no damage"),
             Touched::Connor => {
                 self.fight_note(&shooter, at.replace("{}", "Connor") + &format!(": a hit of {}, {} (fighting.md rule 29)", b.damage, b.kind.name()));
-                self.hit_connor(&shooter, b.damage, b.kind);
+                self.hit_connor_full(&shooter, b.damage, b.kind, b.must_react, false);
             }
             Touched::Character(j) => {
                 let who = self.anims[j].player.name.clone();
@@ -1882,6 +1940,8 @@ impl crate::active::WorldState {
             max: rock.range,
             damage,
             kind: HitKind::Normal,
+            must_react: false,
+            script: None,
             mask: p.collider_mask,
             balls: None,
             updates: 0,
