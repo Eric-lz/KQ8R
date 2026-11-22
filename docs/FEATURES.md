@@ -961,6 +961,23 @@ other Swamp commands and liquid immunity not yet played by hand):
   permanently alongside the tree transforming into a solid `mt_dead.kqs`
   dead trunk (`20,000` XP).
 
+## Script coverage batch 4 — Gnome (2026-11-22, steps B4-1 to B4-4)
+
+Verified across `805` workspace unit tests and headless Gnome `--sound off`
+viewer logs (**not yet checked live by eye in Gnome**):
+
+- **Shop click helper & console clear (`conClickItem`, `cls`):** `conClickItem`
+  synchronously clicks named objects (`INVITEM_BronzePlate` in Gnome's armory)
+  without reach or `handsOff` checks, and `cls` cleanly returns `0`.
+- **Alternate interior lightmaps (`useAlternateLightmap`):** `gnome13` and
+  `gnome14` preload compatible alternate `.dil` lightmaps (`gnome13l.dil`,
+  `gnome14l.dil`) and swap them on demand (persisted when returning to a kept
+  world).
+- **Rolling boulder (`KQBoulder`):** Gnome's `boulder` (`pushston.kqs`) freezes
+  after `0.5 s` (`KQCueEvent 50`), rolls one animation update per Connor push
+  step in `Push` state while staying frozen at rest, turns toward its push
+  direction `+ 0.1 s` later (`KQMoveEvent`), and keeps its collider synced.
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses: triggers and

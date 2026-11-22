@@ -1,15 +1,22 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-recording the user's live checks confirming **`B1-F1c`** (`Q199` part b:
-popup sounds in group `1` and `button1.aud` on normal help popup open)
-and **`B3-F4`** (`Q201`: projectile wall/object impact `sword.aud` & thrown
-rock `rock.aud`) work as expected, with **Batch 4 (Gnome)** already studied
-and ready for the next session. Read with `AGENTS.md`, `docs/DESIGN.md`,
+implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`: `conClickItem`, `cls`,
+`useAlternateLightmap`, `KQBoulder`, and regenerated `SCRIPT-COVERAGE.md`;
+unit-tested across `805` tests and verified in headless Gnome logs, **pending
+live check by eye in Gnome**). Previously confirmed live: `B1-F1c` (`Q199`b)
+and `B3-F4` (`Q201`). Read with `AGENTS.md`, `docs/DESIGN.md`,
 `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top). The short public
 summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
+
+- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) (`B4-1`..`B4-4`, unit/log-verified only — pending live play check):**
+  - **`B4-1` (`conClickItem` & `cls`, `script-commands.md` rules 12c–12d):** `conClickItem <obj>` bypasses reach/turn/`handsOff`/queue and synchronously runs empty-hand `ConnorAction` (`do`, `do`) returning `"1"` (or `"0"` on usage/missing), while `cls` safely returns `"0"`. Verified across unit tests and Gnome `doors.log`/`items.log` (`conClickItem NoName55` picking up `INVITEM_BronzePlate` and running `brnzplat.cs` synchronously).
+  - **`B4-2` (`useAlternateLightmap`, `object-lighting.md` rule 12 & `script-commands.md` rule 12e):** `KQInterior` loads compatible alternate `.dil` lightmaps (`althwLightmapName`, `usingAltLighting`; `gnome13l.dil`, `gnome14l.dil`, `tmpl401r.dil`), swaps GPU textures immediately via `WallLights::set_alternate`, persists flags across kept worlds, warns on missing objects, and ignores non-interiors. Verified in unit tests and `400`-frame Gnome logs.
+  - **`B4-3` (`KQBoulder`, `pushing.md` rules 12a–12d):** `boulder` advances `1` update on add while forced active, freezes on `KQCueEvent 50` at `+0.5 s`, and when pushed in `Mode::Push` (`Δ ≥ 1e-6`) advances `pushston.kqs` `1` update per push while staying frozen and queues `KQMoveEvent` `+0.1 s` later turning to `yaw + π`, keeping `ObjectColliders` synced. Verified in unit tests and `900`-frame Gnome push logs (visual roll direction pending live check by eye).
+  - **`B4-4` (`SCRIPT-COVERAGE.md` regenerated):** `cargo run --release -- script-coverage --out docs/SCRIPT-COVERAGE.md` reduced distinct missing commands from `15` to `12` (`0` stubs): Gnome now shows `0 (0)` missing commands (`KQBoulder` `named`), and Barren commands also dropped to `0 (0)`.
+  - **Next:** User checks Batch 4 (`B4-1`..`B4-3`) live in Gnome; next coding batch is **Batch 5 (Barren)** (once studied by Session A).
 
 - **2026-11-22 (A): Projectile impact sound rules (`Q201`) studied** (traced
   in `Mask.exe` via Ghidra and checked against `MASK/` data; **not checked by
