@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 4 fix B4-F3: `KQObject::collisionType` updates characters (`Dragon` melee hits)
+- **Changed:** `crates/kq8-core/src/active.rs` (`WorldState::collision_type` character branch via `character_index`, unit test `collision_type_updates_character_for_swing_pick`), `STATUS.md`, `MODLOG.md`, `docs/provenance/README.md`.
+- **Why:** Fix the live Gnome bug where `Dragon` (`dragworm.kq` `colliderType = 16386 = 0x4002`) stayed un-targetable by melee weapons even after `fusebox.cs` ran `KQObject::collisionType Dragon +64` when the lights turned on: `WorldState::collision_type` did not handle `KQMonster` / `AnimObject` characters, so `+64` failed with `object kind not tracked yet` and left bit `0x40` clear (`SWING_PICK` never matched). Also records live user confirmation of `useAlternateLightmap` (`B4-2`: `gnome13`/`gnome14` light up when inserting `INVITEM_ShardFuse`).
+- **Tested how:** `cargo test --workspace` (followed by release build and headless Gnome verification of `B4-F1`..`B4-F3`).
+- **Result:** Workspace unit tests pass (including `collision_type_updates_character_for_swing_pick`).
+- **Still broken:** Headless Gnome log verification and user live re-check of `B4-F1`..`B4-F3` pending next step.
+- **Next:** Commit `B4-F3`, build `target\release\kq8-viewer.exe`, and run headless Gnome checks for `Bouldtrp`, `changeBmp Dragon normal`, and `Dragon` melee swings.
+
 ## 2026-11-22 Batch 4 fix B4-F2: Deduplicate `changeBmp` materials so shared `.kqs` animations restore
 - **Changed:** `crates/kq8-viewer/src/anim_view.rs` (`dedup_texture_names` helper in `spawn_animated`, duplicate-handle guard on `p.bmp_saved` in `changeBmp` swap loop, unit test `dedup_texture_names_keeps_unique_shape_material_pairs`), `MODLOG.md`, `docs/provenance/README.md`.
 - **Why:** Fix the live Gnome bug where `Dragon` stayed almost black in its `Stop` idle animation after `fusebox.cs` ran `KQObject::changeBmp Dragon normal`: `dragworm.anm` shares `dw_stop.KQS` across `run`, `stop`, and `walk`, so `texture_names` listed that material `3` times, causing `changeBmp Dragon drag11.bmp black64.bmp` to overwrite the saved original with `black64.bmp` on the 2nd/3rd pass and `normal` to restore `black64.bmp` last.

@@ -1724,6 +1724,11 @@ impl WorldState {
             let old = c.collision_type;
             c.collision_type = change(old);
             (old, c.collision_type)
+        } else if let Some(i) = self.character_index(name) {
+            let c = self.anims[i].character.as_deref_mut().unwrap();
+            let old = c.collision_type;
+            c.collision_type = change(old);
+            (old, c.collision_type)
         } else {
             let why = if self.known.contains(&name.to_ascii_lowercase()) { "object kind not tracked yet" } else { "unknown object" };
             self.note(format!("{at}: collisionType {name} {bits}: {why}; not changed"));
@@ -12507,5 +12512,30 @@ mod talk_tests {
             a.world.requests.as_slice(),
             [Request::Move { who, flags: 0, position, .. }] if who == "boulder" && *position == [101_950.0, 91_915.0, 17_470.0]
         ), "{:?}", a.world.requests);
+    }
+
+    #[test]
+    fn collision_type_updates_character_for_swing_pick() {
+        let mut a = active("", &[]);
+        let mut c = crate::character::Character::new(false, 0x20, 0.0, false, false, true, 1);
+        c.collision_type = 0x4002;
+        c.bounds = Some(([-835.0, -835.0, 0.0], [835.0, 835.0, 1670.0]));
+        let player = crate::named_anim::tests::still_then_open("Dragon");
+        a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None, boulder: None }]);
+        a.start();
+        a.world.anims[0].player.base.position = [100_117.0, 138_250.0, 14_915.0];
+
+        let origin = [100_117.0, 136_000.0, 15_500.0];
+        let dir = [0.0, 1.0, 0.0];
+        assert!(a.world.mask_pick(origin, dir, crate::weapons::SWING_PICK, &[], &[]).is_none());
+
+        assert_eq!(a.test_command("KQObject::collisionType Dragon -64", "t").as_deref(), Some("0"));
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().collision_type, 0x4002);
+        assert!(a.world.mask_pick(origin, dir, crate::weapons::SWING_PICK, &[], &[]).is_none());
+
+        assert_eq!(a.test_command("KQObject::collisionType Dragon +64", "t").as_deref(), Some("0"));
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().collision_type, 0x4042);
+        let hit = a.world.mask_pick(origin, dir, crate::weapons::SWING_PICK, &[], &[]);
+        assert_eq!(hit.as_ref().map(|h| (h.name.as_str(), h.collision_type, h.character)), Some(("Dragon", 0x4042, Some(0))));
     }
 }

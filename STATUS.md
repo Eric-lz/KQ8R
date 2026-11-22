@@ -1,17 +1,24 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`: `conClickItem`, `cls`,
-`useAlternateLightmap`, `KQBoulder`, and regenerated `SCRIPT-COVERAGE.md`;
-unit-tested across `805` tests and verified in headless Gnome logs, **pending
-live check by eye in Gnome**). Previously confirmed live: `B1-F1c` (`Q199`b)
-and `B3-F4` (`Q201`). Read with `AGENTS.md`, `docs/DESIGN.md`,
+implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`) plus three post-playtest fixes
+(`B4-F1`..`B4-F3`: pushed object trap visits + `move boulder` collider sync,
+`changeBmp` shared-`.kqs` material deduplication, and `KQObject::collisionType`
+on characters). Live play confirmed `B4-2` (`useAlternateLightmap` lighting in
+Gnome's `gnome13`/`gnome14` tunnel) works; **`B4-F1`..`B4-F3` live re-check
+and `B4-1` armory/weapon shop check pending**. Previously confirmed live:
+`B1-F1c` (`Q199`b) and `B3-F4` (`Q201`). Read with `AGENTS.md`, `docs/DESIGN.md`,
 `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top). The short public
 summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
 
-- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) (`B4-1`..`B4-4`, unit/log-verified only — pending live play check):**
+- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F3`):**
+  - **`B4-2` confirmed live:** User confirmed inserting `INVITEM_ShardFuse` switches `gnome13`/`gnome14` alternate lightmaps to `1` and lights up the tunnel; arrows bounce off `Dragon` as expected (`"just bounce off!"`), and `boulder` rolls when pushed.
+  - **`B4-F1` (`traps.md` rules 4–6):** `push_apply` sends each pushed object (`BoxCollider` `Visitor` via `Active::object_moved`) to traps so `boulder` (`colliderType = 257`) triggers `Bouldtrp`/`Bouldtp2` (`colliderMask = 1`), and `move_object` emits `Request::Move` + syncs `clickables` for moved `KQBoulder`s.
+  - **`B4-F2` (`characters.md` rule 4a):** `anim_view::dedup_texture_names` deduplicates `texture_names` by `(shape_index, material_id)` (plus a duplicate-handle guard in `bmp_saved`) so `changeBmp Dragon drag11.bmp black64.bmp` doesn't overwrite `drag11.bmp` across `dragworm.anm`'s shared `dw_stop.KQS` movements (`run`/`stop`/`walk`), restoring `Dragon`'s idle texture on `changeBmp Dragon normal`.
+  - **`B4-F3` (`KQObject::collisionType`):** `WorldState::collision_type` updates `Character::collision_type` via `character_index` so `fusebox.cs`'s `KQObject::collisionType Dragon +64` flips `0x4002 -> 0x4042` and enables melee `SWING_PICK` targeting.
+- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) (`B4-1`..`B4-4`):**
   - **`B4-1` (`conClickItem` & `cls`, `script-commands.md` rules 12c–12d):** `conClickItem <obj>` bypasses reach/turn/`handsOff`/queue and synchronously runs empty-hand `ConnorAction` (`do`, `do`) returning `"1"` (or `"0"` on usage/missing), while `cls` safely returns `"0"`. Verified across unit tests and Gnome `doors.log`/`items.log` (`conClickItem NoName55` picking up `INVITEM_BronzePlate` and running `brnzplat.cs` synchronously).
   - **`B4-2` (`useAlternateLightmap`, `object-lighting.md` rule 12 & `script-commands.md` rule 12e):** `KQInterior` loads compatible alternate `.dil` lightmaps (`althwLightmapName`, `usingAltLighting`; `gnome13l.dil`, `gnome14l.dil`, `tmpl401r.dil`), swaps GPU textures immediately via `WallLights::set_alternate`, persists flags across kept worlds, warns on missing objects, and ignores non-interiors. Verified in unit tests and `400`-frame Gnome logs.
   - **`B4-3` (`KQBoulder`, `pushing.md` rules 12a–12d):** `boulder` advances `1` update on add while forced active, freezes on `KQCueEvent 50` at `+0.5 s`, and when pushed in `Mode::Push` (`Δ ≥ 1e-6`) advances `pushston.kqs` `1` update per push while staying frozen and queues `KQMoveEvent` `+0.1 s` later turning to `yaw + π`, keeping `ObjectColliders` synced. Verified in unit tests and `900`-frame Gnome push logs (visual roll direction pending live check by eye).

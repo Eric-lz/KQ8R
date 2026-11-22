@@ -4318,6 +4318,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | Deduplicated `Playing::texture_names` by `(shape_index, material_id)` via `dedup_texture_names` and guarded `p.bmp_saved` against saving the same `Handle<ObjectMaterial>` twice so `changeBmp ... normal` restores shared `.kqs` animations (e.g. `dragworm.anm`'s `dw_stop.KQS` across `run`/`stop`/`walk`) | `characters.md` rule 4a; `MASK/Gnome/kq/{dragworm.anm,fusebox.cs}` | unit test `anim_view::tests::dedup_texture_names_keeps_unique_shape_material_pairs` (headless Gnome check pending after `B4-F3`) |
 
+## B4-F3 2026-11-22: `KQObject::collisionType` character support (`Dragon` melee targeting) — core `active.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `WorldState::collision_type` updates `Character::collision_type` when `name` resolves via `character_index` so `KQObject::collisionType Dragon +64` toggles `0x4002 <-> 0x4042` for `SWING_PICK` melee targeting | `doors.md` rule 12 / `script-commands.md`; `MASK/Gnome/kq/{dragworm.kq,fusebox.cs}` | unit test `collision_type_updates_character_for_swing_pick` (`0x4002 -> 0x4042`, picked by `SWING_PICK`) |
+
 
 
 
