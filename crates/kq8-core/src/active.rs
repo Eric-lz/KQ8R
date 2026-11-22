@@ -3428,7 +3428,7 @@ impl WorldState {
                 new.position[2],
                 note.map_or(String::new(), |n| format!("; {n}"))
             ));
-            if let Some(i) = moved_anim {
+            let is_boulder = if let Some(i) = moved_anim {
                 if self.anims[i].character.as_deref().is_some_and(|c| c.mandragore_tree.is_some()) {
                     self.sync_mandragore_roots(i);
                 }
@@ -3437,6 +3437,15 @@ impl WorldState {
                         b.prev_pos = new.position;
                     }
                 }
+                self.anims[i].boulder.is_some()
+            } else {
+                false
+            };
+            if is_boulder {
+                if let Some(c) = self.clickables.iter_mut().find(|c| !c.gone && c.name.eq_ignore_ascii_case(&who)) {
+                    c.placement = new;
+                }
+                self.requests.push(Request::Move { who, flags, position, turn, at: at.to_string() });
             }
             return "0".into();
         }
@@ -5930,6 +5939,13 @@ impl Active {
         let calls = self.traps_check(v, false);
         self.world.hazers_check(v.position, "moved");
         calls
+    }
+
+    /// After another moving object's step (a pushed box or boulder,
+    /// `traps.md` rules 4-6): every trap checks it and runs its script for
+    /// `On`, `Off` or `Cue`. Returns the calls made, as `<trap> <args>`.
+    pub fn object_moved(&mut self, v: &Visitor) -> Vec<String> {
+        self.traps_check(v, false)
     }
 
     /// After a script's `move Connor` (traps.md rule 5 "Placed by a
@@ -12438,5 +12454,58 @@ mod talk_tests {
         // Scripted move updates prev_pos so next push checks from new spot.
         assert_eq!(a.test_command("move boulder 0 5000 6000 700", "t").as_deref(), Some("0"));
         assert_eq!(a.world.anims[0].boulder.unwrap().prev_pos, [5000.0, 6000.0, 700.0]);
+    }
+
+    #[test]
+    fn pushed_object_triggers_mask_1_trap() {
+        use crate::trap::TrapSettings;
+        let script = b"if test $2 == On\n set Gnome::Boulder::Hit $3\nendif\n".to_vec();
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("bouldtrp.cs".into(), script)]);
+        a.add_traps([Trap::new(TrapSettings {
+            name: "Bouldtrp".into(),
+            position: [100_000.0, 91_250.0, 20_700.0],
+            min: [-750.0, -750.0, 750.0],
+            max: [750.0, 750.0, 750.0],
+            script: Some("bouldtrp.cs".into()),
+            mask: 1,
+            trap_type: 0,
+            inner_percent: None,
+            lookup_call: false,
+            spirit_damage: None,
+        })]);
+        a.start();
+
+        let (min, max) = ([-850.0, -850.0, -20.0], [850.0, 850.0, 1750.0]);
+        let balls = crate::collide::BallStack::from_box(min, max);
+        let connor_v = Visitor { name: "Connor", collision_type: CONNOR_TYPE, from: [100_000.0, 91_250.0, 20_700.0], position: [100_000.0, 91_250.0, 20_700.0], min: [-200.0, -200.0, 0.0], max: [200.0, 200.0, 1300.0], balls: &balls };
+        assert!(a.connor_moved(&connor_v).is_empty(), "mask 1 must ignore Connor");
+
+        let boulder_v = Visitor {
+            name: "boulder",
+            collision_type: 257,
+            from: [101_000.0, 91_250.0, 20_540.0],
+            position: [100_000.0, 91_250.0, 20_540.0],
+            min,
+            max,
+            balls: &balls,
+        };
+        assert_eq!(a.object_moved(&boulder_v), vec!["Bouldtrp On boulder".to_string()]);
+        assert_eq!(a.scripts.vars.get("Gnome::Boulder::Hit"), Some("boulder"));
+    }
+
+    #[test]
+    fn move_boulder_emits_request_for_collider() {
+        let mut a = active("", &[]);
+        a.add_anims([boulder_anim("boulder", [103_894.0, 90_758.0, 20_540.0], None)]);
+        a.start();
+        a.world.requests.clear();
+
+        assert_eq!(a.test_command("move boulder 0 101950 91915 17470", "t").as_deref(), Some("0"));
+        assert_eq!(a.world.anims[0].player.base.position, [101_950.0, 91_915.0, 17_470.0]);
+        assert_eq!(a.world.anims[0].boulder.unwrap().prev_pos, [101_950.0, 91_915.0, 17_470.0]);
+        assert!(matches!(
+            a.world.requests.as_slice(),
+            [Request::Move { who, flags: 0, position, .. }] if who == "boulder" && *position == [101_950.0, 91_915.0, 17_470.0]
+        ), "{:?}", a.world.requests);
     }
 }

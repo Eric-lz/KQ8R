@@ -4306,6 +4306,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `BoulderState` (`prev_pos`, `forced_active`, `frozen`), `Active::start()` `forced_active` + 1-update `pushston.kqs` advance + `+0.5 s` `KQCueEvent 50`, `Active::deliver()` `Cue 50` freeze while delegating other cues, `Active::boulder_pushed` (`Mode::Push`, `Δ ≥ 1e-6` -> 1-update unfreeze/advance/re-freeze + `+0.1 s` `KQMoveEvent` `yaw + π`), `move_command` `prev_pos` sync | `pushing.md` rules 12a–12d (Batch 4); `MASK/Gnome/kq/{boulder,bouldtrp}.kq/.cs` | unit tests `kq_boulder_startup_freezes_on_cue_50_and_delegates_other_cues`, `kq_boulder_pushed_rolls_when_connor_pushes_and_rotates_on_move_event`; Gnome `doors.log` (`update 0` -> `update 8 Cue 50` -> push steps `0.1333`..`93335.4`) |
 | `load.rs` routes `KQBoulder` into animated objects; `anim_step` keeps `boulder` collider synced to `base`; `door_step` preserves `BoulderState::frozen` across `FrozenNow`; `push_apply` calls `doors.active.boulder_pushed` | `pushing.md` rules 12a–12d (Batch 4) | Gnome `900`-frame `viewer.log`, `connor.log`, `anim.log` (`[boulder]` collider synced at `90980..93189`; **visual roll axis in play not yet checked by eye**) |
 
+## B4-F1 2026-11-22: Pushed objects visit traps (`Bouldtrp`/`Bouldtp2`) & `move boulder` collider sync — core `active.rs`; viewer `connor_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `Active::object_moved` + `connor_view::push_apply` send each pushed object (`BoxCollider` `BallStack::from_box` `Visitor` with `collision_type`, e.g. `boulder` `257`) through `traps_check`; `move_object` updates live `clickables` and emits `Request::Move` when moving a `KQBoulder` | `traps.md` rules 4–6; `MASK/Gnome/kq/{boulder,bouldtrp,bouldtp2}.{kq,cs}` | unit tests `pushed_object_triggers_mask_1_trap`, `move_boulder_emits_request_for_collider` (headless Gnome check pending after `B4-F3`) |
+
 
 
 

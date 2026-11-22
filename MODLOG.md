@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 4 fix B4-F1: Pushed objects visit traps (`Bouldtrp`/`Bouldtp2`) and `move boulder` syncs collider
+- **Changed:** `crates/kq8-core/src/active.rs` (`Active::object_moved`, `WorldState::move_object` pushing `Request::Move` and syncing `clickables` when moving a `KQBoulder`, unit tests `pushed_object_triggers_mask_1_trap` and `move_boulder_emits_request_for_collider`), `crates/kq8-viewer/src/connor_view.rs` (`push_apply` sends `Visitor` of pushed object to `doors.active.object_moved`), `MODLOG.md`, `docs/provenance/README.md`.
+- **Why:** Fix the live Gnome bug where pushing `boulder` (`colliderType = 257`) onto `Bouldtrp` (`colliderMask = 1`) never triggered `bouldtrp.cs` (`traps.md` rules 4–6), because only Connor (`CONNOR_TYPE = 4`) was passed to trap checks and `move boulder` skipped updating the viewer collider/view-blocker.
+- **Tested how:** `cargo test -p kq8-core` and `cargo test -p kq8-viewer` (end-to-end headless Gnome push verification runs after `B4-F3`).
+- **Result:** Unit tests pass (`pushed_object_triggers_mask_1_trap` and `move_boulder_emits_request_for_collider`); `kq8-core` and `kq8-viewer` test suites pass cleanly.
+- **Still broken:** Remaining two Gnome playtest bugs (`B4-F2`: `Dragon` dark idle after `changeBmp Dragon normal`; `B4-F3`: `KQObject::collisionType Dragon +64` for melee combat) and live re-check pending.
+- **Next:** Implement `B4-F2` (`changeBmp` shared-`.kqs` material deduplication in `anim_view.rs`).
+
 ## 2026-11-22 Batch 4 step B4-4: regenerate `SCRIPT-COVERAGE.md` and close Batch 4 (Gnome)
 - **Changed:** `docs/SCRIPT-COVERAGE.md`, `STATUS.md`, `docs/FEATURES.md`, `README.md`, `docs/DESIGN.md`, `MODLOG.md` (documentation and generated coverage report only; no Rust code modified).
 - **Why:** Close Batch 4 (Gnome) of the script coverage plan by regenerating `docs/SCRIPT-COVERAGE.md` and updating the project status/feature docs.

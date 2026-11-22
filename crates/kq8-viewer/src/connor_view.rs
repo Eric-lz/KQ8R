@@ -2203,6 +2203,10 @@ pub fn push_apply(
     let Some(mut sim) = sim else { return };
     let (mut colliders, mut view) = (colliders, view);
     for (name, d) in std::mem::take(&mut sim.pushed) {
+        let moved_box = colliders
+            .as_ref()
+            .and_then(|c| c.0.iter().find(|b| b.name == name))
+            .map(|b| (b.placement.position, b.min, b.max, b.kind.collision_type));
         let mut boxes = 0;
         let mut at = None;
         for list in [colliders.as_mut().map(|c| &mut c.0), view.as_mut().map(|v| &mut v.boxes)].into_iter().flatten() {
@@ -2230,6 +2234,12 @@ pub fn push_apply(
                 sim.mover.position,
                 sim.walker.mode == kq8_core::connor::Mode::Push,
             );
+            // traps.md rules 4-6: pushed boxes/boulders set off traps whose mask covers them.
+            if let Some((from, min, max, collision_type)) = moved_box {
+                let balls = kq8_core::collide::BallStack::from_box(min, max);
+                let v = kq8_core::trap::Visitor { name: &name, collision_type, from, position: new_pos, min, max, balls: &balls };
+                doors.active.object_moved(&v);
+            }
         }
         let shift = Vec3::from(crate::to_bevy(d, [0.0; 3]));
         let mut entities = 0;
