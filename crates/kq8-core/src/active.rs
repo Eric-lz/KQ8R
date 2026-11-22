@@ -2104,6 +2104,77 @@ impl WorldState {
         "0".into()
     }
 
+    /// `conClickItem <objectName>` (`script-commands.md` rule 12c, Batch 4):
+    /// dispatches an empty-hand (`do`) `ConnorAction` synchronously from Connor
+    /// to `<objectName>`, bypassing reach, turning, `handsOff`, and the queue;
+    /// returns `"1"` on success, `"0"` on usage error or missing object.
+    fn con_click_item(&mut self, words: &[String], at: &str) -> String {
+        let [_, target] = words else {
+            self.note(format!("{at}: usage: conClickItem <objectName>: '{}'", words.join(" ")));
+            return "0".into();
+        };
+        if self.is_gone(target) {
+            self.note(format!("{at}: conClickItem: can't find object name {target}"));
+            return "0".into();
+        }
+        if let Some(i) = self.items.index(target) {
+            let o = self.items.objects[i].clone();
+            if o.place == Place::Gone {
+                self.note(format!("{at}: conClickItem: can't find object name {target}"));
+                return "0".into();
+            }
+            if let Some(placement) = o.placement().filter(|_| !o.hidden) {
+                let before = self.items.count(CONNOR, &o.kind);
+                crate::connor_inventory::receive(self, &o.name, Some(placement.position), "conClickItem");
+                let after = self.items.count(CONNOR, &o.kind);
+                let sound = self.pickup_sound(&o.kind);
+                self.item_note(format!("{at}: conClickItem {} ({} x{}): picked up; Connor's {} {before} -> {after}; {sound}", o.name, o.kind, o.quantity, o.kind));
+            }
+            let script_note = match o.script {
+                Some(script) => {
+                    self.calls_out.push((script.clone(), vec![o.name.clone(), "ConnorAction".into(), "do".into(), "do".into()]));
+                    format!(" -> runs {script}")
+                }
+                None => String::new(),
+            };
+            self.note(format!("{at}: conClickItem {}: dispatched empty-hand ConnorAction synchronously{script_note} (script-commands.md rule 12c)", o.name));
+            return "1".into();
+        }
+        let same = |n: &str| n.eq_ignore_ascii_case(target);
+        let found: Option<(String, Option<String>)> = if let Some(d) = self.doors.iter().find(|d| !d.gone && same(&d.door.name)) {
+            Some((d.door.name.clone(), d.script.clone()))
+        } else if let Some(o) = self.objects.iter().find(|o| !o.gone && same(o.name())) {
+            Some((o.name().to_string(), o.script.clone()))
+        } else if let Some(c) = self.clickables.iter().find(|c| !c.gone && same(&c.name)) {
+            Some((c.name.clone(), c.script.clone()))
+        } else if let Some(b) = self.buildings.iter().find(|b| same(&b.name)) {
+            Some((b.name.clone(), b.script.clone()))
+        } else if let Some(a) = self.anims.iter().find(|a| !a.gone && same(&a.player.name)) {
+            Some((a.player.name.clone(), a.script.clone()))
+        } else if let Some(c) = self.chests.iter().find(|c| !c.gone && same(&c.chest.name)) {
+            Some((c.chest.name.clone(), c.script.clone()))
+        } else if let Some(m) = self.monsters.iter().find(|m| same(&m.name)) {
+            Some((m.name.clone(), m.script.clone()))
+        } else if self.known.contains(&target.to_ascii_lowercase()) {
+            Some((target.clone(), None))
+        } else {
+            None
+        };
+        let Some((canonical, script)) = found else {
+            self.note(format!("{at}: conClickItem: can't find object name {target}"));
+            return "0".into();
+        };
+        let script_note = match script {
+            Some(s) => {
+                self.calls_out.push((s.clone(), vec![canonical.clone(), "ConnorAction".into(), "do".into(), "do".into()]));
+                format!(" -> runs {s}")
+            }
+            None => String::new(),
+        };
+        self.note(format!("{at}: conClickItem {canonical}: dispatched empty-hand ConnorAction synchronously{script_note} (script-commands.md rule 12c)"));
+        "1".into()
+    }
+
     /// `getEndLoop <from> <to> <1|0>` (`clicking.md` rule 21): with 1, `<to>`
     /// is told whenever one of `<from>`'s play-once movements ends; 0 stops
     /// it. One listener per object; a new one replaces the old (inferred
@@ -4423,6 +4494,10 @@ impl Active {
     /// [`Self::test_command`], which keeps the event open.
     pub fn command_event(&mut self, line: &str, at: &str) -> Option<String> {
         let result = self.test_command(line, at);
+        for (script, args) in ScriptHost::take_calls(&mut self.world) {
+            self.world.note(format!("{at}: runs {script} {} at once", args.join(" ")));
+            self.scripts.call(&script, &args, &mut self.world);
+        }
         ScriptHost::event_done(&mut self.world);
         result
     }
@@ -4484,6 +4559,11 @@ impl ScriptHost for WorldState {
             "KQConner::setRelDamage" => Some(self.set_rel_damage(words, at)),
             "KQConner::addImmunity" => Some(self.add_immunity(words, at)),
             "KQMonster::preSpecial" => Some(self.pre_special(words, at)),
+            "conClickItem" => Some(self.con_click_item(words, at)),
+            "cls" => {
+                self.note(format!("{at}: cls: debug console clear (no-op, script-commands.md rule 12d)"));
+                Some("0".into())
+            }
             "getConInventory" => Some(self.get_con_inventory(at)),
             "exist" => Some(self.exist(words, at)),
             "setHaze" => {
@@ -9471,6 +9551,14 @@ endif
         assert!(log.contains("no target: he hits dead air"), "{log}");
         // The big swing: x 0.75 to 4, cut.
         a.world.connor_do(from, std::f32::consts::PI, 2350.0, Some("gob"), true, "attack2");
+        assert!(a.world.fight_log.join("\n").contains("(the big swing, 0.75 to 4, cut)"));
+    }
+
+    /// The goblin with a `react` (0.6 s, one-shot) added, health 500 so it
+    /// never dies, Connor 1,400 south of it standing.
+    fn hit_goblin() -> Active {
+        let mut a = fighter();
+        let o = &mut a.world.anims[0];
         let mut react = crate::named_anim::tests::movement("react", 0.0, 1.0, false, false, vec![]);
         react.play_time = 0.6;
         o.player.movements.push(react);
@@ -11987,5 +12075,45 @@ mod talk_tests {
         assert_eq!(a.world.sounds.len(), 1, "{:?}", a.world.sounds);
         assert_eq!(a.world.sounds[0].name, "rock.aud");
         assert_eq!(a.world.sounds[0].group, crate::sound::GROUP_EFFECTS);
+    }
+
+    #[test]
+    fn cls_and_con_click_item_follow_script_commands_rules_12c_and_12d() {
+        let mut a = active("", &[]);
+        let itl = b"[InventoryItemTypeList]\nnumItems=1\nitem0=\tKQInventoryItemType\tINVITEM_BronzePlate\t1\t0\t0\t0\t2\t0\t0\tArmor\tIDBMP_X\t1 0 0 1\tNoModeChange\t0\t1\tnone\tnone\tnone\tx.kqs\tnone\t1\t256\n";
+        a.world.items = crate::item::Items::new(kq8_data::items::ItemTypes::parse(itl).0, []);
+        a.world.sources.insert(
+            "caller.cs".into(),
+            b"cls\nset clsRet $Console::Return\nconClickItem\nset badArgsRet $Console::Return\nconClickItem missing\nset missingRet $Console::Return\nconClickItem NoName0\nset okRet $Console::Return\n"
+                .to_vec(),
+        );
+        a.world.sources.insert(
+            "armpit.cs".into(),
+            b"set pickedArgs $1 $2 $3 $4\nset nestedCmdRan 1\n"
+                .to_vec(),
+        );
+        let armor = a
+            .world
+            .items
+            .make("INVITEM_BronzePlate", 1, Place::World { position: [50_000.0, 50_000.0, 0.0], angles: [0.0; 3] })
+            .unwrap()
+            .name
+            .clone();
+        assert_eq!(armor, "NoName0");
+        a.world.known.insert(armor.to_ascii_lowercase());
+        a.world.items.objects.last_mut().unwrap().script = Some("armpit.cs".into());
+        a.world.connor_hands_off = true;
+        a.world.connor_at = Some([0.0, 0.0, 0.0]);
+
+        // Run through a script so we observe `$Console::Return` and synchronous nested execution.
+        assert!(a.scripts.call("caller.cs", &[], &mut a.world));
+        assert_eq!(a.scripts.vars.get("clsRet"), Some("0"));
+        assert_eq!(a.scripts.vars.get("badArgsRet"), Some("0"));
+        assert_eq!(a.scripts.vars.get("missingRet"), Some("0"));
+        assert_eq!(a.scripts.vars.get("okRet"), Some("1"));
+        assert_eq!(a.scripts.vars.get("pickedArgs"), Some("NoName0 ConnorAction do do"));
+        assert_eq!(a.world.items.count(CONNOR, "INVITEM_BronzePlate"), 1);
+        assert!(a.world.requests.is_empty(), "conClickItem must not turn Connor or queue requests: {:?}", a.world.requests);
+        assert_eq!(a.test_command("cls", "t").as_deref(), Some("0"));
     }
 }

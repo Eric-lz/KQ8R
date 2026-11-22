@@ -4085,3 +4085,21 @@ Implementing Session A's Batch 3 notes for Swamp (`docs/behaviour/{inventory,scr
 9. **Step B3-F4: Projectile impact & `KQObject` `ouchSound` rules (`Q201`) — Done (2026-11-22; confirmed live by ear 2026-11-22):**
    - Parsed `ouchSound=` on `ProjectileKeys` (`crates/kq8-data/src/characters.rs`) and collected placed `.kq` `ouchSound=` overrides into `Objects`/`WorldState::object_ouch_sounds` (`crates/kq8-viewer/src/load.rs`, `door_view.rs`).
    - Added `WorldState::play_object_ouch` and unified `bolt_hits_non_character` (`crates/kq8-core/src/fight.rs`): `KQInterior` buildings, `KQDoor`s, and `KQObject`/`KQAnimObject`s play their `ouchSound` (default `sword.aud`) as a group-`0` placed one-shot (`5,000 / 25,000`, `1.0 s` cooldown) at their placement origin on `weaponType` `0`–`3` projectile or Connor hand hits, skipping scripted `ProjImmune`/`0`-damage hits and `weaponType == 4`; thrown rocks (`RockFlight.ouch_sound`, `prrock.kq` = `rock.aud`) play their own `ouchSound` at landing and skip target `ouchSound`. Verified in unit tests (`800` passed), headless Swamp logs (`132` overrides; `fiengate1` starts `GAME/SOUND/SWORD.AUD` at `(65536, 98304, 16320)`), and live play (`2026-11-22`).
+
+---
+
+### Batch 4 — Gnome (planned 2026-11-22)
+
+Implementing Session A's Batch 4 notes for Gnome (`docs/behaviour/{script-commands,object-lighting,pushing}.md` and `docs/SCRIPT-COVERAGE.md`), one step and one commit at a time:
+
+1. **Step B4-1: `conClickItem` and `cls` (`script-commands.md` rules 12c–12d) — Done (2026-11-22, unit/log-verified only):**
+   - `cls`: safe debug-console no-op returning `"0"`.
+   - `conClickItem <objectName>`: exact 2 words (usage -> `"0"`), looks up live object (`can't find object name` -> `"0"`), dispatches empty-hand `ConnorAction` (`do`, `do`) synchronously bypassing reach, turn, `handsOff`, and the event queue (picking up world `KQInventoryItem`s and running any script via `calls_out`), and returns `"1"` on success; `Active::command_event` drains `calls_out` for `--command`.
+   - Also restored the 8-line `fn hit_goblin()` test helper header in `crates/kq8-core/src/active.rs` that was accidentally omitted in commit `501bf83`.
+2. **Step B4-2: `useAlternateLightmap` (`object-lighting.md` rule 12, `script-commands.md` rule 12e) — planned:**
+   - Core: `Request::UseAlternateLightmap { name, alt, at }`, `WorldState::alt_lightmaps` (and `KeptWorld` carry-over), handling `useAlternateLightmap <interiorName> <0|1>` (returns `"0"`, warns on missing object, ignores non-interiors).
+   - Viewer: parse `althwLightmapName` / `usingAltLighting` on `KQInterior`, load alternate `.dil` atlas/wall-light data alongside the default `.dil`, support live swap on `WallLights::set_alternate` (clearing `lit` and updating the GPU `Image` immediately, even with dynamic lighting off).
+3. **Step B4-3: Gnome's boulder (`KQBoulder`, `pushing.md` rules 12a–12d) — planned:**
+   - Core: `BoulderState` on `AnimObject`, startup 1-frame advance + forced-active (`Request::AlwaysNear`) + `Cue 50` in `0.5 s`, `Cue 50` freeze + clear forced-active, and `boulder_pushed` (when Connor is in `Push` and `Δ ≥ 1e-6`, queue `KQMoveEvent` `+0.1 s` turning to `yaw + π` and advance `pushston.kqs` 1 frame).
+   - Viewer: include `KQBoulder` in `load.rs` animated objects driven by `Source::Core`, wire `connor_view::push_apply` to `Active::boulder_pushed`, and keep `move boulder` / `KQMoveEvent` colliders synced.
+4. **Step B4-4: Regenerate `docs/SCRIPT-COVERAGE.md` and close Batch 4 (Gnome) — planned.**

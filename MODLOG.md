@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 4 step B4-1: `conClickItem` and `cls`
+- **Changed:** `crates/kq8-core/src/active.rs` (`conClickItem` / `con_click_item`, `cls`, `Active::command_event` draining `calls_out`, unit test `cls_and_con_click_item_follow_script_commands_rules_12c_and_12d`, and restored the 8-line `fn hit_goblin()` test helper header accidentally omitted in commit `501bf83`), `docs/DESIGN.md` (added Batch 4 plan and marked `B4-1` done), `MODLOG.md`, `docs/provenance/README.md`.
+- **Why:** Implement Step `B4-1` of Batch 4 (Gnome) from `docs/behaviour/script-commands.md` rules `12c`–`12d` (`conClickItem` used 28 times across Gnome armory/weapon shop and 10 times in Barren; `cls` in `Gnome/EMPTYLOC.CS`).
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; headless Gnome viewer run (`--world Gnome --sound off --no-ai --god --frames 150 --command "cls",5 --command "conClickItem NoName55",10 --command "conClickItem missing",15`), inspecting `kq8-artifacts/logs/doors.log` and `items.log`. **Live interactive play in Gnome's armory/weapon shop is not yet checked by eye.**
+- **Result:** All `801` workspace unit tests pass (`5` `kq8-audio`, `618` `kq8-core`, `150` `kq8-data`, `28` `kq8-viewer`); headless Gnome run passes (`RESULT: PASS`): `cls` returns `0`, `conClickItem NoName55` (`INVITEM_BronzePlate`) bypasses reach and picks up the armor from `(147535, 43484, 12595)` (`protection 32 -> 40`, `armor.aud`) while synchronously running `brnzplat.cs NoName55 ConnorAction do do` (`nameSelected = 'NoName55'`), and `conClickItem missing` prints `can't find object name missing` and returns `0`.
+- **Still broken:** Live interactive check of Gnome's armory/weapon shop pending; `useAlternateLightmap` (`B4-2`), `KQBoulder` (`B4-3`), and `SCRIPT-COVERAGE.md` update (`B4-4`) remain in Batch 4.
+- **Next:** Implement Step `B4-2` (`useAlternateLightmap`).
+
 ## 2026-11-22 Batch 3: Record `B1-F1c` and `B3-F4` live ear/visual checks
 - **Changed:** `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md` (documentation-only update; no Rust code modified).
 - **Why:** Record the user's 2026-11-22 live check confirming both `B1-F1c` (`Q199` b: normal popup open `button1.aud` and sound group `1`) and `B3-F4` (`Q201`: Swamp totem fireballs playing wall-impact sound on `fiengate1` behind Connor and thrown rocks playing `rock.aud`) work as expected.

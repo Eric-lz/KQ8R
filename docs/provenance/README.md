@@ -4286,6 +4286,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `WorldState::play_object_ouch` + unified `bolt_hits_non_character` & `connor_hits_object`: buildings/doors/objects play `ouchSound` (default `sword.aud`) as group-`0` placed one-shot (`5,000 / 25,000`, `1.0 s` cooldown) at target origin unless `weaponType == 4` or scripted `0`-damage/`0x4000` (`ProjImmune`); bare terrain/range expiry silent | `ranged-weapons.md` rule 30, `sound.md` rule 41 (`Q201`) | unit tests `projectile_hit_on_building_plays_default_sword_with_cooldown_and_floor_stays_silent`, `projectile_hit_on_object_plays_ouch_sound_and_skips_scripted_immune`; Swamp `fight.log` & `sound.log` (`fiengate1` starts `GAME/SOUND/SWORD.AUD` at `(65536, 98304, 16320)`); **live check 2026-11-22: totem fireball impact on `fiengate1` confirmed by ear** |
 | `RockFlight.ouch_sound` (`prrock.kq` = `rock.aud`): played as group-`0` placed one-shot (`5,000 / 25,000`) at landing position on removal (`rock_step`), skipping non-character target `ouchSound` | `ranged-weapons.md` rule 30, `sound.md` rule 41 (`Q201`) | unit test `thrown_rock_plays_own_ouch_sound_on_landing_and_skips_target_ouch`; **live check 2026-11-22 (confirmed by ear)** |
 
+## B4-1 2026-11-22: `conClickItem` and `cls` — core `active.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `conClickItem <objectName>` (exact 2 words -> `"0"` on usage/missing; picks up world `KQInventoryItem` bypassing reach/turn/`handsOff`/queue and synchronously dispatches empty-hand `ConnorAction do do` via `calls_out`, returning `"1"`); `cls` safe no-op returning `"0"` | `script-commands.md` rules 12c–12d (Batch 4); `MASK/Gnome/kq/{armorgnm,brnzplat,chnmlst,myarmor,platmail,weapngnm,emptyloc}.cs` | unit test `cls_and_con_click_item_follow_script_commands_rules_12c_and_12d`; headless Gnome `doors.log`/`items.log` (`conClickItem NoName55` picking up `INVITEM_BronzePlate` and running `brnzplat.cs` synchronously; `cls` -> `0`; **not yet checked live in play**) |
+
 
 
 
