@@ -4069,4 +4069,5 @@ Implementing Session A's Batch 3 notes for Swamp (`docs/behaviour/{inventory,scr
 4. **Step B3-4: Mandragore (`KQMandragorTree` & `KQMandragorRoot`) — Done (2026-11-22, unit/log-verified only):**
    - `Class::MandragorTree` / `Class::MandragorRoot`, default `colliderType = 0x4042` (`ProjImmune`), 0-damage hits sending tree (or parent tree) to `Special laugh`, tree immediate alarm + team alert + solid `mt_dead.kqs` corpse on all hit kinds + `20,000` XP.
    - Roots start visible above ground, snap to `treePos + treeRot * (±600, -1,000, 0)`, repel Connor (`< tooClose 700` -> pushed `repelDist 800` + `Special reactback`), sink on `Die` (`r_sink.kqs`, `rootDownCount += 1`, tree `noTurn` ON) and regrow after `rebirthDelay` (`5 s` L / `4 s` R, `r_appr.kqs`, `noTurn` OFF when `rootDownCount == 0`), or die permanently (`0` XP) when parent tree dies.
-5. **Step B3-5: Regenerate `docs/SCRIPT-COVERAGE.md` and update hand-over docs.**
+5. **Step B3-5: Regenerate `docs/SCRIPT-COVERAGE.md` and update hand-over docs — Done (2026-11-22).**
+   - Missing commands dropped from `20` to `15`; Swamp has `1 (1)` missing (`beep` in `Swamp/BOILOIL.CS` only), `Tile2` state is `built`, and `KQSwampTile` / `KQMandragorTree` / `KQMandragorRoot` are `named`.

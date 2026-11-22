@@ -1,14 +1,56 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-11-21 after
-recording the user's visual/ear checks for `B1-F1`/`B1-F1b` and `B1-F2`
-(`litehaze` shared GPU haze buffer, quiet ramp logs, wireframe-with-rings
-`H`-key marker, and trap bounding boxes) and adding the Batch 3 (Swamp)
-plan (`B3-1`..`B3-5`) to `docs/DESIGN.md`. Read with `AGENTS.md`, `docs/DESIGN.md`,
-`docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top). The short public
-summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
+Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
+completing **Script Coverage Batch 3 (Swamp)** (`B3-1`..`B3-5`) and
+regenerating `docs/SCRIPT-COVERAGE.md`. Read with `AGENTS.md`,
+`docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the
+top). The short public summary is `README.md`; the detailed "what works"
+list is `docs/FEATURES.md`.
 
-## Where we are (2026-11-21)
+## Where we are (2026-11-22)
+
+- **2026-11-22 (B): Script Coverage Batch 3 (Swamp) built (`B3-1`..`B3-5`,
+  `794` workspace unit tests; headless `--sound off` Swamp viewer logs;
+  NOT yet checked by eye or played by hand):**
+  - **Swamp script commands & liquid immunity (`B3-1`):** `KQConner::pay`
+    (`INVITEM_` fallback, `unapply` + empty hand/ready-weapon when spent),
+    `KQConner::setRelDamage` (`$CurRelDamage` / `$CurRelHealth`),
+    `KQMonster::preSpecial`, `setFirstPerson` (`SetFirstPerson::WasThirdPerson`
+    & F2 lock state mirror), and `Connor.kq` `immunities` /
+    `KQConner::addImmunity` / `Journey::immunities` masking liquid damage
+    (Swamp `0x100` vs Poison `0x40`). Intentional `Swamp/boiloil.cs:4` `beep`
+    typo left unimplemented (`script-commands.md` rule 5).
+  - **`KQSwampTile` gas traps & Clarity Reveal (`B3-2`):** all 42 tiles
+    parsed (`heightNum`, `damFactor = 0.48`), clickable (`INVITEM_Rock`),
+    multi-pair static/animated `ChangeBmp` highlights only the 12 safe tiles
+    (`fiensafe.cs`) on Clarity `Reveal`, `0`-damage projectile hits spawn
+    auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250` while armed, and
+    Connor collisions on `> 2.0 s` resettable cooldown subtract
+    `trunc(-level * 10 * damFactor)` health directly + 1 `Fire` hit.
+  - **`Tile2` Connor state & built-in rock throw (`B3-3`):** state `16,384`
+    (`10 × 7` grid placing `tile00..tile56` in cols `2..=7` plus row-3 West/East
+    door spots), 4 forbidden empty-corner edge blocks, lit stone highlight,
+    row-3 door cues (`fiendoor Cue 1`, `Rtswdoor ConnorAction "do"`), `Die`
+    allowed while `tileExit 0` holds, weapon-swap refusal `0/0/37/23`, and
+    built-in `Tile2` rock throw (`handsOff 1` -> `away` -> `Prrock.kq`
+    `throw` -> `handsOff 0`, staying in `Tile2`).
+  - **Mandragore (`B3-4`, `KQMandragorTree` & `KQMandragorRoot`):** `0x4042`
+    (`ProjImmune`) + `0`-damage `Special laugh`, `.kq` `alarmRadius`
+    (`15,000`) override, immediate `0.00 s` tree alarm + team `mand<N>`
+    alert (`now > 0`), visible roots locked to `(±600, −1,000, 0)` shoulders,
+    repel `< 700` -> `800` away keeping Z + `Special reactback` (`c_rctbk.kqs`
+    + `conrowbk.aud`), root sink (`r_sink.kqs`, `rootDownCount`, tree `noTurn`
+    ON) -> `rebirthDelay` -> `Birth` (`r_appr.kqs`, `0x4042`/`0x201f`,
+    `noTurn` OFF when `0`), permanent `0`-XP root death when parent tree dies,
+    `20,000` XP, and solid `mt_dead.kqs` corpse (`BoxCollider`) on all hit
+    kinds.
+  - **`docs/SCRIPT-COVERAGE.md` regenerated (`B3-5`):** missing commands
+    across the whole game dropped from `20` to `15`; Swamp now has `1 (1)`
+    missing command (only `beep`), `0` missing Connor states (`Tile2` is
+    `built`), and `KQSwampTile` / `KQMandragorTree` / `KQMandragorRoot` all
+    `named`.
+  - **Next:** User live visual/play check of Batch 3 (Swamp) features;
+    Session A Study Batch 4 (Gnome; `Q199` part b still open).
 
 - **2026-11-20/21 (B): `Q197`–`Q198` + Script Coverage Batch 1 + `B1-F1`/`B1-F1b`/`B1-F2` built**
   (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1" and "Batch 1 follow-up fixes";

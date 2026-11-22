@@ -929,6 +929,26 @@ the logs and unit tests only.
   Book (`Close`, `<<`, `>>` with Portal-style highlight and animations;
   **checked live by eye and ear 2026-11-21**).
 
+## Script coverage batch 3 — Swamp (2026-11-21/22, steps B3-1 to B3-5)
+
+Verified across `794` workspace unit tests and headless Swamp `--sound off`
+viewer logs only (**not yet checked by eye or played by hand**).
+
+- **Swamp script helpers and liquid immunity:** `KQConner::pay`,
+  `KQConner::setRelDamage`, `KQMonster::preSpecial`, `setFirstPerson`
+  state tracking, and `Connor.kq` / `KQConner::addImmunity` / `Journey`
+  liquid damage immunity masking (Swamp `0x100` vs Poison `0x40`).
+- **Swamp gas-tile puzzle (`KQSwampTile` and Connor `Tile2` state):** all
+  42 tiles, Clarity `Reveal` green highlights on safe tiles only, armed
+  gas puffs (`swmpgas.kqs`) and `damFactor` + `Fire` touch damage, 10 × 7
+  `Tile2` jumping rules with lit stone highlighting and row-3 door cues,
+  and built-in `Tile2` rock throwing.
+- **Mandragore (`KQMandragorTree` and `KQMandragorRoot`):** shoulder-linked
+  roots that follow tree turns, knock Connor back with `reactback`, sink
+  temporarily while freezing the tree's turn (`noTurn`), laugh at
+  projectile hits (`0x4042`), and die permanently with a solid
+  `mt_dead.kqs` tree corpse (`20,000` XP).
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses: triggers and
