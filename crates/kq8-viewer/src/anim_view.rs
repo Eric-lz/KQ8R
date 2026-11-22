@@ -637,9 +637,12 @@ pub fn spawn_animated(
             .collect();
         let recipe: Vec<(usize, Vec<GameTransform>)> = drawn.iter().map(|d| (d.frames, d.steps.clone())).collect();
         // Batch 2 D-6: each material's original texture name, keyed as
-        // its drawing's materials are.
-        let texture_names: Vec<((usize, i32), String)> =
-            a.movements.iter().flat_map(|(_, _, i)| built[*i].textures.iter().filter_map(move |(m, t)| t.as_ref().map(|t| ((*i, *m), t.clone())))).collect();
+        // its drawing's materials are (deduplicated per `(shape, material)`
+        // so shared `.kqs` movements like `dragworm.anm`'s `dw_stop.KQS`
+        // do not swap and overwrite the same material twice).
+        let texture_names: Vec<((usize, i32), String)> = dedup_texture_names(
+            a.movements.iter().flat_map(|(_, _, i)| built[*i].textures.iter().filter_map(move |(m, t)| t.as_ref().map(|t| ((*i, *m), t.clone())))).collect(),
+        );
         // K-3: a KQMonster::add prototype (a character) is copied too.
         let prototype = p.name.ends_with(kq8_core::active::ADD_PROTOTYPE);
         if (*unused || template) && (a.character.is_none() || prototype) {
@@ -1013,7 +1016,9 @@ pub fn anim_draw(
                             }
                             let Some(image) = image.clone() else { continue };
                             if let Some(mut m) = materials.get_mut(h) {
-                                p.bmp_saved.push((h.clone(), m.texture.clone()));
+                                if !p.bmp_saved.iter().any(|(saved, _)| saved == h) {
+                                    p.bmp_saved.push((h.clone(), m.texture.clone()));
+                                }
                                 m.texture = Some(image);
                                 changed += 1;
                             }
@@ -1286,5 +1291,47 @@ pub fn shadow_draw(
         for l in lines {
             log.detail(l);
         }
+    }
+}
+
+/// Deduplicates `((shape_index, material_id), texture_name)` entries while
+/// keeping first-seen order so multiple movements referencing the same `.kqs`
+/// file do not save/overwrite the same `ObjectMaterial` more than once.
+fn dedup_texture_names(entries: Vec<((usize, i32), String)>) -> Vec<((usize, i32), String)> {
+    let mut out: Vec<((usize, i32), String)> = Vec::with_capacity(entries.len());
+    for (key, name) in entries {
+        if !out.iter().any(|(k, _)| *k == key) {
+            out.push((key, name));
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dedup_texture_names;
+
+    #[test]
+    fn dedup_texture_names_keeps_unique_shape_material_pairs() {
+        // Models dragworm.anm where run (3), stop (4), and walk (5) share dw_stop.KQS (shape 3).
+        let raw = vec![
+            ((0, 0), "drag11.bmp".into()),
+            ((1, 0), "drag11.bmp".into()),
+            ((2, 0), "drag11.bmp".into()),
+            ((3, 0), "drag11.bmp".into()),
+            ((3, 0), "drag11.bmp".into()),
+            ((3, 0), "drag11.bmp".into()),
+        ];
+        let deduped = dedup_texture_names(raw);
+        assert_eq!(deduped.len(), 4);
+        assert_eq!(
+            deduped,
+            vec![
+                ((0, 0), "drag11.bmp".into()),
+                ((1, 0), "drag11.bmp".into()),
+                ((2, 0), "drag11.bmp".into()),
+                ((3, 0), "drag11.bmp".into()),
+            ]
+        );
     }
 }

@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 4 fix B4-F2: Deduplicate `changeBmp` materials so shared `.kqs` animations restore
+- **Changed:** `crates/kq8-viewer/src/anim_view.rs` (`dedup_texture_names` helper in `spawn_animated`, duplicate-handle guard on `p.bmp_saved` in `changeBmp` swap loop, unit test `dedup_texture_names_keeps_unique_shape_material_pairs`), `MODLOG.md`, `docs/provenance/README.md`.
+- **Why:** Fix the live Gnome bug where `Dragon` stayed almost black in its `Stop` idle animation after `fusebox.cs` ran `KQObject::changeBmp Dragon normal`: `dragworm.anm` shares `dw_stop.KQS` across `run`, `stop`, and `walk`, so `texture_names` listed that material `3` times, causing `changeBmp Dragon drag11.bmp black64.bmp` to overwrite the saved original with `black64.bmp` on the 2nd/3rd pass and `normal` to restore `black64.bmp` last.
+- **Tested how:** `cargo test -p kq8-viewer` (headless Gnome `fusebox` `changeBmp` verification runs after `B4-F3`).
+- **Result:** Unit tests pass (`dedup_texture_names_keeps_unique_shape_material_pairs`).
+- **Still broken:** Remaining Gnome playtest bug (`B4-F3`: `KQObject::collisionType Dragon +64` for melee combat) and live re-check pending.
+- **Next:** Implement `B4-F3` (`KQObject::collisionType` character support in `crates/kq8-core/src/active.rs`).
+
 ## 2026-11-22 Batch 4 fix B4-F1: Pushed objects visit traps (`Bouldtrp`/`Bouldtp2`) and `move boulder` syncs collider
 - **Changed:** `crates/kq8-core/src/active.rs` (`Active::object_moved`, `WorldState::move_object` pushing `Request::Move` and syncing `clickables` when moving a `KQBoulder`, unit tests `pushed_object_triggers_mask_1_trap` and `move_boulder_emits_request_for_collider`), `crates/kq8-viewer/src/connor_view.rs` (`push_apply` sends `Visitor` of pushed object to `doors.active.object_moved`), `MODLOG.md`, `docs/provenance/README.md`.
 - **Why:** Fix the live Gnome bug where pushing `boulder` (`colliderType = 257`) onto `Bouldtrp` (`colliderMask = 1`) never triggered `bouldtrp.cs` (`traps.md` rules 4–6), because only Connor (`CONNOR_TYPE = 4`) was passed to trap checks and `move boulder` skipped updating the viewer collider/view-blocker.

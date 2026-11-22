@@ -4312,6 +4312,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `Active::object_moved` + `connor_view::push_apply` send each pushed object (`BoxCollider` `BallStack::from_box` `Visitor` with `collision_type`, e.g. `boulder` `257`) through `traps_check`; `move_object` updates live `clickables` and emits `Request::Move` when moving a `KQBoulder` | `traps.md` rules 4–6; `MASK/Gnome/kq/{boulder,bouldtrp,bouldtp2}.{kq,cs}` | unit tests `pushed_object_triggers_mask_1_trap`, `move_boulder_emits_request_for_collider` (headless Gnome check pending after `B4-F3`) |
 
+## B4-F2 2026-11-22: Deduplicate `changeBmp` materials across shared `.kqs` movements — viewer `anim_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Deduplicated `Playing::texture_names` by `(shape_index, material_id)` via `dedup_texture_names` and guarded `p.bmp_saved` against saving the same `Handle<ObjectMaterial>` twice so `changeBmp ... normal` restores shared `.kqs` animations (e.g. `dragworm.anm`'s `dw_stop.KQS` across `run`/`stop`/`walk`) | `characters.md` rule 4a; `MASK/Gnome/kq/{dragworm.anm,fusebox.cs}` | unit test `anim_view::tests::dedup_texture_names_keeps_unique_shape_material_pairs` (headless Gnome check pending after `B4-F3`) |
+
 
 
 
