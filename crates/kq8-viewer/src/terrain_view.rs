@@ -44,15 +44,21 @@ pub struct StaticTexture {
     pub swapped_to: Option<String>,
 }
 
+fn texture_basename(name: &str) -> &str {
+    name.rsplit(['/', '\\']).next().unwrap_or(name)
+}
+
 /// Applies `KQObject::changeBmp` / Clarity `KQSwampTile` texture swaps to static
 /// object parts (`characters.md` rule 4a; `tile-puzzle.md` rule 38).
 pub fn static_bmp_swap_step(
     doors: Option<Res<crate::door_view::DoorSim>>,
     anim: Option<Res<crate::anim_view::AnimSim>>,
+    shared: Res<Shared>,
     mut materials: ResMut<Assets<ObjectMaterial>>,
     mut query: Query<(&mut StaticTexture, &mut MeshMaterial3d<ObjectMaterial>)>,
 ) {
     let (Some(doors), Some(anim)) = (doors, anim) else { return };
+    let (mut swapped, mut restored) = (0usize, 0usize);
     for (mut st, mut mat_handle) in &mut query {
         let wanted = doors.active.world.bmp_swaps.get(&st.object_lc).and_then(|pairs| {
             pairs.iter().rev().find_map(|(old, new)| {
@@ -71,13 +77,18 @@ pub fn static_bmp_swap_step(
                     cloned.texture = Some(img.clone());
                     mat_handle.0 = materials.add(cloned);
                     st.swapped_to = Some(new_lc.clone());
+                    swapped += 1;
                 }
             }
             None => {
                 mat_handle.0 = st.original_material.clone();
                 st.swapped_to = None;
+                restored += 1;
             }
         }
+    }
+    if swapped > 0 || restored > 0 {
+        shared.log.lock().unwrap().detail(format!("static changeBmp: {swapped} part(s) swapped, {restored} restored"));
     }
 }
 /// Tint for floor squares higher than the surface.
@@ -461,7 +472,7 @@ pub fn setup_objects(
                 let mut tex_names = Vec::new();
                 for group in model.groups {
                     let tex_name = match &group.look {
-                        crate::load::Look::Texture { name, .. } => Some(name.clone()),
+                        crate::load::Look::Texture { name, .. } => Some(texture_basename(name).to_string()),
                         _ => None,
                     };
                     let mesh = model_mesh(&group.triangles, group.shading.lighting, [0.0; 3]);
@@ -1247,5 +1258,12 @@ mod tests {
         assert_eq!(guides.count_vertices(), 8);
         assert!(guides.attribute(Mesh::ATTRIBUTE_NORMAL).is_some());
         assert!(guides.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+    }
+
+    #[test]
+    fn static_texture_basename_strips_vol_prefix() {
+        assert_eq!(texture_basename("vol:Swamp/8bit/GASTRAP.BMP").to_ascii_lowercase(), "gastrap.bmp");
+        assert_eq!(texture_basename(r"data\Swamp\8bit\WTower5.bmp").to_ascii_lowercase(), "wtower5.bmp");
+        assert_eq!(texture_basename("TRUNK.BMP").to_ascii_lowercase(), "trunk.bmp");
     }
 }

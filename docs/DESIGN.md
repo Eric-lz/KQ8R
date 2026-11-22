@@ -4074,7 +4074,9 @@ Implementing Session A's Batch 3 notes for Swamp (`docs/behaviour/{inventory,scr
    - Live check (2026-11-22): user confirmed projectile laugh, shoulder roots, killing roots, knockback (`reactback`) animation, killing the Mandragore tree, and dead trunk transformation all work as expected.
 5. **Step B3-5: Regenerate `docs/SCRIPT-COVERAGE.md` and update hand-over docs — Done (2026-11-22).**
    - Missing commands dropped from `20` to `15`; Swamp has `1 (1)` missing (`beep` in `Swamp/BOILOIL.CS` only), `Tile2` state is `built`, and `KQSwampTile` / `KQMandragorTree` / `KQMandragorRoot` are `named`.
-6. **Step B3-F1: Startup `KQObject::setScript` for placed objects (`2c`), god-mode log polish (`2d`), and `Q200` (`2e`) — Done (2026-11-22, logs verified; live re-check pending):**
+6. **Step B3-F1: Startup `KQObject::setScript` for placed objects (`2c`), god-mode log polish (`2d`), and `Q200` (`2e`) — Done (2026-11-22; safe tiles, rock throws, and flame damage confirmed by eye 2026-11-22):**
    - Extended `set_character_script` in `crates/kq8-viewer/src/load.rs` to update `collision` scripts (mapped from `placed`), `doors`, and `traps` in addition to `monsters` and `animated`, fixing `newWorld.cs` lines 209–220 (`KQObject::setScript tileXX fiensafe.cs`).
    - Updated `Active::connor_touch` in `crates/kq8-core/src/active.rs` so the log explicitly says `damage skipped (god mode on)` (explaining `2d`, where `F3` god mode had been turned on during the user playtest) instead of claiming a health drop occurred.
-   - Logged `Q200` in `docs/behaviour/QUESTIONS.md` for Study Session (A) to trace `KQCueEvent 500` on `KQObject` projectile launchers (`totem.01`–`06` and similar traps across Daventry and Dead City).
+   - Logged `Q200` in `docs/behaviour/QUESTIONS.md` (answered by Session A 2026-11-22 in `ranged-weapons.md` section 9, rules 34–37).
+7. **Step B3-F2: Strip path prefix in `StaticTexture` for Clarity tile highlights — Done (2026-11-22, logs verified; visual re-check pending):**
+   - Stripped the `vol:<world>/8bit/` prefix in `crates/kq8-viewer/src/terrain_view.rs` (`texture_basename`) so `StaticTexture.original_tex` holds `"GASTRAP.BMP"` instead of `"vol:Swamp/8bit/GASTRAP.BMP"` and matches `reveal_pairs(...)` case-insensitively (`static changeBmp: 24 part(s) swapped, 0 restored` across the 12 safe Swamp tiles).

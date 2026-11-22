@@ -1,13 +1,12 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-Session A answered **`Q200`** (`KQCueEvent 500` object projectile launchers,
-unblocking Swamp bug `2e`), following **Batch 3 fix `B3-F1`** (safe Swamp
-tiles / Clarity startup `setScript` fix, god-mode log polish, and `Q200`).
-Read with `AGENTS.md`,
-`docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the
-top). The short public summary is `README.md`; the detailed "what works"
-list is `docs/FEATURES.md`.
+**Batch 3 fix `B3-F2`** (`StaticTexture` basename fix for Clarity Swamp tile
+highlights) and recording the user's live check of `B3-F1`, following
+Session A's answer to **`Q200`** (`KQCueEvent 500` object projectile
+launchers). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
+`MODLOG.md` (newest entries at the top). The short public summary is
+`README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
 
@@ -27,17 +26,17 @@ list is `docs/FEATURES.md`.
     (scripts/victims handle sounds), standard `KQProjectile` collision
     (launcher ignored), and `Die` running on contact, `maxDistance`, and
     floor hits (`PRfire2.kq` → `GAME/Kq/swmpfrbl.cs` → `endfrbl.kqs`).
-  - **Next:** Implementation Session (B) can now implement `KQCueEvent 500`
-    (`B3-F2`, Swamp bug `2e`); `Q199` part (b) and Batch 4 (Gnome) remain
+  - **Next:** Implementation Session (B) implements `KQCueEvent 500`
+    (`B3-F3`, Swamp bug `2e`); `Q199` part (b) and Batch 4 (Gnome) remain
     for Study Session (A).
 
-- **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`,
-  `794` workspace unit tests; headless `--sound off` Swamp viewer logs;
-  live user play check 2026-11-22: `B3-4` Mandragores confirmed working by
-  eye, `B3-2`/`B3-3` gas-tile puzzle checked in play; `2c` fixed in `B3-F1`
-  and `2d` traced to `F3` god mode — pending re-check by eye; `2e`
-  awaiting `Q200`; `2b` first-person camera note; `B3-1` commands & liquid
-  immunity still unit/log-verified only):**
+- **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`/`B3-F2`,
+  `795` workspace unit tests; headless `--sound off` Swamp viewer logs;
+  live user play check 2026-11-22: `B3-4` Mandragores, safe Swamp tiles,
+  rock throws onto unsafe tiles, and tile flame damage confirmed working by
+  eye; `B3-F2` fixes Clarity's `StaticTexture` path-prefix bug — pending
+  re-check by eye; `2e` ready for `B3-F3`; `2b` first-person camera note;
+  `B3-1` commands & liquid immunity still unit/log-verified only):**
   - **Swamp script commands & liquid immunity (`B3-1`):** `KQConner::pay`
     (`INVITEM_` fallback, `unapply` + empty hand/ready-weapon when spent),
     `KQConner::setRelDamage` (`$CurRelDamage` / `$CurRelHealth`),
@@ -48,21 +47,18 @@ list is `docs/FEATURES.md`.
     `KQConner::addImmunity` / `Journey::immunities` masking liquid damage
     (Swamp `0x100` vs Poison `0x40`). Intentional `Swamp/boiloil.cs:4` `beep`
     typo left unimplemented (`script-commands.md` rule 5).
-  - **`KQSwampTile` gas traps & Clarity Reveal (`B3-2` + `B3-F1`):** all 42
+  - **`KQSwampTile` gas traps & Clarity Reveal (`B3-2` + `B3-F1`/`B3-F2`):** all 42
     tiles parsed (`heightNum`, `damFactor = 0.48`), clickable (`INVITEM_Rock`),
     multi-pair static/animated `ChangeBmp` highlights only the 12 safe tiles
     (`fiensafe.cs`) on Clarity `Reveal`, `0`-damage projectile hits spawn
     auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250` while armed, and
     Connor collisions on `> 2.0 s` resettable cooldown subtract
-    `trunc(-level * 10 * damFactor)` health directly + 1 `Fire` hit. **`B3-F1`
-    fix:** startup `KQObject::setScript` in `load.rs` now updates placed
-    static clickables (`collision`) as well as items/characters, fixing bug
-    `2c` (all 12 `fiensafe.cs` safe tiles now register `Init`, emit no gas/damage
-    when touched, and highlight on Clarity `Reveal` in Swamp logs — pending
-    user re-check by eye); bug `2d` was `F3` god mode suppressing tile damage
-    in the user's run (log message now says `damage skipped (god mode on)`;
-    unsafe `tile53` drops health `150 -> 78 -> 77` with `F3` off — pending
-    user re-check by eye).
+    `trunc(-level * 10 * damFactor)` health directly + 1 `Fire` hit. **Live
+    check 2026-11-22 (`B3-F1`):** safe tiles, rock throws onto unsafe tiles,
+    and flame damage on Connor all confirmed working by eye! **`B3-F2` fix:**
+    `StaticTexture` now strips archive prefixes (`texture_basename`) so
+    Clarity swaps all 24 static parts on the 12 safe tiles in `viewer.log` —
+    pending visual re-check by eye.
   - **`Tile2` Connor state & built-in rock throw (`B3-3`):** state `16,384`
     (`10 × 7` grid placing `tile00..tile56` in cols `2..=7` plus row-3 West/East
     door spots), 4 forbidden empty-corner edge blocks, lit stone highlight,

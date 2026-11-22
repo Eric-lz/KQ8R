@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 3 fix B3-F2: Strip path prefix in `StaticTexture` for Clarity Swamp tile highlights
+- **Changed:** `crates/kq8-viewer/src/terrain_view.rs` (added `texture_basename` helper stripping `vol:<world>/8bit/` / path prefixes when storing `StaticTexture.original_tex`, logged `static changeBmp: <swapped> part(s) swapped, <restored> restored` in `static_bmp_swap_step`, and added unit test `static_texture_basename_strips_vol_prefix`), `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `docs/provenance/README.md` (and discarded an accidental unstaged duplicate edit in `docs/FEATURES.md`).
+- **Why:** Record the user's 2026-11-22 live check confirming safe Swamp tiles, rock throws onto unsafe tiles, and tile flame damage on Connor all work by eye, while Clarity still wasn't visually highlighting the safe tiles (`StaticTexture.original_tex` held `"vol:Swamp/8bit/GASTRAP.BMP"` so `eq_ignore_ascii_case("gastrap.bmp")` never matched).
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; headless Swamp Clarity check (`--world Swamp --sound off --no-ai --at 60000,100600,0 --lift 2000 --console "give Clarity 1",1 --key left:IDCTL_HEALTHBAR_7,3 --frames 20`), inspecting `viewer.log`. **Visual look of Clarity's highlighted Swamp tiles in `kq8-viewer` is pending live re-check.**
+- **Result:** All 795 workspace tests pass (5 `kq8-audio`, 612 `kq8-core`, 150 `kq8-data`, 28 `kq8-viewer`). Headless Swamp `viewer.log` confirms `static changeBmp: 24 part(s) swapped, 0 restored` (all 12 safe tiles × 2 materials each) (`RESULT: PASS`).
+- **Still broken / not tested:** Visual confirmation of Clarity tile highlights by eye; `B3-F3` (`KQCueEvent 500` object projectile launchers per `Q200` for bug `2e` `totem.01`–`06`) is next.
+- **Next:** Implement Batch 3 fix `B3-F3` (`KQCueEvent 500` per `Q200`).
+
 ## 2026-11-22 Study (A): `KQCueEvent 500` object projectile launchers (`Q200`)
 - **Changed:** `docs/behaviour/ranged-weapons.md` (added section 9 "Object projectile launchers (`KQCueEvent 500`)", rules 34–37, plus summary tables/data/edge cases/do-not-reproduce/checks), `docs/behaviour/clicking.md` (corrected rule 21 and summary row for cue `500`), `docs/behaviour/tile-puzzle.md` (rule 28 cross-reference), `docs/behaviour/QUESTIONS.md` (marked `Q200` answered), `STATUS.md`, `MODLOG.md`, and untracked `re/notes.md` (no Rust code written).
 - **Why:** Answer `Q200` (blocking Swamp's 6 fire-shooting towers `totem.01`–`06` in bug `2e` and projectile traps in Daventry, Dead City, and Swamp).
