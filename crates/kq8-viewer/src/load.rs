@@ -1703,6 +1703,8 @@ pub struct AnimatedAssets {
     pub script: Option<String>,
     /// `classType=KQAnimOnce` (`anim-scripts.md` rule 11; M5 5d-1).
     pub once: bool,
+    /// `classType=KQBoulder` (`pushing.md` rules 12a–12d): pauses after 0.5 s and rolls on push.
+    pub boulder: bool,
     /// A character's own values (M4 4d-2), `None` for other objects.
     pub character: Option<CharacterAssets>,
     /// A character's mouth textures `lip0`…`lip7` (M4 4d-5, rule 25),
@@ -2959,6 +2961,7 @@ impl Placer<'_> {
                 random: false,
                 script: None,
                 once: true,
+                boulder: false,
                 lip_looks: Vec::new(),
                 character: None,
             });
@@ -4093,15 +4096,7 @@ impl Placer<'_> {
         // 3r-2).
         let movement_count = kq8_data::objects::movement_loops(&file, s).ok().flatten().map_or(0, |m| m.len());
         if let Some(c) = animation.as_ref().filter(|c| c.speed != 0.0 || movement_count > 1) {
-            if boulder {
-                self.log.summary(format!(
-                    "animated {label}[{}]: class KQBoulder: movement {} not played, drawn still at its start (objects.md Q51 rule 8)",
-                    self.placed.last().map_or("?", |(p, _, _)| p.name.as_str()),
-                    c.movement
-                ));
-            } else {
-                self.place_animated(&label, &file, c, flags.as_deref(), character.clone());
-            }
+            self.place_animated(&label, &file, c, flags.as_deref(), character.clone(), boulder);
         }
         if let (false, Some(l)) = (unused, self.located.get_mut(&key)) {
             l.drawn = Drawn::Model(self.placed.len() - 1);
@@ -4816,6 +4811,7 @@ impl Placer<'_> {
         c: &kq8_data::objects::CurrentLoop,
         flags: Option<&str>,
         character: Option<CharacterAssets>,
+        boulder: bool,
     ) {
         // A character's skin swap (characters.md rule 4) gives its own
         // copies of the animations that use the texture.
@@ -4891,6 +4887,7 @@ impl Placer<'_> {
             random: flag_bits & kq8_core::anim::RANDOM_START != 0,
             script: text("script"),
             once: s.get("classType").is_some_and(|c| c.trim().eq_ignore_ascii_case("KQAnimOnce")),
+            boulder,
             lip_looks,
             character,
         });

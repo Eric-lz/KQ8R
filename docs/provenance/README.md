@@ -4299,6 +4299,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `useAlternateLightmap <interiorName> <0|1>` (exact 3 words -> `"0"`, queues `Request::UseAlternateLightmap` + stores `WorldState::alt_lightmaps` for `KQInterior`, prints `useAlternateLightmap: Could not find object <name>` on missing, silently ignores non-interiors) | `script-commands.md` rule 12e, `object-lighting.md` rule 12 (Batch 4); `MASK/Gnome/kq/{fusebox.cs,gnome13.kq,gnome14.kq}` | unit test `use_alternate_lightmap_switches_interior_ignores_non_interior_and_returns_0`; Gnome `doors.log` (`fusebox.cs`, `gnome13`/`gnome14`, `missing`, `anvil`) |
 | `KQInterior` `althwLightmapName` & `usingAltLighting` parsing, alternate `.dil` layout compatibility validation, `WallLights::set_alternate` immediate GPU `Image` swap, and `KeptWorld`/`Arrival` persistence | `object-lighting.md` rule 12 (Batch 4); `MASK/{Gnome,temple4}/resource/*.dil` & `MASK/temple4/kq/temple.kq` | unit test `wall_lights::tests::set_alternate_swaps_atlas_and_writes_image`; Gnome `viewer.log` (`gnome13l.dil` `512x175` & `gnome14l.dil` `512x215` compatible, `normal`/`alternate` swaps; **not yet checked live by eye**) |
 
+## B4-3 2026-11-22: `KQBoulder` rolling and animation rules — core `active.rs`; viewer `load.rs`, `anim_view.rs`, `door_view.rs`, `connor_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `BoulderState` (`prev_pos`, `forced_active`, `frozen`), `Active::start()` `forced_active` + 1-update `pushston.kqs` advance + `+0.5 s` `KQCueEvent 50`, `Active::deliver()` `Cue 50` freeze while delegating other cues, `Active::boulder_pushed` (`Mode::Push`, `Δ ≥ 1e-6` -> 1-update unfreeze/advance/re-freeze + `+0.1 s` `KQMoveEvent` `yaw + π`), `move_command` `prev_pos` sync | `pushing.md` rules 12a–12d (Batch 4); `MASK/Gnome/kq/{boulder,bouldtrp}.kq/.cs` | unit tests `kq_boulder_startup_freezes_on_cue_50_and_delegates_other_cues`, `kq_boulder_pushed_rolls_when_connor_pushes_and_rotates_on_move_event`; Gnome `doors.log` (`update 0` -> `update 8 Cue 50` -> push steps `0.1333`..`93335.4`) |
+| `load.rs` routes `KQBoulder` into animated objects; `anim_step` keeps `boulder` collider synced to `base`; `door_step` preserves `BoulderState::frozen` across `FrozenNow`; `push_apply` calls `doors.active.boulder_pushed` | `pushing.md` rules 12a–12d (Batch 4) | Gnome `900`-frame `viewer.log`, `connor.log`, `anim.log` (`[boulder]` collider synced at `90980..93189`; **visual roll axis in play not yet checked by eye**) |
+
 
 
 

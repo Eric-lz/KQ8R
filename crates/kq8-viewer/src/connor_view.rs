@@ -2223,6 +2223,14 @@ pub fn push_apply(
             }
             boxes += 1;
         }
+        if let (Some(new_pos), Some(doors)) = (at, doors.as_deref_mut()) {
+            doors.active.boulder_pushed(
+                &name,
+                new_pos,
+                sim.mover.position,
+                sim.walker.mode == kq8_core::connor::Mode::Push,
+            );
+        }
         let shift = Vec3::from(crate::to_bevy(d, [0.0; 3]));
         let mut entities = 0;
         for (_, mut t) in drawn.iter_mut().filter(|(n, _)| n.0 == name) {

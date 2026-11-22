@@ -75,6 +75,7 @@ struct Playing {
     /// (movement, frame) shown.
     shown: Option<(usize, usize)>,
     tracked: bool,
+    boulder: bool,
     /// Its entry in `ObjectColliders` (only for objects with steps):
     /// `None` = not looked up yet, `Some(None)` = it has none.
     collider: Option<Option<usize>>,
@@ -182,7 +183,7 @@ impl AnimSim {
         let index = active.world.anims.len();
         let Source::Own(player) = std::mem::replace(&mut p.source, Source::Core(index)) else { unreachable!() };
         let player = p.at_load.take().unwrap_or(player);
-        active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.take(), translucency: None }]);
+        active.add_anims([AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.take(), translucency: None, boulder: None }]);
         true
     }
 
@@ -194,7 +195,7 @@ impl AnimSim {
         let Source::Own(player) = &p.source else { return None };
         let mut player = p.at_load.clone().unwrap_or_else(|| player.clone());
         player.name = name.to_string();
-        Some(AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.clone(), translucency: None })
+        Some(AnimObject { player: *player, script: p.script.clone(), gone: false, character: p.character.clone(), translucency: None, boulder: None })
     }
 
     /// K-3: a new character copied from a `KQMonster::add` prototype (core
@@ -282,6 +283,7 @@ impl AnimSim {
             bmp_shown: None,
             bmp_saved: Vec::new(),
             at_load: None,
+            boulder: false,
         });
         line
     }
@@ -698,7 +700,12 @@ pub fn spawn_animated(
             }
             Source::Own(Box::new(player))
         } else {
-            core.push(AnimObject { player, script: a.script.clone(), gone: false, character: character.take(), translucency: None });
+            let boulder = a.boulder.then(|| kq8_core::active::BoulderState {
+                prev_pos: p.position,
+                forced_active: false,
+                frozen: false,
+            });
+            core.push(AnimObject { player, script: a.script.clone(), gone: false, character: character.take(), translucency: None, boulder });
             Source::Core(core.len() - 1)
         };
         playing.push(Playing {
@@ -713,6 +720,7 @@ pub fn spawn_animated(
             body,
             shown: None,
             tracked,
+            boulder: a.boulder,
             collider: None,
             character,
             test: prepared_test,
@@ -834,7 +842,7 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
             sim.log.detail(format!("update {n} [{}] phase {:.4} frame {}{}", p.name, player.phase, frame, if player.has_ended() { " finished" } else { "" }));
         }
         let Some(drawn) = p.movements.get(movement) else { continue };
-        if drawn.steps.is_empty() {
+        if !p.boulder && drawn.steps.is_empty() {
             continue;
         }
         let Some(colliders) = colliders.as_mut() else { continue };

@@ -425,6 +425,17 @@ pub struct AnimObject {
     /// `makeTranslucent` (characters.md rule 22): the see-through value a
     /// script set (256 = solid), for the viewer; `None` = as loaded.
     pub translucency: Option<f32>,
+    /// `KQBoulder` rolling state (`pushing.md` rules 12a–12d); `None` for non-boulders.
+    pub boulder: Option<BoulderState>,
+}
+
+/// Push-roll state for `classType=KQBoulder` (`pushing.md` rules 12a–12d).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BoulderState {
+    pub prev_pos: [f32; 3],
+    pub forced_active: bool,
+    /// Stays frozen after `KQCueEvent 50` even when draw-distance `FrozenNow` syncs `world.frozen`.
+    pub frozen: bool,
 }
 
 /// What a kept world keeps of an animated or scripted object whose state
@@ -2830,7 +2841,7 @@ impl WorldState {
         player.started_this_update = true;
         self.deleted.remove(&lower);
         self.known.insert(lower);
-        self.anims.push(AnimObject { player, script: None, gone: false, character: None, translucency: None });
+        self.anims.push(AnimObject { player, script: None, gone: false, character: None, translucency: None, boulder: None });
         self.vars_out.push(("ObjectName".into(), name.clone()));
         self.note(format!(
             "{at}: loadAnim {name} {file}: KQAnimOnce at ({:.0}, {:.0}, {:.0}) turned ({:.3}, {:.3}, {:.3}) (script-commands.md rule 11)",
@@ -2888,7 +2899,7 @@ impl WorldState {
         player.started_this_update = true;
         self.deleted.remove(&lower);
         self.known.insert(lower);
-        self.anims.push(AnimObject { player, script: None, gone: false, character: None, translucency: None });
+        self.anims.push(AnimObject { player, script: None, gone: false, character: None, translucency: None, boulder: None });
         self.requests.push(Request::Spawn { file: key.into(), name: name.clone(), placement, at: at.to_string() });
         name
     }
@@ -2919,7 +2930,7 @@ impl WorldState {
                 let mut player = (**p).clone();
                 player.name = name.to_string();
                 player.base = placement;
-                self.anims.push(AnimObject { player, script: t.script.clone(), gone: false, character: None, translucency: None });
+                self.anims.push(AnimObject { player, script: t.script.clone(), gone: false, character: None, translucency: None, boulder: None });
                 "animated"
             }
             TemplateKind::Still { bounds: Some((min, max)), collision_type } => {
@@ -3417,8 +3428,15 @@ impl WorldState {
                 new.position[2],
                 note.map_or(String::new(), |n| format!("; {n}"))
             ));
-            if let Some(i) = moved_anim.filter(|&i| self.anims[i].character.as_deref().is_some_and(|c| c.mandragore_tree.is_some())) {
-                self.sync_mandragore_roots(i);
+            if let Some(i) = moved_anim {
+                if self.anims[i].character.as_deref().is_some_and(|c| c.mandragore_tree.is_some()) {
+                    self.sync_mandragore_roots(i);
+                }
+                if new.position != old {
+                    if let Some(b) = self.anims[i].boulder.as_mut() {
+                        b.prev_pos = new.position;
+                    }
+                }
             }
             return "0".into();
         }
@@ -6121,6 +6139,83 @@ impl Active {
             self.call_trap(i, &["Init"]);
             self.post_lookup(i, "the start");
         }
+        // pushing.md rule 12b (B4-3): KQBoulder starts forced active,
+        // unfreezes/advances 1 update, and queues KQCueEvent 50 at +0.5 s.
+        let now = self.world.now();
+        for i in 0..self.world.anims.len() {
+            if self.world.anims[i].gone || self.world.anims[i].boulder.is_none() {
+                continue;
+            }
+            let name = self.world.anims[i].player.name.clone();
+            let pos = self.world.anims[i].player.base.position;
+            if let Some(b) = self.world.anims[i].boulder.as_mut() {
+                b.prev_pos = pos;
+                b.forced_active = true;
+                b.frozen = false;
+            }
+            self.world.frozen.remove(&name.to_ascii_lowercase());
+            let _ = self.world.anims[i].player.advance(1.0 / crate::UPDATES_PER_SECOND as f32);
+            let (phase, frame) = (self.world.anims[i].player.phase, self.world.anims[i].player.frame());
+            self.world.requests.push(Request::MakeActive {
+                name: name.clone(),
+                on: true,
+                at: "KQBoulder add (pushing.md rule 12b)".into(),
+            });
+            self.world.queue.send(now, 0.5, &name, "KQCueEvent", &["50".into()], "KQBoulder add (pushing.md rule 12b)");
+            self.world.note(format!(
+                "{name}: KQBoulder added: forced active, advanced 1 update to phase {phase:.4} frame {frame}, freezing on Cue 50 in 0.5 s (pushing.md rule 12b)"
+            ));
+        }
+    }
+
+    /// Updates a `KQBoulder` when physically pushed (`pushing.md` rule 12c):
+    /// updates its position, and when Connor is in `Push` and it moved by at
+    /// least `1e-6`, queues a `KQMoveEvent` `0.1 s` later facing `yaw + π` and
+    /// advances `pushston.kqs` by one update while staying frozen.
+    pub fn boulder_pushed(&mut self, name: &str, new_pos: [f32; 3], connor_pos: [f32; 3], connor_in_push: bool) {
+        let Some(i) = self.world.anim_index(name).filter(|&i| !self.world.anims[i].gone && self.world.anims[i].boulder.is_some()) else {
+            return;
+        };
+        let canonical = self.world.anims[i].player.name.clone();
+        self.world.anims[i].player.base.position = new_pos;
+        if !connor_in_push {
+            return;
+        }
+        let Some(prev) = self.world.anims[i].boulder.map(|b| b.prev_pos) else {
+            return;
+        };
+        if (0..3).all(|k| (new_pos[k] - prev[k]).abs() < 1e-6) {
+            return;
+        }
+        let yaw = crate::connor_auto::heading_towards(connor_pos, [prev[0], prev[1]]);
+        let rot_z = yaw + std::f32::consts::PI;
+        if let Some(b) = self.world.anims[i].boulder.as_mut() {
+            b.prev_pos = new_pos;
+            b.frozen = false;
+        }
+        let lower = canonical.to_ascii_lowercase();
+        self.world.frozen.remove(&lower);
+        let step = self.world.anims[i].player.advance(1.0 / crate::UPDATES_PER_SECOND as f32);
+        self.world.frozen.insert(lower);
+        if let Some(b) = self.world.anims[i].boulder.as_mut() {
+            b.frozen = true;
+        }
+        let now = self.world.now();
+        let data = [
+            "1".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            "0".to_string(),
+            format!("{rot_z:.6}"),
+        ];
+        self.world.queue.send(now, 0.1, &canonical, "KQMoveEvent", &data, "KQBoulder push (pushing.md rule 12c)");
+        let (phase, frame) = (self.world.anims[i].player.phase, self.world.anims[i].player.frame());
+        self.world.note(format!(
+            "KQBoulder {canonical}: pushed ({:.1}, {:.1}, {:.1}) -> ({:.1}, {:.1}, {:.1}); yaw+pi {rot_z:.4}, advanced phase {:.4} -> {phase:.4} (frame {frame}) (pushing.md rule 12c)",
+            prev[0], prev[1], prev[2], new_pos[0], new_pos[1], new_pos[2], step.from
+        ));
     }
 
     /// traps.md rule 15a (D-9a): the trap posts itself the lookup notice
@@ -7085,7 +7180,8 @@ impl Active {
             // U-3: updated only with the tick (near), not when far.
             let lower = self.world.anims[i].player.name.to_ascii_lowercase();
             let in_range = self.world.characters_in_range.contains(&lower) && !self.world.frozen.contains(&lower);
-            if self.world.anims[i].character.is_none() && self.world.frozen.contains(&lower) {
+            let boulder_frozen = self.world.anims[i].boulder.is_some_and(|b| b.frozen);
+            if self.world.anims[i].character.is_none() && (self.world.frozen.contains(&lower) || boulder_frozen) {
                 continue;
             }
             let connor_at = self.world.connor_at.map(|p| [p[0], p[1]]);
@@ -7530,6 +7626,26 @@ impl Active {
                     self.tower_cue201(j, &from);
                     return;
                 }
+            }
+        }
+        // pushing.md rule 12c (B4-3): KQBoulder pauses on Cue 50 sent 0.5 s after add.
+        if e.kind == "KQCueEvent" && e.data.first().map(String::as_str) == Some("50") {
+            if let Some(i) = self.world.anim_index(&e.target).filter(|&i| !self.world.anims[i].gone && self.world.anims[i].boulder.is_some()) {
+                let name = self.world.anims[i].player.name.clone();
+                if let Some(b) = self.world.anims[i].boulder.as_mut() {
+                    b.forced_active = false;
+                    b.frozen = true;
+                }
+                self.world.frozen.insert(name.to_ascii_lowercase());
+                self.world.requests.push(Request::MakeActive {
+                    name: name.clone(),
+                    on: false,
+                    at: format!("KQCueEvent 50{from}"),
+                });
+                self.world.note(format!(
+                    "KQCueEvent 50 to KQBoulder {name}{from}: forced active cleared, animation frozen (pushing.md rule 12c)"
+                ));
+                return;
             }
         }
         // objects.md "Loops that move the whole object" rule 3 (batch 2,
@@ -8913,7 +9029,7 @@ endif
         let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("o.cs".to_string(), script.as_bytes().to_vec())]);
         let mut player = crate::named_anim::tests::still_then_open("burst");
         player.once = true;
-        a.add_anims([AnimObject { player, script: Some("o.cs".into()), gone: false, character: None, translucency: None }]);
+        a.add_anims([AnimObject { player, script: Some("o.cs".into()), gone: false, character: None, translucency: None, boulder: None }]);
         a.call_named("burst", &["Init"]);
         let mut log = String::new();
         for _ in 0..25 {
@@ -8996,7 +9112,7 @@ endif
         let mut a = with_object(script, "x");
         let mut player = crate::named_anim::tests::still_then_open("water");
         player.movements[1].name = "blocked".into();
-        a.add_anims([AnimObject { player, script: None, gone: false, character: None, translucency: None }]);
+        a.add_anims([AnimObject { player, script: None, gone: false, character: None, translucency: None, boulder: None }]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         a.update();
         let log = a.take_log().join("\n");
@@ -9010,7 +9126,7 @@ endif
         }
         assert!(log.contains("cue 'playsound chstopen' fires") && log.contains("object water: movement 'blocked' finished"), "{log}");
         let mut d = with_object("deleteObject water\n", "x");
-        d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None }]);
+        d.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None, boulder: None }]);
         d.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert!(d.world.anims[0].gone && d.world.is_deleted("water"));
     }
@@ -9021,7 +9137,7 @@ endif
         let mut player = crate::named_anim::tests::still_then_open("wiz");
         player.movements[0].name = "stop".into();
         let character = crate::character::Character::new(false, 0x20, 0.0, false, false, true, 1);
-        a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(character)), translucency: None }]);
+        a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(character)), translucency: None, boulder: None }]);
         let at = Placement { rotation: crate::door::identity().m, position: [0.0; 3] };
         a.world.clickables.push(Clickable::plain("wiz", "KQMonster", [-100.0; 3], [100.0; 3], at, 33));
         a.world.characters_in_range.insert("wiz".into());
@@ -9063,7 +9179,7 @@ endif
         p.name = "gob".into();
         c.collision_type = 0x42;
         c.bounds = Some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
-        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None, boulder: None }]);
         a.world.characters_in_range.insert("gob".into());
         a.world.characters_solid.insert("gob".into());
         let mut objects = Vec::new();
@@ -9110,7 +9226,7 @@ endif
             player.base.position = [0.0, -2800.0, 100.0];
             let mut c = crate::character::Character::new(false, 0x20, 0.0, false, false, false, 2);
             c.bounds = Some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
-            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None, boulder: None }]);
             a.world.characters_solid.insert("gob2".into());
         });
         assert!(at[1] > -1200.0 && at[1] < -1150.0, "{at:?} {log}");
@@ -9137,7 +9253,7 @@ endif
             s.team = team.map(str::to_string);
             s.alarm_radius = *alarm;
             c.ai = Some(crate::character_ai::Ai::new(s, player.base.position, 1300.0, false));
-            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None, boulder: None }]);
             a.world.characters_in_range.insert(name.to_ascii_lowercase());
         }
         a.world.connor_at = Some([0.0, -5000.0, 100.0]);
@@ -9212,7 +9328,7 @@ endif
         s.wander = wander;
         s.alarm_radius = 1000.0;
         c.ai = Some(crate::character_ai::Ai::new(s, p.base.position, 1300.0, false));
-        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None, boulder: None }]);
         a.world.characters_in_range.insert("gob".into());
         a.world.connor_at = Some([20_000.0, 0.0, 100.0]);
         a
@@ -9324,7 +9440,7 @@ endif
         let mut ai = crate::character_ai::Ai::new(s, p.base.position, 1750.0, true);
         ai.has_birth = true;
         c.ai = Some(ai);
-        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+        a.add_anims([AnimObject { player: p, script: None, gone: false, character: Some(Box::new(c)), translucency: None, boulder: None }]);
         a.world.characters_in_range.insert("zom".into());
         a.world.connor_at = Some([0.0, -3000.0, 100.0]);
         watch(&mut a, &[], 16);
@@ -10013,7 +10129,7 @@ endif
             let mut c = crate::character::Character::new(false, 0x20, 0.0, false, false, false, 1);
             c.collision_type = kind;
             c.bounds = bounds.then_some(([-350.0, -800.0, 0.0], [350.0, 800.0, 1300.0]));
-            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None }]);
+            a.add_anims([AnimObject { player, script: None, gone: false, character: Some(Box::new(c)), translucency: None, boulder: None }]);
         };
         add("gob", 0x42, true);
         add("wiz", 0xC021, true);
@@ -10046,7 +10162,7 @@ endif
     #[test]
     fn make_translucent_sets_the_value_on_an_animated_object() {
         let mut a = with_object("makeTranslucent water 150\nmakeTranslucent nobody 150\nmakeTranslucent Connor 180\n", "x");
-        a.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None }]);
+        a.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("water"), script: None, gone: false, character: None, translucency: None, boulder: None }]);
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert_eq!(a.world.anims[0].translucency, Some(150.0));
         let log = a.take_log().join("\n");
@@ -10267,6 +10383,7 @@ getGuiStatus
             gone: false,
             character: Some(Box::new(crate::character::Character::new(false, 0, 0.0, false, false, false, 1))),
             translucency: None,
+            boulder: None,
         });
         a.world.anims[0].player.cut_short = false;
         assert_eq!(a.test_command("KQMonster::preSpecial hench", "t").as_deref(), Some("0"));
@@ -10496,10 +10613,10 @@ endif
             rai.team = Some("mand3".into());
             rai.alarm_radius = 15_000.0;
             rc.ai = Some(crate::character_ai::Ai::new(rai, tpos, 2140.0, false));
-            AnimObject { player: rp, script: None, gone: false, character: Some(Box::new(rc)), translucency: None }
+            AnimObject { player: rp, script: None, gone: false, character: Some(Box::new(rc)), translucency: None, boulder: None }
         };
         a.add_anims([
-            AnimObject { player: tp, script: None, gone: false, character: Some(Box::new(tc)), translucency: None },
+            AnimObject { player: tp, script: None, gone: false, character: Some(Box::new(tc)), translucency: None, boulder: None },
             mk_root("mand3l", [-600.0, -1000.0, 0.0], 2),
             mk_root("mand3r", [600.0, -1000.0, 0.0], 3),
         ]);
@@ -10690,7 +10807,7 @@ deleteObject waterfall2
         a.update();
         let log = a.take_log().join("\n");
         assert!(log.contains("KQAnimPlayEvent open to magicmap") && log.contains("held until then"), "{log}");
-        a.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("magicmap"), script: None, gone: false, character: None, translucency: None }]);
+        a.add_anims([AnimObject { player: crate::named_anim::tests::still_then_open("magicmap"), script: None, gone: false, character: None, translucency: None, boulder: None }]);
         a.loaded("magicmap");
         let log = a.take_log().join("\n");
         assert!(log.contains("handed over now") && log.contains("KQAnimPlayEvent open to object magicmap"), "{log}");
@@ -12201,5 +12318,125 @@ mod talk_tests {
             a.world.requests.as_slice(),
             [Request::UseAlternateLightmap { name, alt: false, .. }] if name == "gnome13"
         ));
+    }
+
+    fn boulder_anim(name: &str, pos: [f32; 3], script: Option<&str>) -> AnimObject {
+        let movement = crate::door::DoorMovement {
+            name: "pushston".into(),
+            start: 0.0,
+            speed: 1.0,
+            repeat: true,
+            cut_short: true,
+            play_time: 1.0,
+            frame_steps: Vec::new(),
+            first_in_file: true,
+            frame_parts: Vec::new(),
+            cues: Vec::new(),
+            transitions: Vec::new(),
+        };
+        let mut player = NamedAnimPlayer::new(name, vec![movement], 0, Placement::at(pos));
+        player.playing = true;
+        AnimObject {
+            player,
+            script: script.map(str::to_string),
+            gone: false,
+            character: None,
+            translucency: None,
+            boulder: Some(BoulderState { prev_pos: [0.0; 3], forced_active: false, frozen: false }),
+        }
+    }
+
+    #[test]
+    fn kq_boulder_startup_freezes_on_cue_50_and_delegates_other_cues() {
+        let mut a = active("", &[]);
+        a.world.sources.insert("b.cs".into(), b"set cueArgs $1 $2 $3\n".to_vec());
+        a.add_anims([boulder_anim("boulder", [1000.0, 2000.0, 500.0], Some("b.cs"))]);
+        a.world.frozen.insert("boulder".into());
+
+        a.start();
+        assert_eq!(
+            a.world.anims[0].boulder,
+            Some(BoulderState { prev_pos: [1000.0, 2000.0, 500.0], forced_active: true, frozen: false })
+        );
+        assert!(a.world.anims[0].player.phase > 0.0);
+        assert!(!a.world.frozen.contains("boulder"));
+        assert!(matches!(
+            a.world.requests.as_slice(),
+            [Request::MakeActive { name, on: true, .. }] if name == "boulder"
+        ));
+        a.world.requests.clear();
+
+        for _ in 0..8 {
+            a.update();
+        }
+        assert!(!a.world.frozen.contains("boulder"));
+        assert!(a.world.anims[0].boulder.unwrap().forced_active);
+
+        // On update 9 (now = 8/15 s > 0.5 s), Cue 50 arrives, clears forced_active, and freezes without calling b.cs.
+        a.update();
+        assert!(a.world.frozen.contains("boulder"));
+        assert!(!a.world.anims[0].boulder.unwrap().forced_active);
+        assert!(matches!(
+            a.world.requests.as_slice(),
+            [Request::MakeActive { name, on: false, .. }] if name == "boulder"
+        ));
+        assert_eq!(a.scripts.vars.get("cueArgs"), None);
+
+        // Non-50 cues still delegate to KQObject's cue handler.
+        assert_eq!(a.test_command("sendEvent 0 boulder KQCueEvent 99", "t").as_deref(), Some("0"));
+        a.update();
+        assert_eq!(a.scripts.vars.get("cueArgs"), Some("boulder Cue 99"));
+        assert!(a.world.anims[0].boulder.unwrap().frozen);
+    }
+
+    #[test]
+    fn kq_boulder_pushed_rolls_when_connor_pushes_and_rotates_on_move_event() {
+        let mut a = active("", &[]);
+        a.add_anims([boulder_anim("boulder", [1000.0, 2000.0, 500.0], None)]);
+        a.start();
+        for _ in 0..9 {
+            a.update();
+        }
+        assert!(a.world.frozen.contains("boulder"));
+        assert!(a.world.anims[0].boulder.unwrap().frozen);
+        let phase0 = a.world.anims[0].player.phase;
+
+        // Ignored for rolling/rotation when Connor is not in Push state.
+        // Also verify boulder stays frozen even if external draw-distance state clears world.frozen.
+        a.world.frozen.clear();
+        a.boulder_pushed("boulder", [1000.0, 2050.0, 500.0], [1000.0, 1900.0, 500.0], false);
+        a.update();
+        assert_eq!(a.world.anims[0].player.base.position, [1000.0, 2050.0, 500.0]);
+        assert_eq!(a.world.anims[0].player.phase, phase0);
+
+        // Ignored when position differs from prev_pos by < 1e-6.
+        a.boulder_pushed("boulder", [1000.0, 2000.0, 500.0], [1000.0, 1900.0, 500.0], true);
+        assert_eq!(a.world.anims[0].player.phase, phase0);
+
+        // Pushed north (+Y) from (1000, 1900) while in Push: advances 1 update, re-freezes, queues turn +0.1 s later.
+        a.boulder_pushed("boulder", [1000.0, 2050.0, 500.0], [1000.0, 1900.0, 500.0], true);
+        let phase1 = a.world.anims[0].player.phase;
+        assert!(phase1 > phase0);
+        assert!(a.world.frozen.contains("boulder"));
+        assert!(a.world.anims[0].boulder.unwrap().frozen);
+        assert_eq!(a.world.anims[0].boulder.unwrap().prev_pos, [1000.0, 2050.0, 500.0]);
+
+        // After 3 updates (now reaches +2/15 s > 0.1 s), KQMoveEvent turns boulder without advancing phase again.
+        for _ in 0..3 {
+            a.update();
+        }
+        assert_eq!(a.world.anims[0].player.phase, phase1);
+        assert_eq!(a.world.anims[0].player.base.position, [1000.0, 2050.0, 500.0]);
+        let yaw = crate::connor_auto::heading_towards([1000.0, 1900.0, 500.0], [1000.0, 2000.0]);
+        let expected_rot = kq8_data::objects::rotation([0.0, 0.0, yaw + std::f32::consts::PI]);
+        for i in 0..3 {
+            for j in 0..3 {
+                assert!((a.world.anims[0].player.base.rotation[i][j] - expected_rot[i][j]).abs() < 1e-4);
+            }
+        }
+
+        // Scripted move updates prev_pos so next push checks from new spot.
+        assert_eq!(a.test_command("move boulder 0 5000 6000 700", "t").as_deref(), Some("0"));
+        assert_eq!(a.world.anims[0].boulder.unwrap().prev_pos, [5000.0, 6000.0, 700.0]);
     }
 }

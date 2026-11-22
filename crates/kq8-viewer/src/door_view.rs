@@ -2137,7 +2137,13 @@ pub fn door_step(
     // Rule 33 (M4 4d-12-3): which have their collider on.
     sim.active.world.characters_solid = solid.0.clone();
     // U-3 (object-lighting.md rule 37): which are frozen (no update tick).
+    // Preserve KQBoulder's own freeze state across draw-distance updates (`pushing.md` rule 12c).
     sim.active.world.frozen = frozen.0.clone();
+    for a in &sim.active.world.anims {
+        if a.boulder.is_some_and(|b| b.frozen) {
+            sim.active.world.frozen.insert(a.player.name.to_ascii_lowercase());
+        }
+    }
     // KQConner::JumpDir / endJump in timed cues (3m-1).
     sim.active.world.connor_jump = connor.as_ref().and_then(|c| c.jump_state());
     // talking.md rule 7: whether he can turn to a listener, and where.
