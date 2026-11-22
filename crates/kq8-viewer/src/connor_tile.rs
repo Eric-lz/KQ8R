@@ -33,6 +33,8 @@ pub enum TileCall {
     /// Follow Connor again when the camera's flight ends, the hold switch
     /// then this (rule 13, I-4).
     FollowAfterFlight(bool),
+    /// Toggle Connor's `handsOff` (`Tile2` built-in rock throw, rule 35).
+    HandsOff(bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -96,6 +98,17 @@ impl ConnorSim {
     /// `tileExit 0|1` (rule 21): the exit switch; with 1 he goes to Wait
     /// at once. Nothing outside the state.
     pub fn tile_exit(&mut self, can_exit: bool, at: &str) -> String {
+        if let Some(t2) = self.tile2.as_mut() {
+            t2.can_exit = can_exit;
+            let line = if can_exit {
+                let wait = self.leave_tile2();
+                format!("tileExit 1: the exit switch on; {wait} (rule 31)")
+            } else {
+                "tileExit 0: the exit switch off (rule 31)".to_string()
+            };
+            self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+            return line;
+        }
         let line = match self.tile.as_mut() {
             None => format!("tileExit {}: not in a tile state; nothing (rule 21)", u8::from(can_exit)),
             Some(t) => {
@@ -132,7 +145,10 @@ impl ConnorSim {
         // U-8b: the Scales state refuses the others the same way, until
         // he steps away (tile-puzzle.md "The scales").
         // U-9c: nor can ThrowRock be left before its end (8b).
-        self.tile.as_ref().is_some_and(|t| !t.can_exit) || self.scales.is_some() || self.rock.is_some()
+        self.tile.as_ref().is_some_and(|t| !t.can_exit)
+            || self.tile2.as_ref().is_some_and(|t| !t.can_exit)
+            || self.scales.is_some()
+            || self.rock.is_some()
     }
 
     /// Before his update (rules 8-15): the keys, the jump, the landing,
@@ -402,7 +418,13 @@ pub fn unlit_step(
     shared: bevy::prelude::Res<crate::Shared>,
 ) {
     use bevy::prelude::{ChildOf, DetectChanges};
-    let wanted = connor.as_ref().and_then(|c| c.tile.as_ref()).and_then(|t| t.lit).map(|c| c.name());
+    let wanted = connor.as_ref().and_then(|c| {
+        c.tile
+            .as_ref()
+            .and_then(|t| t.lit)
+            .map(|c| c.name())
+            .or_else(|| c.tile2.as_ref().and_then(|t| t.lit_name()))
+    });
     if wanted.is_none() && state.parts.is_empty() {
         return;
     }

@@ -4064,7 +4064,7 @@ Implementing Session A's Batch 3 notes for Swamp (`docs/behaviour/{inventory,scr
    - Support multi-pair `bmp_swaps` on both animated and static objects (`static_bmp_swap_step`) so Clarity's `Reveal` highlights only the 12 safe tiles (`fiensafe.cs`).
    - 0-damage projectile hit on unsafe tile while `Swamp::Tile::PowerOn` and `Swamp::Tile::SwitchOn` are truthy spawns auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250`.
    - Connor collision updates `last_touch` on every touch and, when `> 2.0 s` elapsed on an armed unsafe tile, puffs gas, subtracts `trunc(-level * 10 * damFactor)` health bypassing protection, and sends a 1-damage `Fire` hit.
-3. **Step B3-3: Connor's `Tile2` state + built-in rock throw:**
+3. **Step B3-3: Connor's `Tile2` state + built-in rock throw — Done (2026-11-22, unit/log-verified only):**
    - State `16,384` (`Tile2`): 10 × 7 grid putting `tile00..tile56` (`tile<col><row>`) in columns 2–7 and outer row-3 door spots (`46,000`/`48,000` west, `62,000`/`64,000` east), four forbidden edge-move rules blocking empty corners, lit stone highlighting (`unlit_step`), plain `jump` off West/East (`100`/`200`), `fiendoor` `Cue 1` on cells `30/31` and `Rtswdoor` `ConnorAction "do"` on cells `38/39`, allowing `Die` while locked (`tileExit 0`), and built-in rock throw (`handsOff 1` -> `away` -> `throw` with `Prrock.kq` -> `handsOff 0`, staying in `Tile2`).
 4. **Step B3-4: Mandragore (`KQMandragorTree` & `KQMandragorRoot`):**
    - `Class::MandragorTree` / `Class::MandragorRoot`, default `colliderType = 0x4042` (`ProjImmune`), 0-damage hits sending tree (or parent tree) to `Special laugh`, tree immediate alarm + team alert + solid `mt_dead.kqs` corpse on all hit kinds + `20,000` XP.

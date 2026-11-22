@@ -1253,6 +1253,19 @@ pub fn trap_step(
                 let n = connor.updates;
                 connor.log.detail(format!("connor update {n}: Tile state: {name} gets ConnorAction do do (rule 12): {}", if ran { "its script ran" } else { "no object with a script by that name" }));
             }
+            crate::connor_view::TileCall::HandsOff(on) => {
+                let was = std::mem::replace(&mut connor.hands_off, on);
+                let mut msg = format!("handsOff {} (Tile2 rock throw)", u8::from(on));
+                if on && !was {
+                    if let Some(c) = camera.as_mut().and_then(|c| c.hands_off()) {
+                        msg.push_str(&format!("; {c}"));
+                    }
+                } else if !on && was {
+                    msg.push_str(&format!("; {}", connor.keys_sent_again()));
+                }
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: {msg}"));
+            }
         }
     }
     let requests: std::collections::VecDeque<(usize, Request)> =
@@ -1292,6 +1305,11 @@ pub fn trap_step(
             _ => None,
         };
         if let Some((what, at)) = state {
+            if connor.tile2.is_some() && matches!(&r, Request::ConnorDies { .. }) {
+                let left = connor.leave_tile2();
+                let n = connor.updates;
+                connor.log.detail(format!("connor update {n}: {what}: allowed in Tile2 (tile-puzzle.md rule 31); {left}"));
+            }
             // tile-puzzle.md rule 20 (D-4): refused and dropped while the
             // exit switch is off.
             if connor.tile_holds() {
@@ -1413,15 +1431,20 @@ pub fn trap_step(
                 format!("{at}: applied: matchHeights {words:?} queued for the ground")
             }
             Request::ConnorThrowRock { aim, at } => {
-                // ranged-weapons.md 8b (U-9c): a drawn weapon is put away
-                // (its mode comes back at the end).
-                let had = sim.active.world.put_weapon_away(&at).map(|c| c.from);
                 let p = connor.mover.position;
                 let h = connor.walker.heading;
                 // Ours: a script's ThrowRock with no rock click: 2,000 ahead.
                 let aim = aim.unwrap_or([p[0] + 2000.0 * h.sin(), p[1] - 2000.0 * h.cos(), p[2]]);
-                let line = connor.enter_rock(aim, had, &at);
-                format!("{at}: applied: Connor {line}")
+                if connor.tile2.is_some() {
+                    let line = connor.enter_tile2_rock(aim, &at);
+                    format!("{at}: applied: Connor {line}")
+                } else {
+                    // ranged-weapons.md 8b (U-9c): a drawn weapon is put away
+                    // (its mode comes back at the end).
+                    let had = sim.active.world.put_weapon_away(&at).map(|c| c.from);
+                    let line = connor.enter_rock(aim, had, &at);
+                    format!("{at}: applied: Connor {line}")
+                }
             }
             Request::ConnorScales { at } => {
                 // tile-puzzle.md rule 23 (U-8b): a drawn weapon put away
@@ -1443,6 +1466,20 @@ pub fn trap_step(
                     Some(_) => {
                         let said = sim.active.test_command("KQMonster::speak Connor Connor 0 0 37 23 1 1", "Tile state");
                         format!("; the weapon was out: says 0/0/37/23 ({said:?}) (the user's check, Q181)")
+                    }
+                    None => String::new(),
+                };
+                format!("{at}: applied: Connor {line}{said}")
+            }
+            Request::ConnorTile2 { at } => {
+                // tile-puzzle.md rule 31 (B3-3): drawn weapon put away + 0/0/37/23.
+                let away = sim.active.world.put_weapon_away(&at);
+                let world = &sim.active.world;
+                let line = connor.enter_tile2(&|name| world.place_of(name).map(|p| p.position), &at);
+                let said = match away {
+                    Some(_) => {
+                        let said = sim.active.test_command("KQMonster::speak Connor Connor 0 0 37 23 1 1", "Tile2 state");
+                        format!("; the weapon was out: says 0/0/37/23 ({said:?}) (tile-puzzle.md rule 31)")
                     }
                     None => String::new(),
                 };
@@ -2114,7 +2151,7 @@ pub fn door_step(
         // every weapon change is refused with his common line: keys,
         // bottom-bar slots and scripts' alike. Alt only acts with a weapon
         // drawn, so with empty hands it does nothing, silently.
-        if c.tile.is_some() || c.scales.is_some() {
+        if c.tile.is_some() || c.tile2.is_some() || c.scales.is_some() {
             let empty = w.weapon_mode == kq8_core::weapons::WeaponMode::None;
             for r in std::mem::take(&mut w.weapon_requests) {
                 let said = if r.ask == kq8_core::weapons::Ask::Away && empty {
@@ -2359,6 +2396,7 @@ pub fn door_step(
         c.may_ready().is_ok()
             && c.swing.is_none()
             && c.tile.is_none()
+            && c.tile2.is_none()
             && c.scales.is_none()
             && c.rock.is_none()
             && c.choice.is_none()

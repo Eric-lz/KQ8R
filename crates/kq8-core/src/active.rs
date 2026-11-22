@@ -164,6 +164,8 @@ pub enum Request {
     TileExit { can_exit: bool, at: String },
     /// `KQMonster::setState Connor Tile` (`tile-puzzle.md` rule 7).
     ConnorTile { at: String },
+    /// `KQMonster::setState Connor Tile2` (`tile-puzzle.md` rules 29–35).
+    ConnorTile2 { at: String },
     /// `KQMonster::setState Connor Scales` (`tile-puzzle.md` rule 23, U-8b).
     ConnorScales { at: String },
     /// `ThrowRock` (`ranged-weapons.md` 8a-8b, U-9c): toward `aim` (`None`:
@@ -3540,6 +3542,11 @@ impl WorldState {
                 // tile-puzzle.md rule 7 (batch 2, D-4).
                 self.note(format!("{at}: KQMonster::setState Connor Tile: handed to Connor (tile-puzzle.md rule 7)"));
                 self.requests.push(Request::ConnorTile { at: at.to_string() });
+            }
+            [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("Tile2") => {
+                // tile-puzzle.md rule 31 (Batch 3 B3-3).
+                self.note(format!("{at}: KQMonster::setState Connor Tile2: handed to Connor (tile-puzzle.md rule 31)"));
+                self.requests.push(Request::ConnorTile2 { at: at.to_string() });
             }
             [_, who, state, ..] if who.eq_ignore_ascii_case("Connor") && state.eq_ignore_ascii_case("ThrowRock") => {
                 // ranged-weapons.md 8a-8b (U-9c): toward the aim the rock
@@ -10241,6 +10248,13 @@ endif
         a.connor_touch("tile00", [0.0, 0.0, 1.0], 5);
         assert!(a.world.connor_dying);
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorDies { kind: crate::fight::HitKind::Fire, .. })));
+    }
+
+    #[test]
+    fn set_state_connor_tile2_emits_request() {
+        let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".into()], []);
+        a.test_command("KQMonster::setState Connor Tile2", "test");
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorTile2 { .. })));
     }
 
     #[test]

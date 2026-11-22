@@ -37,6 +37,8 @@ use crate::Shared;
 
 #[path = "connor_tile.rs"]
 mod tile;
+#[path = "connor_tile2.rs"]
+mod tile2;
 #[path = "connor_scales.rs"]
 mod scales;
 #[path = "connor_rock.rs"]
@@ -196,6 +198,8 @@ pub struct ConnorSim {
     /// The death hall's `Tile` state (`tile-puzzle.md`; batch 2, D-4),
     /// while he is in it, and what it asks of the world this update.
     pub tile: Option<tile::TileRun>,
+    /// Swamp's `Tile2` state (`tile-puzzle.md` rules 29–35; Batch 3 B3-3).
+    pub tile2: Option<tile2::Tile2Run>,
     /// The `Scales` state (`tile-puzzle.md` rules 23-26a, U-8b).
     pub scales: Option<scales::ScalesRun>,
     /// The `ThrowRock` state (`ranged-weapons.md` 8b, U-9c); the rocks its
@@ -849,6 +853,7 @@ pub fn spawn_connor(
         choice: None,
         choice_calls: Vec::new(),
         tile: None,
+        tile2: None,
         scales: None,
         rock: None,
         rock_launches: Vec::new(),
@@ -1196,6 +1201,9 @@ impl ConnorSim {
         }
         if self.tile.is_some() {
             return TILE;
+        }
+        if self.tile2.is_some() {
+            return TILE2;
         }
         // tile-puzzle.md "The scales", characters.md rule 16 (Q198):
         // Scales is 131,072 and falling / landing is 262,144.
@@ -2351,6 +2359,11 @@ pub fn connor_step(
     if sim.tile.is_some() && jump {
         jump = false;
     }
+    // tile-puzzle.md rules 29-35 (B3-3): Swamp's tiles & built-in rock throw.
+    let tile2_lines = sim.tile2_step(&mut intent, jump);
+    if sim.tile2.is_some() && jump {
+        jump = false;
+    }
     // tile-puzzle.md rules 24-26a (U-8b): the scales; no jumping (ours).
     let scales_lines = sim.scales_step(&mut intent);
     if sim.scales.is_some() {
@@ -2361,7 +2374,7 @@ pub fn connor_step(
     if sim.rock.is_some() {
         jump = false;
     }
-    for l in choice_lines.into_iter().chain(tile_lines).chain(scales_lines).chain(rock_lines) {
+    for l in choice_lines.into_iter().chain(tile_lines).chain(tile2_lines).chain(scales_lines).chain(rock_lines) {
         let l = format!("connor update {}: {l}", sim.updates);
         shared.log.lock().unwrap().detail(&l);
         sim.log.detail(l);
@@ -2411,9 +2424,9 @@ pub fn connor_step(
             sim.throw_ended.push(e);
         }
     }
-    // tile-puzzle.md rules 12-14: a tile jump or `teleportdown` that ended
+    // tile-puzzle.md rules 12-14 / 33-34: a tile jump or `teleportdown` that ended
     // in this update is followed now, before he is drawn.
-    for l in sim.tile_follow_on() {
+    for l in sim.tile_follow_on().into_iter().chain(sim.tile2_follow_on()) {
         let l = format!("connor update {}: {l} (in the same update)", sim.updates);
         shared.log.lock().unwrap().detail(&l);
         sim.log.detail(l);
@@ -2597,8 +2610,8 @@ pub fn connor_step(
                     }
                     None => "playsound without a file name; nothing".to_string(),
                 },
-                // ranged-weapons.md 8b (U-9c): the rock leaves.
-                "do" if sim.rock_do(s.played) => "the rock leaves his hand (ranged-weapons.md 8b)".to_string(),
+                // ranged-weapons.md 8b (U-9c) & tile-puzzle.md rule 35 (B3-3): the rock leaves.
+                "do" if sim.rock_do(s.played) || sim.tile2_rock_do(s.played) => "the rock leaves his hand (ranged-weapons.md 8b)".to_string(),
                 // fighting.md rule 41 (M5 5c-5): his swing's hit test.
                 "do" if sim.swing.as_ref().is_some_and(|w| w.movement == s.played) => {
                     sim.do_cues.push(s.played.to_string());

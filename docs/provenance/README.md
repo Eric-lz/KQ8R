@@ -4249,6 +4249,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Clarity `Reveal` highlights only safe `KQSwampTile`s via 2 texture pairs (`gastrap.bmp`->`I_gastrp.bmp`, `wtower5.bmp`->`I_wtowr7.bmp` for `1..=3`; `trapring.bmp`->`I_trprng.bmp`, `trunk.bmp`->`I_trunk.bmp` for `12..=13`) using per-entity cloned `StaticTexture` materials; `Reveal False` restores originals | `tile-puzzle.md` rule 38 (Batch 3) | unit test `swamp_tile_reveal_gas_puffs_and_touch_damage_follow_rules_37_to_40`; Swamp `viewer.log` (4 Reveal textures read; **visual swap not yet checked by eye**) |
 | 0-damage projectile hit & Connor touch (`> 2.0 s` resettable cooldown) on armed unsafe tiles spawn auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250`, plus direct `trunc(-level * 10 * damFactor)` health loss and 1 Fire hit (`HitKind::Fire`) | `tile-puzzle.md` rules 39–40 (Batch 3) | unit tests; Swamp `viewer.log` & `doors.log` (`tile12` rock hit `swmpgas.kqs` `z+750`; `tile03` touch `150 -> 78 -> 77`, cooldown reset) |
 
+## B3-3 2026-11-22: Connor `Tile2` state & built-in `Tile2` rock throw — core `tile2.rs`, `active.rs`; viewer `connor_tile.rs`, `connor_tile2.rs`, `connor_view.rs`, `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `Tile2` (`16,384`) 10 × 7 grid (`tile00..tile56` in cols `2..=7`, row-3 door spots `(0,3)/(1,3)` & `(8,3)/(9,3)`), four forbidden empty-corner edge blocks, `where_is` directions (`East 200`/`West 100`/`South 300`/`North 400`/`Spot`), plain `jump` off West/East (`100`/`200`), lit stone `unlit_step`, `tileExit 0` lock overridden by `Die`, `0/0/37/23` weapon-swap refusal | `tile-puzzle.md` rules 29–35 (Batch 3) | `tile2::tests` (3 unit tests), `set_state_connor_tile2_emits_request`; Swamp `viewer.log` (`42 of 42 Swamp tiles`, `tile03` -> `tile13`, `tileExit 1`, not yet played by hand) |
+| Row-3 door landings: cells `30/31` send `Cue 1` to `fiendoor` (`WestDoor`); cells `38/39` send `ConnorAction "do"` to `Rtswdoor` (`EastDoor`); built-in `Tile2` rock throw (`handsOff 1` -> `away` -> `Prrock.kq` `throw` -> `handsOff 0`, staying in `Tile2`) | `tile-puzzle.md` rules 34–35, `ranged-weapons.md` 8e (Batch 3); `MASK/Swamp/kq/{fiendoor.cs,swdoor.cs}` | Swamp `viewer.log` & `doors.log` (rock throw hitting `tile03` with `swmpgas.kqs`, `fiendoor Cue 1`, `Rtswdoor ConnorAction do`) |
+
 
 
 

@@ -50,6 +50,7 @@ pub mod talk;
 pub mod terrain_drain;
 pub mod trap;
 pub mod tile_puzzle;
+pub mod tile2;
 pub mod tower_skeleton;
 pub mod turn_keys;
 pub mod water;
