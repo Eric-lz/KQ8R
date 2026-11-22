@@ -145,6 +145,9 @@ pub enum Request {
     /// rule 16): the comma-separated items as written. `hold`: stay in
     /// `Special` holding the last frame until `ConnorWait` (U-11).
     ConnorSpecial { items: String, hold: bool, at: String },
+    /// `KQMonster::preSpecial Connor` (`script-commands.md` rule 12b):
+    /// marks Connor's playing movement interruptable and resets wanted to `"Stop"`.
+    ConnorPreSpecial { at: String },
     /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): the caller
     /// sets `hazeDistance` n and `visibleDistance` 1.5 n at once.
     /// `quiet`: continuous `KQHazer` ramp updates stay in detail logs only.
@@ -798,6 +801,13 @@ pub struct WorldState {
     /// `…::SetThirdPerson::WasFirstPerson` (we are always in third person).
     first_person_locked: bool,
     was_first_person: bool,
+    /// `setFirstPerson` (`camera.md` rule 8): mirror-image state for
+    /// forcing first person (`SetFirstPerson::WasThirdPerson`).
+    was_third_person: bool,
+    forced_first_person: bool,
+    /// Connor's 16-bit liquid immunity mask (`water.md` "Liquid damage" rule 5;
+    /// `.kq` `immunities=` key + `KQConner::addImmunity <mask>`).
+    pub connor_immunities: u16,
     /// Connor's jump, set by the caller before scripts run (M3 3m-1,
     /// `anim-scripts.md` rules 28–29): the jump movement (`jump`,
     /// `runJump`, `backJump`) while he is in the Jump state, else `None`.
@@ -2139,6 +2149,93 @@ impl WorldState {
             "{at}: setThirdPerson: third person, WasFirstPerson 0: the first-person key is now {}{one} (we have no first person; camera untouched)",
             if self.first_person_locked { "locked" } else { "allowed" }
         ));
+        "0".into()
+    }
+
+    /// `setFirstPerson` (`camera.md` rule 8, Batch 3): mirror-image toggle
+    /// using the unprefixed global variable `SetFirstPerson::WasThirdPerson`.
+    /// Requires exact 1 word; we have no first-person camera yet, so the
+    /// camera stays untouched and the toggle/flag state is tracked cleanly.
+    fn set_first_person(&mut self, words: &[String], at: &str) -> String {
+        if words.len() != 1 {
+            self.note(format!("{at}: usage: setFirstPerson (got {} word(s)); nothing", words.len()));
+            return "0".into();
+        }
+        if !self.forced_first_person {
+            self.was_third_person = true;
+            self.first_person_locked = true;
+            self.forced_first_person = true;
+            self.vars_out.push(("SetFirstPerson::WasThirdPerson".into(), "1".into()));
+            self.note(format!("{at}: setFirstPerson: third person -> SetFirstPerson::WasThirdPerson 1, F2 locked, forced first person (we have no first person; camera untouched)"));
+        } else if self.was_third_person {
+            self.was_third_person = false;
+            self.first_person_locked = false;
+            self.forced_first_person = false;
+            self.vars_out.push(("SetFirstPerson::WasThirdPerson".into(), "0".into()));
+            self.note(format!("{at}: setFirstPerson: WasThirdPerson 1 -> SetFirstPerson::WasThirdPerson 0, F2 unlocked, back to third person (we have no first person; camera untouched)"));
+        } else {
+            self.first_person_locked = !self.first_person_locked;
+            self.note(format!(
+                "{at}: setFirstPerson: already first person, WasThirdPerson 0: F2 key now {} (we have no first person; logged only)",
+                if self.first_person_locked { "locked" } else { "allowed" }
+            ));
+        }
+        "0".into()
+    }
+
+    /// `KQConner::setRelDamage <fraction>` (`script-commands.md` rule 12a, Batch 3):
+    /// computes `d = trunc(-level * 10 * fraction)` and sets `$CurRelDamage = d`,
+    /// `$CurRelHealth = -d`.
+    fn set_rel_damage(&mut self, words: &[String], at: &str) -> String {
+        if words.len() != 2 {
+            self.note(format!("{at}: usage: KQConner::setRelDamage <fraction>; nothing"));
+            return "0".into();
+        }
+        let level = self.connor_stats.map_or(1, |c| c.level);
+        let frac = number_value(&words[1]);
+        let d = (-(level as f64) * 10.0 * frac).trunc() as i64;
+        self.vars_out.push(("CurRelDamage".into(), d.to_string()));
+        self.vars_out.push(("CurRelHealth".into(), (-d).to_string()));
+        self.note(format!("{at}: KQConner::setRelDamage {}: level {level} -> CurRelDamage={d}, CurRelHealth={} (script-commands.md rule 12a)", words[1], -d));
+        "0".into()
+    }
+
+    /// `KQMonster::preSpecial <monsterName>` (`script-commands.md` rule 12b, Batch 3):
+    /// turns ON current animation's interruptable flag and resets cached wanted to `"Stop"`.
+    fn pre_special(&mut self, words: &[String], at: &str) -> String {
+        if words.len() != 2 {
+            self.note(format!("{at}: usage: KQMonster::preSpecial <monsterName>; nothing"));
+            return "0".into();
+        }
+        let who = &words[1];
+        if who.eq_ignore_ascii_case(CONNOR) {
+            self.note(format!("{at}: KQMonster::preSpecial Connor: interruptable on, wanted 'Stop' (script-commands.md rule 12b)"));
+            self.requests.push(Request::ConnorPreSpecial { at: at.to_string() });
+            return "0".into();
+        }
+        let Some(i) = self.character_index(who) else {
+            self.note(format!("{at}: KQMonster::preSpecial: can't find monster {who} (script-commands.md rule 12b)"));
+            return "0".into();
+        };
+        let p = &mut self.anims[i].player;
+        p.cut_short = true;
+        p.waiting = Some(crate::named_anim::STOP_NAME.to_string());
+        p.chosen = None;
+        let name = p.name.clone();
+        self.character_note(&name, format!("{at}: KQMonster::preSpecial: interruptable on, wanted 'Stop' (script-commands.md rule 12b)"));
+        "0".into()
+    }
+
+    /// `KQConner::addImmunity <mask>` (`water.md` "Liquid damage" rule 5, Batch 3):
+    /// bitwise-ORs `<mask>` into Connor's 16-bit liquid immunity mask.
+    fn add_immunity(&mut self, words: &[String], at: &str) -> String {
+        if words.len() != 2 {
+            self.note(format!("{at}: usage: KQConner::addImmune  immuneValue"));
+            return "0".into();
+        }
+        let mask = (number_value(&words[1]).trunc() as i64) as u16;
+        self.connor_immunities |= mask;
+        self.note(format!("{at}: KQConner::addImmunity {mask} (0x{mask:x}): connor immunities now 0x{:x} (water.md rule 5)", self.connor_immunities));
         "0".into()
     }
 
@@ -4286,6 +4383,18 @@ impl ScriptHost for WorldState {
             "KQMonster::inventory" | "give" => Some(self.make_item(words, at)),
             "KQMonster::dropItem" => Some(self.drop_item_command(words, at)),
             "KQMonster::checkInventory" => Some(self.check_inventory(words, at)),
+            "KQConner::pay" => {
+                if words.len() != 3 {
+                    self.note(format!("{at}: usage: KQConner::pay <itemType> <quantity>; nothing"));
+                    Some("0".into())
+                } else {
+                    let qty = number_value(&words[2]).trunc() as i64;
+                    Some(crate::connor_inventory::pay(self, &words[1], qty, at))
+                }
+            }
+            "KQConner::setRelDamage" => Some(self.set_rel_damage(words, at)),
+            "KQConner::addImmunity" => Some(self.add_immunity(words, at)),
+            "KQMonster::preSpecial" => Some(self.pre_special(words, at)),
             "getConInventory" => Some(self.get_con_inventory(at)),
             "exist" => Some(self.exist(words, at)),
             "setHaze" => {
@@ -4363,6 +4472,7 @@ impl ScriptHost for WorldState {
                 Some(v.to_string())
             }
             "setThirdPerson" => Some(self.set_third_person(words, at)),
+            "setFirstPerson" => Some(self.set_first_person(words, at)),
             "KQConner::walkTo" | "KQConner::runTo" | "pointAndCue" => Some(self.connor_auto(words, at)),
             "walkExit" => {
                 self.note(format!("{at}: walkExit: a scripted walk ends now, with its cue (anim-scripts.md rule 24)"));
@@ -4590,6 +4700,9 @@ impl Active {
                 templates: BTreeMap::new(),
                 first_person_locked: false,
                 was_first_person: false,
+                was_third_person: false,
+                forced_first_person: false,
+                connor_immunities: 0,
                 connor_jump: None,
                 talk: Talk::default(),
                 notify: BTreeMap::new(),
@@ -4898,7 +5011,7 @@ impl Active {
         if !s.moved {
             return;
         }
-        let flags = s.flags;
+        let flags = s.flags & !u32::from(self.world.connor_immunities);
         let Some(timer) = w::timer_name(flags) else { return };
         let ontop = flags & kq8_data::envinfo::ONTOP != 0 && s.surface >= s.feet - w::ONTOP_BELOW;
         if !ontop && !w::deep(flags, s.surface, s.feet) {
@@ -9730,6 +9843,51 @@ getGuiStatus
         assert!(locked < allowed, "{log}");
         assert!(log.contains("at most (2 + 1) / 15 s"), "{log}");
         assert!(log.contains("held movement keys sent again"), "{log}");
+    }
+
+    #[test]
+    fn batch3_set_first_person_set_rel_damage_pre_special_and_add_immunity() {
+        let mut a = with_object(
+            "KQConner::setRelDamage 0.5\nKQMonster::preSpecial Connor\nsetFirstPerson\nsetFirstPerson\nKQConner::addImmunity 256\n",
+            "x",
+        );
+        a.world.connor_stats = Some(crate::stats::ConnorStats { stats: Stats([20, 10, 5, 0, 0]), level: 2 });
+        a.scripts.vars.set("KQWorld::SwampTime", "0".into());
+        a.scripts.vars.set("KQWorld::PoisonTime", "0".into());
+        a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
+        // setRelDamage 0.5 at level 2 -> CurRelDamage = -10, CurRelHealth = 10.
+        assert_eq!(a.scripts.vars.get("CurRelDamage"), Some("-10"));
+        assert_eq!(a.scripts.vars.get("CurRelHealth"), Some("10"));
+        // preSpecial Connor emitted Request::ConnorPreSpecial.
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorPreSpecial { .. })));
+        // Paired setFirstPerson ended back in third person with SetFirstPerson::WasThirdPerson = "0".
+        assert_eq!(a.scripts.vars.get("SetFirstPerson::WasThirdPerson"), Some("0"));
+        assert!(!a.world.forced_first_person && !a.world.first_person_locked);
+        // Unpaired single setFirstPerson queues SetFirstPerson::WasThirdPerson = "1".
+        a.world.vars_out.clear();
+        a.test_command("setFirstPerson", "single");
+        assert!(a.world.vars_out.contains(&("SetFirstPerson::WasThirdPerson".into(), "1".into())));
+        assert!(a.world.forced_first_person && a.world.first_person_locked);
+        // addImmunity 256 protects against SWAMP (0x100) while keeping POISON (0x40) lethal.
+        assert_eq!(a.world.connor_immunities, 256);
+        let swamp = crate::water::LiquidSample { flags: kq8_data::envinfo::SWAMP, surface: 500.0, feet: 0.0, moved: true };
+        a.connor_liquid(swamp);
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[0], 20, "swamp immunity blocks swamp damage");
+        let poison = crate::water::LiquidSample { flags: kq8_data::envinfo::POISON, surface: 500.0, feet: 0.0, moved: true };
+        a.connor_liquid(poison);
+        assert!(a.world.connor_stats.unwrap().stats.0[0] < 0, "poison still hurts despite swamp immunity");
+        // preSpecial on a named character flips cut_short and waiting = Some("Stop").
+        a.world.anims.push(AnimObject {
+            player: crate::named_anim::NamedAnimPlayer::new("hench", vec![], 0, crate::collide::Placement::at([0.0; 3])),
+            script: None,
+            gone: false,
+            character: Some(Box::new(crate::character::Character::new(false, 0, 0.0, false, false, false, 1))),
+            translucency: None,
+        });
+        a.world.anims[0].player.cut_short = false;
+        assert_eq!(a.test_command("KQMonster::preSpecial hench", "t").as_deref(), Some("0"));
+        assert!(a.world.anims[0].player.cut_short);
+        assert_eq!(a.world.anims[0].player.waiting.as_deref(), Some("Stop"));
     }
 
     #[test]

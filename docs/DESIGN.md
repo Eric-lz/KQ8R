@@ -4052,7 +4052,7 @@ User visual and ear check results (2026-11-20/21): `KQCamera::shake` (`B1-5`) an
 
 Implementing Session A's Batch 3 notes for Swamp (`docs/behaviour/{inventory,script-commands,camera,water,tile-puzzle,ranged-weapons,fighting}.md` and `docs/SCRIPT-COVERAGE.md`), one step and one commit at a time:
 
-1. **Step B3-1: Swamp script commands (`KQConner::pay`, `KQConner::setRelDamage`, `KQMonster::preSpecial`, `setFirstPerson`, `KQConner::addImmunity` + `.kq` `immunities` / `Journey`):**
+1. **Step B3-1: Swamp script commands (`KQConner::pay`, `KQConner::setRelDamage`, `KQMonster::preSpecial`, `setFirstPerson`, `KQConner::addImmunity` + `.kq` `immunities` / `Journey`) — Done (2026-11-21, unit/log-verified only):**
    - `KQConner::pay <itemType> <quantity>`: exact 3 words, `Invinfo.itl` lookup falling back to `INVITEM_<itemType>`, deduct/remove without dropping, `unapply` + empty hand / ready weapon when count hits 0, returns `"1"` when paid else `"0"`.
    - `KQConner::setRelDamage <fraction>`: sets `$CurRelDamage = trunc(-level * 10 * frac)` and `$CurRelHealth = -CurRelDamage`, returns `"0"`.
    - `KQMonster::preSpecial <monsterName>`: marks current movement interruptable (`can_be_cut_short`) and resets cached wanted movement to `"Stop"` on Connor or named character.

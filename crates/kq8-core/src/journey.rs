@@ -60,6 +60,7 @@ pub struct Journey {
     pub pickup_experience: Vec<(f64, i64, String)>,
     pub flags: BTreeMap<String, bool>,
     pub in_temple4: bool,
+    pub immunities: u16,
     pub map_marks: crate::magic_map::ConnorMapMarks,
     pub map_view: crate::magic_map::View,
     pub other_maps: BTreeMap<usize, (String, kq8_data::magic_map::MapKeys, String)>,
@@ -108,6 +109,7 @@ impl Journey {
             pickup_experience: w.pickup_experience.iter().map(|(t, n, k)| (t - w.now(), *n, k.clone())).collect(),
             flags: w.connor_flags.clone(),
             in_temple4: w.connor_in_temple4,
+            immunities: w.connor_immunities,
             map_marks: w.map_marks.clone(),
             map_view: w.map_view,
             other_maps: w.other_maps.clone(),
@@ -171,6 +173,7 @@ impl Journey {
         w.pickup_experience = self.pickup_experience.iter().map(|(t, n, k)| (now + t, *n, k.clone())).collect();
         w.connor_flags = self.flags.clone();
         w.connor_in_temple4 = self.in_temple4;
+        w.connor_immunities = self.immunities;
         w.map_marks = self.map_marks.clone();
         w.map_view = self.map_view;
         w.other_maps = self.other_maps.clone();
@@ -211,7 +214,7 @@ impl Journey {
         for (r, until) in &self.potions {
             out.push(format!("  potion {} ({}) {} of {} s left, next second in {until} updates, icon place {:?}", r.item, r.kind, r.left, r.duration, r.place));
         }
-        out.push(format!("  flags {:?}; InTemple4 {}; map marks {:?}; other maps {:?}", self.flags, self.in_temple4, self.map_marks, self.other_maps.keys().collect::<Vec<_>>()));
+        out.push(format!("  flags {:?}; InTemple4 {}; immunities {:#x}; map marks {:?}; other maps {:?}", self.flags, self.in_temple4, self.immunities, self.map_marks, self.other_maps.keys().collect::<Vec<_>>()));
         out.push(format!("  combat level x{}; next NoName {}; god {}, AI off {}; notStartingHelp {}, tipBits {:#x}; {} game-wide variables", self.combat_level, self.next_no_name, self.god_mode, self.ai_off, self.not_starting_help, self.tip_bits, self.vars.len()));
         out
     }
@@ -280,6 +283,7 @@ numItems=2
         a.world.items.make("Crystal", 1, Place::World { position: [1.0, 2.0, 3.0], angles: [0.0; 3] }).unwrap();
         a.world.hand = Some("NoName0".into());
         a.world.connor_flags.insert("BeenToCastle".into(), true);
+        a.world.connor_immunities = 256;
         a.world.combat_level = 1.5;
         a.world.updates = 100;
         a.world.potions.push(Running { next_tick: 110, left: 42, place: Some(2), ..Running::new("NoName0", "INVITEM_Mushroom", 60, 95) });
@@ -313,8 +317,9 @@ numItems=2
         assert!(b.world.items.no_name_counter() >= 2, "no new name repeats a carried one");
         // Taken again from the new world: the same journey (apart from
         // where it comes from and its variables).
+        assert_eq!(b.world.connor_immunities, 256);
         let again = Journey::take(&b.world, &b.scripts.vars, "Swamp");
-        assert_eq!((again.stats, &again.items, &again.hand, &again.flags, again.combat_level), (j.stats, &j.items, &j.hand, &j.flags, j.combat_level));
+        assert_eq!((again.stats, &again.items, &again.hand, &again.flags, again.immunities, again.combat_level), (j.stats, &j.items, &j.hand, &j.flags, j.immunities, j.combat_level));
         assert_eq!(again.potions, j.potions);
         assert_eq!(connor_summary(&b.world), connor_summary(&a.world));
     }

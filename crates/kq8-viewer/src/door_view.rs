@@ -865,6 +865,7 @@ pub fn spawn_doors(
         active.world.portals.insert(p.name.to_ascii_lowercase(), p);
     }
     main_log.summary(format!("clarity: objects with groupsAlways bit 2048: {:?} (potions.md rule 31)", active.world.reveal_objects));
+    active.world.connor_immunities = objects.connor_immunities;
     match &objects.connor_stats {
         Some((line, level)) => {
             let words: Vec<&str> = line.split_whitespace().collect();
@@ -1379,6 +1380,10 @@ pub fn trap_step(
             Request::ConnorSpecial { items, hold, at } => {
                 let line = connor.start_special(&items, hold, &at);
                 format!("{at}: applied{again}: Connor {line}")
+            }
+            Request::ConnorPreSpecial { at } => {
+                let line = connor.pre_special(&at);
+                format!("{at}: applied: Connor {line}")
             }
             Request::ConnorAnim { movement, at } => {
                 let line = connor.script_anim(&movement, &at);

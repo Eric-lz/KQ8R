@@ -1548,6 +1548,8 @@ pub struct Objects {
     pub attack_dist: Option<f32>,
     /// Connor's `stats=` and `level=` from `GAME/Kq/Connor.kq` (3i-6).
     pub connor_stats: Option<(String, Option<String>)>,
+    /// Connor's `.kq` `immunities=` mask (`water.md` rule 5, default `0`).
+    pub connor_immunities: u16,
     /// What `Connor.kq` gives the fight (M5 5c-4, `fighting.md` rules 24,
     /// 39–41).
     pub connor_fight: Option<kq8_core::fight::ConnorFight>,
@@ -2072,6 +2074,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         connor: None,
         attack_dist: None,
         connor_stats: None,
+        connor_immunities: 0,
         connor_fight: None,
         connor_inventory: (Vec::new(), Vec::new()),
         connor_start: Vec::new(),
@@ -2400,6 +2403,7 @@ struct Placer<'a> {
     connor: Option<(kq8_data::objects::Placement, ConnorAssets)>,
     attack_dist: Option<f32>,
     connor_stats: Option<(String, Option<String>)>,
+    connor_immunities: u16,
     connor_fight: Option<kq8_core::fight::ConnorFight>,
     connor_inventory: (Vec<ConnorItem>, Vec<String>),
     connor_start: Vec<kq8_core::connor_start::StartLine>,
@@ -3043,6 +3047,7 @@ impl Placer<'_> {
             let mut p = kq8_data::objects::Placement::from_load(section, load);
             self.attack_dist = section.number("attackDist").and_then(Result::ok).map(|v| v as f32);
             self.connor_stats = section.get("stats").map(|s| (s.to_string(), section.get("level").map(str::to_string)));
+            self.connor_immunities = section.number("immunities").and_then(Result::ok).map_or(0, |v| (v.trunc() as i64) as u16);
             // fighting.md rules 24, 39-41 (M5 5c-4): his ouch sound, the big
             // swing's factors, the hand weapons' movement lists.
             let num = |k: &str, d: f32| section.number(k).and_then(Result::ok).map_or(d, |v| v as f32);
@@ -5373,6 +5378,7 @@ impl Placer<'_> {
             scripts: Vec::new(),
             attack_dist: self.attack_dist,
             connor_stats: self.connor_stats,
+            connor_immunities: self.connor_immunities,
             connor_fight: self.connor_fight,
             connor_inventory: self.connor_inventory,
             connor_start: self.connor_start,

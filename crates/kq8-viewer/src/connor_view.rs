@@ -207,6 +207,9 @@ pub struct ConnorSim {
     pub tile_calls: Vec<TileCall>,
     /// The lit stone changed (rule 10): the new one, for the drawing.
     pub tile_lit_changed: Option<Option<kq8_core::tile_puzzle::Cell>>,
+    /// `KQMonster::preSpecial Connor` (`script-commands.md` rule 12b): current
+    /// movement forced interruptable until the next movement switch.
+    pub force_cut_short: bool,
     /// The end of a scripted walk being watched (M3 3n-5, Q98: logs only).
     walk_end: Option<WalkEnd>,
     /// `fighting.md` rules 23, 24, 29 (M5 5c-4): when his last flinch ends
@@ -852,6 +855,7 @@ pub fn spawn_connor(
         rock_rearm: None,
         tile_calls: Vec::new(),
         tile_lit_changed: None,
+        force_cut_short: false,
         walk_end: None,
         flinch_end: f64::NEG_INFINITY,
         last_ouch: f64::NEG_INFINITY,
@@ -1321,12 +1325,24 @@ impl ConnorSim {
     /// transition plays, and its `loop=` line with its `interruptable`
     /// cues says so, or it has ended.
     fn can_be_cut_short(&self) -> bool {
+        if self.force_cut_short {
+            return true;
+        }
         let w = &self.walker;
         let swinging = self.swing.as_ref().is_some_and(|s| !s.waiting && w.mode == Mode::Special && w.movement == s.movement);
         if !(w.keys_choose() || swinging) || w.playing.is_some() {
             return false;
         }
         self.movement_loop(w.movement).is_none_or(|l| kq8_core::fight::cut_short_at(l.cut_short, &l.cues, w.phase))
+    }
+
+    /// `KQMonster::preSpecial Connor` (`script-commands.md` rule 12b, Batch 3).
+    pub fn pre_special(&mut self, at: &str) -> String {
+        self.force_cut_short = true;
+        self.walker.wanted = Some("stop");
+        let line = format!("preSpecial: '{}' marked interruptable, wanted 'Stop' (script-commands.md rule 12b)", self.walker.movement);
+        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+        line
     }
 
     /// `ranged-weapons.md` rule 32 (M5 5f-7; `fighting.md` rules 39-40): a
@@ -1751,7 +1767,7 @@ impl ConnorSim {
             self.log.detail(format!("connor update {}: shot: {line}", self.updates));
             return line;
         }
-        let can = {
+        let can = self.force_cut_short || {
             let w = &self.walker;
             let shooting = self.shot.as_ref().is_some_and(|s| s.started && w.mode == Mode::Special && w.movement == s.movement);
             !shooting && w.keys_choose() && w.playing.is_none() && self.movement_loop(w.movement).is_none_or(|l| kq8_core::fight::cut_short_at(l.cut_short, &l.cues, w.phase))
@@ -1874,6 +1890,7 @@ impl ConnorSim {
     /// own and the Special lists'), then the Special state. Returns a
     /// line for the script logs.
     pub fn start_special(&mut self, items: &str, hold: bool, at: &str) -> String {
+        self.force_cut_short = false;
         let movements = &self.movements;
         let weapon_set = self.weapon_set.as_deref();
         let resolve = |list: Option<&str>, word: &str| -> Option<&'static str> {
@@ -2505,6 +2522,7 @@ pub fn connor_step(
         }
         events.extend(s.notes.iter().cloned());
         if let Some((from, to)) = s.changed {
+            sim.force_cut_short = false;
             // The version drawn (M5 5c fix): the weapon's with one ready.
             let drawn = sim.drawn(to).map_or("none", |m| m.name);
             events.push(if drawn == to { format!("movement {from} -> {to}") } else { format!("movement {from} -> {to} (drawn: {drawn})") });

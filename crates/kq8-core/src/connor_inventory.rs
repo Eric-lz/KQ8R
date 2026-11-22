@@ -295,6 +295,68 @@ fn remove_if_empty(w: &mut WorldState, name: &str) -> String {
     String::new()
 }
 
+/// Rules 27–29 (Batch 3): `KQConner::pay <itemType> <quantity>`.
+/// Takes `<quantity>` of `<itemType>` (falling back to `INVITEM_<itemType>`)
+/// from Connor without dropping it, un-applying and removing on exact count.
+/// Returns `"1"` on payment, `"0"` otherwise (for `$Console::Return`).
+pub fn pay(w: &mut WorldState, raw_type: &str, quantity: i64, at: &str) -> String {
+    if w.connor_stats.is_none() {
+        w.item_note(format!("{at}: KQConner::pay {raw_type} {quantity}: can't find Connor's inventory -> 0 (inventory.md rule 28)"));
+        return "0".into();
+    }
+    let kind_name = match w.items.types.find(raw_type).or_else(|| w.items.types.find(&format!("INVITEM_{raw_type}"))) {
+        Some(t) => t.name.clone(),
+        None => {
+            w.item_note(format!("{at}: KQConner::pay {raw_type} {quantity}: unknown item type -> 0 (inventory.md rule 28)"));
+            return "0".into();
+        }
+    };
+    let Some(i) = w.items.objects.iter().position(|o| o.carried_by(crate::talk::CONNOR) && o.kind.eq_ignore_ascii_case(&kind_name)) else {
+        w.item_note(format!("{at}: KQConner::pay {kind_name} {quantity}: Connor does not carry it -> 0 (inventory.md rule 28)"));
+        return "0".into();
+    };
+    if quantity <= 0 {
+        w.item_note(format!("{at}: KQConner::pay {kind_name} {quantity}: invalid non-positive quantity -> 0"));
+        return "0".into();
+    }
+    let have = w.items.objects[i].quantity;
+    let obj_name = w.items.objects[i].name.clone();
+    if have < quantity {
+        w.item_note(format!("{at}: KQConner::pay {kind_name} {quantity}: carries only x{have} -> 0 (inventory.md rule 29)"));
+        return "0".into();
+    }
+    if have > quantity {
+        w.items.objects[i].quantity = have - quantity;
+        w.connor_stats_events += 1;
+        w.item_note(format!("{at}: KQConner::pay {kind_name} {quantity}: {obj_name} x{have} -> x{} -> 1 (inventory.md rule 29)", have - quantity));
+        return "1".into();
+    }
+    let undone = if w.items.objects[i].third != -1 {
+        unapply(w, &obj_name, "KQConner::pay")
+    } else {
+        String::new()
+    };
+    w.items.objects[i].quantity = 0;
+    w.items.objects[i].place = Place::Gone;
+    let hand_note = if w.hand.as_deref().is_some_and(|h| h.eq_ignore_ascii_case(&obj_name)) {
+        w.hand = None;
+        "; hand emptied"
+    } else {
+        ""
+    };
+    let ready_note = if w.weapon_ready.as_deref().is_some_and(|r| r.eq_ignore_ascii_case(&kind_name)) {
+        w.set_weapon(crate::weapons::WeaponMode::None, None);
+        "; ready weapon cleared"
+    } else {
+        ""
+    };
+    w.connor_stats_events += 1;
+    w.item_note(format!(
+        "{at}: KQConner::pay {kind_name} {quantity}: exact count {obj_name} x{have} removed{hand_note}{ready_note}{undone} -> 1 (inventory.md rule 29)"
+    ));
+    "1".into()
+}
+
 /// Rule 15: un-applies item `name`. Returns a note for the log ("" if it
 /// wasn't applied).
 pub fn unapply(w: &mut WorldState, name: &str, why: &str) -> String {
@@ -910,5 +972,33 @@ mod tests {
         // In the rope state: ignored.
         a.world.connor_roping = true;
         assert_eq!(bar_click(&mut a.world, &rope, true, false, "click"), BarResult::Ignored);
+    }
+
+    #[test]
+    fn pay_handles_partial_exact_unapply_and_failures() {
+        let mut a = active();
+        let coins = carry(&mut a, "SilverCoins", 5);
+        // INVITEM_-less spelling, insufficient count -> "0", stack untouched.
+        assert_eq!(a.test_command("KQConner::pay silvercoins 6", "test").as_deref(), Some("0"));
+        assert_eq!(a.world.items.get(&coins).map(|o| o.quantity), Some(5));
+        // Bad syntax -> "0".
+        assert_eq!(a.test_command("KQConner::pay silvercoins", "test").as_deref(), Some("0"));
+        assert_eq!(a.test_command("KQConner::pay silvercoins 0", "test").as_deref(), Some("0"));
+        assert_eq!(a.test_command("KQConner::pay NoSuchThing 1", "test").as_deref(), Some("0"));
+        // Partial pay -> decrements stack, returns "1".
+        assert_eq!(a.test_command("KQConner::pay SilverCoins 2", "test").as_deref(), Some("1"));
+        assert_eq!(a.world.items.get(&coins).map(|o| o.quantity), Some(3));
+        // Exact count while held in hand -> empties hand, removes without dropping in world, returns "1".
+        a.world.hand = Some(coins.clone());
+        assert_eq!(a.test_command("KQConner::pay INVITEM_SilverCoins 3", "test").as_deref(), Some("1"));
+        assert_eq!(a.world.hand, None);
+        assert_eq!(a.world.items.get(&coins).map(|o| o.place.clone()), Some(Place::Gone));
+        // Applied item (potion running) -> un-applies and removes cleanly.
+        let pot = carry(&mut a, "Clarity", 2);
+        assert_eq!(bar_click(&mut a.world, &pot, true, false, "click"), BarResult::Applied);
+        assert!(!a.world.potions.is_empty());
+        assert_eq!(a.test_command("KQConner::pay Clarity 1", "test").as_deref(), Some("1"));
+        assert!(a.world.potions.is_empty());
+        assert_eq!(a.world.items.get(&pot).map(|o| o.place.clone()), Some(Place::Gone));
     }
 }

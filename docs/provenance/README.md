@@ -4232,6 +4232,16 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `Request::SetHaze { quiet: true }` keeps continuous `KQHazer` ramp updates out of terminal summary output while preserving zone entry, exit, `deleteObject` restore, and script `setHaze` summary logs | `object-lighting.md` rules 23b–23d, 33a; user check (2026-11-20) | unit test `hazer_zone_ramps_haze_on_move_and_restores_on_exit_and_delete`; `DeadCity` stdout vs `viewer.log` / `traps.log`; confirmed smooth in play (2026-11-21) |
 | `MarkerKind::HazeZone` draws `KQHazer` bounds wireframe-only (`[-radius, +radius]` cube + 3 orthogonal `radius` sphere rings in teal-mint; `innerRadius.min(radius)` ring + 4 vertical cylinder guides in yellow-lime; viewer helper) | `object-lighting.md` rules 23a–23c; user visual feedback (2026-11-20) | unit test `wireframe_hazer_rings_and_guides_match_line_list_contract`; `DeadCity` `viewer.log` (`1 haze zone`, `radius 15000, innerRadius 3000`); **checked by eye 2026-11-21** |
 
+## B3-1 2026-11-21: Swamp script commands (`KQConner::pay`, `KQConner::setRelDamage`, `KQMonster::preSpecial`, `setFirstPerson`, `KQConner::addImmunity`) — core `connor_inventory.rs`, `active.rs`, `journey.rs`; viewer `load.rs`, `connor_view.rs`, `door_view.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQConner::pay <itemType> <quantity>` (exact 3 words, `INVITEM_` fallback, partial decrement vs exact-count `unapply` + hand/ready-weapon clear without world drop, `$Console::Return` `"1"`/`"0"`) | `inventory.md` rules 27–30 (Batch 3) | unit test `pay_handles_partial_exact_unapply_and_failures`; Swamp `items.log` & `doors.log` (`KQConner::pay SilverCoins 2`: `x100 -> x98 -> 1`, not yet played by hand) |
+| `KQConner::setRelDamage <fraction>` (`CurRelDamage = trunc(-level * 10 * frac)`, `CurRelHealth = -CurRelDamage`); `KQMonster::preSpecial <name>` (interruptable current movement + `"Stop"` wanted movement on Connor or named character); `Swamp/boiloil.cs:4` `beep` left unimplemented as confirmed typo | `script-commands.md` rules 5, 12a–12b (Batch 3) | unit test `batch3_set_first_person_set_rel_damage_pre_special_and_add_immunity`; Swamp `doors.log` (`level 15 -> CurRelDamage=-75, CurRelHealth=75`; `Connor preSpecial`) |
+| `setFirstPerson` global `SetFirstPerson::WasThirdPerson` toggle & F2 lock mirror of `setThirdPerson` (tracking state while first-person view awaits its own step) | `camera.md` rule 8 (Batch 3) | unit test `batch3_set_first_person_set_rel_damage_pre_special_and_add_immunity`; Swamp `doors.log` (`WasThirdPerson 1 -> 0`) |
+| `Connor.kq` `immunities=` key (default `0`), `KQConner::addImmunity <mask>`, `Journey::immunities` carry-over across worlds, and bitwise immunity masking in `Active::connor_liquid` (`256` / `0x100` Swamp vs `0x40` Poison) | `water.md` "Liquid damage" rule 5 (Batch 3) | unit tests `taken_and_given_back_unchanged` and `batch3_set_first_person_set_rel_damage_pre_special_and_add_immunity`; Swamp `doors.log` (`connor immunities now 0x100`, not yet tested by wading in Swamp) |
+
+
 
 
 
