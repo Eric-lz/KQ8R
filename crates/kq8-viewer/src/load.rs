@@ -1659,6 +1659,8 @@ pub struct Objects {
     pub river_controls: Vec<kq8_core::active::RiverControl>,
     /// `KQHazer` proximity haze zones (`object-lighting.md` rules 23a–23e).
     pub hazers: Vec<kq8_core::hazer::Hazer>,
+    /// `KQSwampTile` gas-trap/stump tiles (`tile-puzzle.md` rules 36–40).
+    pub swamp_tiles: Vec<kq8_core::swamp_tile::SwampTile>,
     /// `alias` definitions from `newWorld.cs` passed to runtime scripts (`script-commands.md` rule 9).
     pub aliases: Vec<(String, String)>,
     /// `Options.cs` `notStartingHelp <0|1|2>` (`interface.md` rule 57).
@@ -2089,6 +2091,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         traps: Vec::new(),
         river_controls: Vec::new(),
         hazers: Vec::new(),
+        swamp_tiles: Vec::new(),
         conv_infos: Vec::new(),
         audibles: Vec::new(),
         music: None,
@@ -2419,6 +2422,7 @@ struct Placer<'a> {
     traps: Vec<kq8_core::trap::TrapSettings>,
     river_controls: Vec<kq8_core::active::RiverControl>,
     hazers: Vec<kq8_core::hazer::Hazer>,
+    swamp_tiles: Vec<kq8_core::swamp_tile::SwampTile>,
     rusted_rivers: Vec<String>,
     conv_infos: Vec<kq8_data::conv_info::ConvInfo>,
     audibles: Vec<kq8_core::sound::Audible>,
@@ -2851,6 +2855,9 @@ impl Placer<'_> {
                     }
                 }
             }
+        }
+        if !self.swamp_tiles.is_empty() {
+            targets.insert(kq8_core::swamp_tile::GAS_FILE.into());
         }
         let mut loaded = Vec::new();
         for key in targets {
@@ -3828,6 +3835,11 @@ impl Placer<'_> {
                 self.portals.push(keys);
             }
         }
+        if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case(kq8_core::swamp_tile::CLASS)) {
+            let height_num = s.number("heightNum").and_then(Result::ok).map_or(0, |v| v.trunc() as i32);
+            let dam_factor = s.number("damFactor").and_then(Result::ok).unwrap_or(kq8_core::swamp_tile::DEFAULT_DAM_FACTOR);
+            self.swamp_tiles.push(kq8_core::swamp_tile::SwampTile::new(&p.name, height_num, dam_factor));
+        }
         if !unused && p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQParticleCatcher")) {
             self.catchers.push((p.name.clone(), kq8_data::effects::CatcherSettings::from_section(s)));
         }
@@ -4675,15 +4687,20 @@ impl Placer<'_> {
     /// `KQObject::changeBmp <obj> <old> <new>` line in the world's scripts,
     /// read now so the swap can be drawn while playing.
     fn swap_looks(&mut self) -> Vec<(String, Look)> {
-        let names: std::collections::BTreeSet<String> = self
+        let mut names: std::collections::BTreeSet<String> = self
             .all_scripts
             .iter()
             .flat_map(|(_, t)| t.lines())
             .filter_map(|l| {
                 let w: Vec<&str> = l.split('#').next().unwrap_or("").split_whitespace().collect();
-                (w.len() == 4 && w[0] == "kqobject::changebmp").then(|| w[3].to_string())
+                (w.len() == 4 && w[0].eq_ignore_ascii_case("kqobject::changebmp")).then(|| w[3].to_string())
             })
             .collect();
+        if !self.swamp_tiles.is_empty() {
+            for t in kq8_core::swamp_tile::REVEAL_TEXTURES {
+                names.insert(t.to_string());
+            }
+        }
         let Ok(palette) = self.object_palette() else { return Vec::new() };
         self.log.quiet = true;
         let looks: Vec<(String, Look)> = names.iter().map(|n| (n.clone(), load_texture(self.world, self.game, n, &palette, self.log))).collect();
@@ -5423,6 +5440,7 @@ impl Placer<'_> {
             damage_timers: Vec::new(),
             river_controls,
             hazers,
+            swamp_tiles: self.swamp_tiles,
             aliases: Vec::new(),
             not_starting_help: crate::talk_view::not_starting_help(self.game),
         }

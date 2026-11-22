@@ -1793,6 +1793,9 @@ impl crate::active::WorldState {
                 }
             }
             Touched::Object(n, t) => {
+                if self.swamp_tiles.contains_key(&n.to_ascii_lowercase()) {
+                    self.swamp_tile_hits.push((n.clone(), shooter.clone()));
+                }
                 if t & IMMUNE_TO_PROJECTILES != 0 {
                     self.fight_note(&shooter, at.replace("{}", &format!("object {n}")) + &format!(": its type 0x{t:X} has the immune bit 0x4000: a hit of 0, its script gets ProjImmune"));
                     self.immune_calls.push(n);

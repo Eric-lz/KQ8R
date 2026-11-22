@@ -32,6 +32,54 @@ pub enum GroundPart {
 
 /// Tint for floor squares lower than the surface (under water).
 const FLOOR_LOWER_TINT: Color = Color::srgb(0.45, 0.6, 1.0);
+
+/// Original texture metadata on a static object part so `KQObject::changeBmp`
+/// and `KQSwampTile` Clarity Reveal swaps can clone & restore its material
+/// without mutating shared model materials across other copies.
+#[derive(Component)]
+pub struct StaticTexture {
+    pub object_lc: String,
+    pub original_tex: String,
+    pub original_material: Handle<ObjectMaterial>,
+    pub swapped_to: Option<String>,
+}
+
+/// Applies `KQObject::changeBmp` / Clarity `KQSwampTile` texture swaps to static
+/// object parts (`characters.md` rule 4a; `tile-puzzle.md` rule 38).
+pub fn static_bmp_swap_step(
+    doors: Option<Res<crate::door_view::DoorSim>>,
+    anim: Option<Res<crate::anim_view::AnimSim>>,
+    mut materials: ResMut<Assets<ObjectMaterial>>,
+    mut query: Query<(&mut StaticTexture, &mut MeshMaterial3d<ObjectMaterial>)>,
+) {
+    let (Some(doors), Some(anim)) = (doors, anim) else { return };
+    for (mut st, mut mat_handle) in &mut query {
+        let wanted = doors.active.world.bmp_swaps.get(&st.object_lc).and_then(|pairs| {
+            pairs.iter().rev().find_map(|(old, new)| {
+                (st.original_tex.eq_ignore_ascii_case(old)
+                    && !new.eq_ignore_ascii_case(&st.original_tex)
+                    && !new.eq_ignore_ascii_case(old))
+                    .then(|| new.to_ascii_lowercase())
+            })
+        });
+        if wanted == st.swapped_to {
+            continue;
+        }
+        match wanted {
+            Some(ref new_lc) => {
+                if let (Some(img), Some(mut cloned)) = (anim.swap_image(new_lc), materials.get(&st.original_material).cloned()) {
+                    cloned.texture = Some(img.clone());
+                    mat_handle.0 = materials.add(cloned);
+                    st.swapped_to = Some(new_lc.clone());
+                }
+            }
+            None => {
+                mat_handle.0 = st.original_material.clone();
+                st.swapped_to = None;
+            }
+        }
+    }
+}
 /// Tint for floor squares higher than the surface.
 const FLOOR_HIGHER_TINT: Color = Color::srgb(1.0, 0.4, 0.4);
 /// Opacity of the surface over a different floor while both are shown.
@@ -349,6 +397,8 @@ pub fn setup_objects(
     commands.insert_resource(gpu);
     // One (mesh, material) list per model, shared by all its copies.
     let mut built: Vec<Vec<(Handle<Mesh>, Handle<ObjectMaterial>)>> = Vec::new();
+    // Original texture name per built part (same shape/part indexing as `built`).
+    let mut shape_textures: Vec<Vec<Option<String>>> = Vec::new();
     // Buildings (M1 5c): their walls use the building material instead.
     let mut built_walls: Vec<Vec<(Handle<Mesh>, Handle<crate::building_light::BuildingMaterial>)>> = Vec::new();
     let mut first_corner: Vec<Option<[f32; 3]>> = Vec::new();
@@ -396,12 +446,22 @@ pub fn setup_objects(
             }
             // A model: lit by the world's lights (M1 5b).
             None => {
+                let mut tex_names = Vec::new();
                 for group in model.groups {
+                    let tex_name = match &group.look {
+                        crate::load::Look::Texture { name, .. } => Some(name.clone()),
+                        _ => None,
+                    };
                     let mesh = model_mesh(&group.triangles, group.shading.lighting, [0.0; 3]);
                     let material = object_material(group.look, group.shading, &light, &mut images);
                     parts.push((meshes.add(mesh), object_materials.add(material)));
+                    tex_names.push(tex_name);
                 }
+                shape_textures.push(tex_names);
             }
+        }
+        if model.light_atlas.is_some() {
+            shape_textures.push(Vec::new());
         }
         wall_info.push(model.light_atlas.map(std::sync::Arc::new).zip(model.wall_light));
         built.push(parts);
@@ -449,11 +509,19 @@ pub fn setup_objects(
         }
         // The lights it carries (M1 7c), on its first part only.
         let mut carried = test.as_ref().and_then(|_| crate::scene_lights::CarriedLights::new(vec![shape_lights[*i].clone()], transform, p.turn_off_dyn_lighting));
-        for (mesh, material) in &built[*i] {
+        for (part_idx, (mesh, material)) in built[*i].iter().enumerate() {
             // Every material of a see-through object (objects.md Q14); a
             // separate copy, because other copies of the model may be solid.
             let material = crate::object_light::for_object(&mut object_materials, material, opacity, p.haze_solid, p.haze_multiplier);
-            let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material), transform, ObjectName(p.name.clone())));
+            let mut e = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), transform, ObjectName(p.name.clone())));
+            if let Some(orig_tex) = shape_textures[*i].get(part_idx).and_then(|t| t.as_deref()) {
+                e.insert(StaticTexture {
+                    object_lc: p.name.to_ascii_lowercase(),
+                    original_tex: orig_tex.to_string(),
+                    original_material: material,
+                    swapped_to: None,
+                });
+            }
             // Unused objects, and hidden ones (objects.md Q18): only with H.
             if *unused || !p.drawn() {
                 e.insert((Visibility::Hidden, ShownWithH));

@@ -845,10 +845,16 @@ pub struct WorldState {
     /// `KQObject::dither <name> 1` (lower case), for the viewer (M5 5g-7;
     /// STAND-IN, Q144).
     pub dithered: BTreeMap<String, u8>,
-    /// `KQObject::changeBmp <name> <old> <new>` (lower-case name): the one
-    /// pair remembered per object, for the viewer (`characters.md` rule
-    /// 4a; batch 2 D-6). `normal` removes it.
-    pub bmp_swaps: BTreeMap<String, (String, String)>,
+    /// `KQObject::changeBmp <name> <old> <new>` (lower-case name): the
+    /// pair(s) remembered per object, for the viewer (`characters.md` rule
+    /// 4a; batch 2 D-6; `tile-puzzle.md` rule 38 multi-pair `KQSwampTile`
+    /// Reveal swaps). `normal` or `Reveal False` removes it.
+    pub bmp_swaps: BTreeMap<String, Vec<(String, String)>>,
+    /// Placed `KQSwampTile`s by lower-case object name (`tile-puzzle.md` rules 36–40).
+    pub swamp_tiles: BTreeMap<String, crate::swamp_tile::SwampTile>,
+    /// Queued 0-damage projectile/rock hits on `KQSwampTile`s (`(tile_name, shooter)`),
+    /// drained against `Swamp::Tile::PowerOn` / `SwitchOn`.
+    pub swamp_tile_hits: Vec<(String, String)>,
     /// Connor's handsOff is on (a cutscene), set by the caller before each
     /// update (M5 5g-9, `potions.md` rule 26).
     pub connor_hands_off: bool,
@@ -2744,6 +2750,59 @@ impl WorldState {
         "0".into()
     }
 
+    /// Spawns auto-deleted `swmpgas.kqs` above a `KQSwampTile` (`tile-puzzle.md` rules 39–40).
+    pub fn spawn_swamp_gas(&mut self, height_num: i32, tile_pos: [f32; 3], at: &str) -> String {
+        let name = self.items.next_name();
+        let lower = name.to_ascii_lowercase();
+        let pos = [tile_pos[0], tile_pos[1], tile_pos[2] + crate::swamp_tile::gas_z_offset(height_num)];
+        let placement = Placement::at(pos);
+        let key = crate::swamp_tile::GAS_FILE;
+        let template_player = self.templates.get(key).and_then(|t| match &t.kind {
+            TemplateKind::Anim(p) => Some((**p).clone()),
+            TemplateKind::Still { .. } => None,
+        });
+        let mut player = template_player.unwrap_or_else(|| {
+            let mut p = NamedAnimPlayer::new(
+                &name,
+                vec![crate::door::DoorMovement {
+                    name: crate::named_anim::STOP_NAME.to_string(),
+                    start: 0.0,
+                    speed: 1.0,
+                    repeat: false,
+                    cut_short: false,
+                    play_time: 1.0,
+                    frame_steps: vec![crate::door::identity(); 15],
+                    first_in_file: true,
+                    frame_parts: Vec::new(),
+                    cues: Vec::new(),
+                    transitions: Vec::new(),
+                }],
+                0,
+                placement,
+            );
+            p.started_this_update = true;
+            p
+        });
+        if let Some(m) = player.movements.first_mut() {
+            m.speed = 1.0;
+            m.repeat = false;
+        }
+        player.name = name.clone();
+        player.base = placement;
+        player.current = 0;
+        player.phase = 0.0;
+        player.playing = true;
+        player.once = true;
+        player.delete_when_done = true;
+        player.waiting = None;
+        player.started_this_update = true;
+        self.deleted.remove(&lower);
+        self.known.insert(lower);
+        self.anims.push(AnimObject { player, script: None, gone: false, character: None, translucency: None });
+        self.requests.push(Request::Spawn { file: key.into(), name: name.clone(), placement, at: at.to_string() });
+        name
+    }
+
     /// Spawns a copy of prepared template `file` named `name` at `placement`
     /// (`false` if no such template exists; U-11 chain pieces also call this).
     pub(crate) fn spawn_template(&mut self, file: &str, name: &str, placement: Placement, at: &str) -> bool {
@@ -2857,7 +2916,7 @@ impl WorldState {
         let line = match pair {
             Some((old, new)) => {
                 let l = format!("{name}: textures first named {old} drawn as {new}");
-                self.bmp_swaps.insert(key, (old, new));
+                self.bmp_swaps.insert(key, vec![(old, new)]);
                 l
             }
             None => {
@@ -4683,6 +4742,8 @@ impl Active {
                 reveal_calls: Vec::new(),
                 dithered: BTreeMap::new(),
                 bmp_swaps: BTreeMap::new(),
+                swamp_tiles: BTreeMap::new(),
+                swamp_tile_hits: Vec::new(),
                 item_voices: Vec::new(),
                 hand: None,
                 gold_persists: false,
@@ -4825,6 +4886,47 @@ impl Active {
     /// when it is not such an object.
     pub fn connor_touch(&mut self, name: &str, normal: [f32; 3], mask: u32) -> Option<String> {
         let key = name.to_ascii_lowercase();
+        if let Some(tile) = self.world.swamp_tiles.get(&key).cloned() {
+            let now = self.world.now();
+            let prev = tile.last_touch;
+            if let Some(t) = self.world.swamp_tiles.get_mut(&key) {
+                t.last_touch = Some(now);
+            }
+            let safe = self.is_swamp_tile_safe(&key);
+            let armed = self.swamp_tile_armed();
+            let ready = prev.is_none_or(|t| now - t > crate::swamp_tile::TOUCH_COOLDOWN);
+            let line = if safe {
+                format!("{name}: KQSwampTile touch: safe tile (fiensafe.cs): no gas (tile-puzzle.md rule 40)")
+            } else if !armed {
+                format!("{name}: KQSwampTile touch: unsafe tile, PowerOn/SwitchOn off: no gas (tile-puzzle.md rule 40)")
+            } else if !ready {
+                format!("{name}: KQSwampTile touch: {:.3} s since last touch (<= {:.1} s), cooldown reset: no gas (tile-puzzle.md rule 40)", now - prev.unwrap_or(now), crate::swamp_tile::TOUCH_COOLDOWN)
+            } else {
+                let gas_note = if let Some(p) = self.world.place_of(name) {
+                    let spawned = self.world.spawn_swamp_gas(tile.height_num, p.position, &format!("KQSwampTile {name} touch"));
+                    format!("spawns {spawned} at z+{:.0}", crate::swamp_tile::gas_z_offset(tile.height_num))
+                } else {
+                    "no placement: no gas".to_string()
+                };
+                if !self.world.god_mode && !self.world.connor_dying && !self.world.connor_roping {
+                    if let Some(mut c) = self.world.connor_stats {
+                        let delta = crate::swamp_tile::touch_health_delta(c.level, tile.dam_factor);
+                        let before = c.stats.0[0];
+                        c.stats.0[0] = (c.stats.0[0] + delta).min(10 * c.level);
+                        let after = c.stats.0[0];
+                        self.world.connor_stats = Some(c);
+                        self.world.connor_stats_events += 1;
+                        self.world.fight_note("Connor", format!("KQSwampTile {name} (damFactor {}): health {before} -> {after} ({delta}, direct; tile-puzzle.md rule 40)", tile.dam_factor));
+                    }
+                    self.world.hit_connor_full(name, 1, crate::fight::HitKind::Fire, false, false);
+                }
+                format!("{name}: unsafe armed KQSwampTile touch: {gas_note}; direct health drop + 1 Fire hit (tile-puzzle.md rule 40)")
+            };
+            self.world.note(format!("game time {now:.3} s: {line}"));
+            if !self.world.con_collision.contains(&key) {
+                return Some(line);
+            }
+        }
         if !self.world.con_collision.contains(&key) {
             return None;
         }
@@ -4958,7 +5060,13 @@ impl Active {
                         self.world.rock_aim = Some(aim);
                         let line = format!("{head}: {name} accepts it, {d:.0} away (under {max}): aimed at its position ({:.0}, {:.0}, {:.0}); ConnorAction {rock} {kind_name} to it (ranged-weapons.md 8a)", aim[0], aim[1], aim[2]);
                         self.world.fight_note("Connor", line.clone());
-                        if !self.call_named(name, &["ConnorAction", &rock, &kind_name]) {
+                        let ran = self.call_named(name, &["ConnorAction", &rock, &kind_name]);
+                        if self.world.swamp_tiles.contains_key(&name.to_ascii_lowercase()) {
+                            let aim = self.world.rock_aim.take().unwrap_or(aim);
+                            self.world.requests.push(Request::ClickTurn { name: name.to_string(), target: [aim[0], aim[1]], at: head.clone() });
+                            self.world.requests.push(Request::ConnorThrowRock { aim: Some(aim), at: head.clone() });
+                            self.world.fight_note("Connor", format!("{head}: KQSwampTile {name} -> ThrowRock at tile position ({:.0}, {:.0}, {:.0}) (tile-puzzle.md rule 37)", aim[0], aim[1], aim[2]));
+                        } else if !ran {
                             self.world.rock_aim = None;
                             self.world.fight_note("Connor", format!("{head}: {name} has no script: nothing more"));
                         }
@@ -5991,7 +6099,10 @@ impl Active {
         let Some(i) = self.world.door_index(name) else {
             let found = self.world.clickables.iter().position(|c| c.name.eq_ignore_ascii_case(name));
             // conversation.md rule 5: a character with an info object.
-            if let Some(i) = found.filter(|&i| self.world.clickables[i].script.is_some()) {
+            if let Some(i) = found.filter(|&i| {
+                self.world.clickables[i].script.is_some()
+                    || self.world.swamp_tiles.contains_key(&self.world.clickables[i].name.to_ascii_lowercase())
+            }) {
                 if let Some(info) = self.world.conv_infos.iter().find(|f| f.partner().eq_ignore_ascii_case(name)).cloned() {
                     return self.click_partner(i, &info, feet, item);
                 }
@@ -6322,7 +6433,6 @@ impl Active {
         self.world.note(format!("{head}; script arguments: {} {}", c.name, args.join(" ")));
         let refs: Vec<&str> = args.iter().map(String::as_str).collect();
         self.call_clickable(i, &refs);
-        // Only clickables with a script come here: always a call.
         self.click_turn(&c.name, &args, true, c.placement.position, c.do_not_point_at);
         let mut full = vec![c.name];
         full.extend(args);
@@ -6578,6 +6688,49 @@ impl Active {
     /// the events sent meanwhile with delay 0 (the ends of movements,
     /// `EndLoop`, `Cue 300`, scripts' `sendEvent 0`), before the frame is
     /// drawn (`anim-scripts.md` rule 8, Q119; M4 4e-10).
+    fn swamp_tile_armed(&self) -> bool {
+        crate::swamp_tile::is_truthy(self.scripts.vars.get("Swamp::Tile::PowerOn"))
+            && crate::swamp_tile::is_truthy(self.scripts.vars.get("Swamp::Tile::SwitchOn"))
+    }
+
+    fn is_swamp_tile_safe(&self, key: &str) -> bool {
+        self.world
+            .clickables
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(key))
+            .is_some_and(|c| crate::swamp_tile::is_safe(c.script.as_deref()))
+    }
+
+    /// Drains 0-damage projectile/rock hits on `KQSwampTile`s (`tile-puzzle.md` rule 39).
+    pub fn drain_swamp_tile_hits(&mut self) {
+        for (name, shooter) in std::mem::take(&mut self.world.swamp_tile_hits) {
+            let key = name.to_ascii_lowercase();
+            let Some(tile) = self.world.swamp_tiles.get(&key).cloned() else { continue };
+            if self.is_swamp_tile_safe(&key) {
+                self.world.fight_note(&shooter, format!("hit on KQSwampTile {name}: safe tile (fiensafe.cs): no gas (tile-puzzle.md rule 39)"));
+                continue;
+            }
+            if !self.swamp_tile_armed() {
+                self.world.fight_note(&shooter, format!("hit on KQSwampTile {name}: unsafe tile, PowerOn/SwitchOn off: no gas (tile-puzzle.md rule 39)"));
+                continue;
+            }
+            let Some(p) = self.world.place_of(&name) else { continue };
+            let at = format!("KQSwampTile {name} projectile hit");
+            let spawned = self.world.spawn_swamp_gas(tile.height_num, p.position, &at);
+            self.world.fight_note(
+                &shooter,
+                format!(
+                    "hit on unsafe armed KQSwampTile {name} (heightNum {}): spawns auto-deleted {} {spawned} at z+{:.0} (tile-puzzle.md rule 39)",
+                    tile.height_num,
+                    crate::swamp_tile::GAS_FILE,
+                    crate::swamp_tile::gas_z_offset(tile.height_num),
+                ),
+            );
+        }
+    }
+
+    /// Scripts run before `handle_due` (M3 3l-2): a trigger cue must fire
+    /// at the very tick it arrives, not wait one frame for delayed handling.
     pub fn update(&mut self) {
         let now = self.world.now();
         self.run_tower_lines();
@@ -6592,12 +6745,45 @@ impl Active {
         self.world.note_connor_report();
         // M6 6a-1: the hook icon (ropeandhook.md rule 7).
         self.world.rope_icon_step();
-        // M5 5g-7: Clarity's Reveal calls (potions.md rule 31).
+        // M5 5g-7: Clarity's Reveal calls (potions.md rule 31; tile-puzzle.md rule 38 for KQSwampTile).
         for (name, on) in std::mem::take(&mut self.world.reveal_calls) {
+            let key = name.to_ascii_lowercase();
+            if let Some(tile) = self.world.swamp_tiles.get(&key).cloned() {
+                let safe = self.is_swamp_tile_safe(&key);
+                if on {
+                    if safe {
+                        let pairs = crate::swamp_tile::reveal_pairs(tile.height_num);
+                        if !pairs.is_empty() {
+                            let vec_pairs: Vec<(String, String)> = pairs.iter().map(|&(a, b)| (a.to_string(), b.to_string())).collect();
+                            if let Some(t) = self.world.swamp_tiles.get_mut(&key) {
+                                t.revealed = true;
+                            }
+                            self.world.bmp_swaps.insert(key, vec_pairs);
+                        }
+                        self.world.item_note(format!(
+                            "clarity: KQSwampTile {name} (safe, heightNum {}): Reveal True -> green highlights ON (tile-puzzle.md rule 38)",
+                            tile.height_num
+                        ));
+                    } else {
+                        self.world.item_note(format!("clarity: KQSwampTile {name} (unsafe): Reveal True -> no highlight (tile-puzzle.md rule 38)"));
+                    }
+                } else {
+                    if let Some(t) = self.world.swamp_tiles.get_mut(&key) {
+                        t.revealed = false;
+                    }
+                    if self.world.bmp_swaps.remove(&key).is_some() {
+                        self.world.item_note(format!("clarity: KQSwampTile {name}: Reveal False -> original textures restored (tile-puzzle.md rule 38)"));
+                    } else {
+                        self.world.item_note(format!("clarity: KQSwampTile {name}: Reveal False -> unchanged (tile-puzzle.md rule 38)"));
+                    }
+                }
+                continue;
+            }
             let word = if on { "True" } else { "False" };
             let line = if self.call_named(&name, &["Reveal", word]) { format!("{name}: its script gets Reveal {word}") } else { format!("{name}: no script: Reveal {word} not called") };
             self.world.item_note(format!("clarity: {line} (potions.md rule 31)"));
         }
+        self.drain_swamp_tile_hits();
         let dt = (1.0 / crate::UPDATES_PER_SECOND) as f32;
         for i in 0..self.world.doors.len() {
             let a = self.world.doors[i].door.advance(dt);
@@ -9961,13 +10147,100 @@ endif
         let mut a = with_object("KQObject::changeBmp tile21 tilea.bmp tileacl.bmp\nKQObject::changeBmp nosuch a.bmp b.bmp\nKQObject::changeBmp tile21\n", "x");
         a.world.known.insert("tile21".into());
         a.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
-        assert_eq!(a.world.bmp_swaps.get("tile21"), Some(&("tilea.bmp".to_string(), "tileacl.bmp".to_string())));
+        assert_eq!(a.world.bmp_swaps.get("tile21"), Some(&vec![("tilea.bmp".to_string(), "tileacl.bmp".to_string())]));
         let log = a.take_log().join("\n");
         assert!(log.contains("cannot find 'nosuch'") && log.contains("usage: KQObject::changeBmp"), "{log}");
         let mut b = with_object("KQObject::changeBmp tile21 tilea.bmp tileacl.bmp\nKQObject::changeBmp tile21 tilea.bmp tilea.bmp\nKQObject::changeBmp Tile21 Normal\n", "x");
         b.world.known.insert("tile21".into());
         b.click("basket1", [0.0, -1000.0, 0.0], 2350.0, None);
         assert!(b.world.bmp_swaps.is_empty());
+    }
+
+    #[test]
+    fn swamp_tile_reveal_gas_puffs_and_touch_damage_follow_rules_37_to_40() {
+        use crate::swamp_tile::{SwampTile, DEFAULT_DAM_FACTOR};
+        let mut a = Active::new(
+            Vars::default(),
+            vec![],
+            vec![],
+            ["Connor".into(), "tile02".into(), "tile00".into(), "tile13".into()],
+            [("fiensafe.cs".into(), b"# safe tile\n".to_vec())],
+        );
+        a.world.connor_stats = Some(crate::stats::ConnorStats { stats: Stats([16, 10, 5, 0, 0]), level: 2 });
+        a.scripts.vars.set("Swamp::Tile::PowerOn", "true".into());
+        a.scripts.vars.set("Swamp::Tile::SwitchOn", "true".into());
+
+        // Safe gas trap tile (heightNum=1 -> +750) with fiensafe.cs; unsafe gastrap2 (heightNum=1 -> +750) & stump2 (heightNum=13 -> +1250) without script.
+        for (name, h, script, x) in [
+            ("tile02", 1, Some("fiensafe.cs"), 50000.0),
+            ("tile00", 1, None, 50000.0),
+            ("tile13", 13, None, 52000.0),
+        ] {
+            a.world.swamp_tiles.insert(name.into(), SwampTile::new(name, h, DEFAULT_DAM_FACTOR));
+            let mut c = Clickable::plain(
+                name,
+                crate::swamp_tile::CLASS,
+                [-500.0, -500.0, 0.0],
+                [500.0, 500.0, 100.0],
+                Placement::at([x, 90000.0, 1000.0]),
+                0x4021,
+            );
+            c.script = script.map(str::to_string);
+            c.accepts_inventory = Some("INVITEM_Rock".into());
+            a.world.clickables.push(c);
+        }
+        a.world.reveal_objects = vec!["tile02".into(), "tile00".into(), "tile13".into()];
+
+        // Reveal True highlights only safe tile02 (2 pairs); unsafe tile00 & tile13 stay untouched.
+        a.world.reveal_calls = vec![("tile02".into(), true), ("tile00".into(), true), ("tile13".into(), true)];
+        a.update();
+        assert!(a.world.swamp_tiles["tile02"].revealed);
+        assert!(!a.world.swamp_tiles["tile00"].revealed);
+        assert_eq!(a.world.bmp_swaps.get("tile02").map(Vec::len), Some(2));
+        assert!(!a.world.bmp_swaps.contains_key("tile00"));
+        a.world.reveal_calls = vec![("tile02".into(), false)];
+        a.update();
+        assert!(!a.world.swamp_tiles["tile02"].revealed);
+        assert!(!a.world.bmp_swaps.contains_key("tile02"));
+
+        // 0-damage rock hits while armed: safe tile02 puffs nothing, unsafe tile00 & tile13 spawn auto-deleted swmpgas.kqs at +750 / +1250.
+        a.world.swamp_tile_hits = vec![
+            ("tile02".into(), "Connor".into()),
+            ("tile00".into(), "Connor".into()),
+            ("tile13".into(), "Connor".into()),
+        ];
+        a.update();
+        assert_eq!(a.world.anims.len(), 2);
+        assert_eq!(a.world.anims[0].player.base.position[2], 1750.0);
+        assert!(a.world.anims[0].player.delete_when_done && a.world.anims[0].player.once);
+        assert_eq!(a.world.anims[1].player.base.position[2], 2250.0);
+
+        // Unarmed (PowerOn false) produces no gas puff.
+        a.scripts.vars.set("Swamp::Tile::PowerOn", "false".into());
+        a.world.swamp_tile_hits = vec![("tile00".into(), "Connor".into())];
+        a.update();
+        assert_eq!(a.world.anims.len(), 2);
+
+        // Armed Connor touch: spawns gas, subtracts 9 directly + 1 Fire hit (16 -> 6 or 7), then >2.0 s cooldown resets on continuous touch!
+        a.scripts.vars.set("Swamp::Tile::PowerOn", "true".into());
+        a.connor_touch("tile00", [0.0, 0.0, 1.0], 5);
+        assert_eq!(a.world.anims.len(), 3);
+        let hp_after_first = a.world.connor_stats.unwrap().stats.0[0];
+        assert!(!a.world.connor_dying && (6..=7).contains(&hp_after_first), "expected direct -9 + 1 Fire roll in 6..=7: got {hp_after_first}");
+        // Touching again after 1.5 s: resets last_touch, no blast.
+        for _ in 0..22 {
+            a.update();
+        }
+        a.connor_touch("tile00", [0.0, 0.0, 1.0], 5);
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[0], hp_after_first);
+        // Wait 2.1 s (32 updates) without touching -> next touch blasts again and kills Connor (Fire).
+        for _ in 0..32 {
+            a.update();
+        }
+        a.world.requests.clear();
+        a.connor_touch("tile00", [0.0, 0.0, 1.0], 5);
+        assert!(a.world.connor_dying);
+        assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorDies { kind: crate::fight::HitKind::Fire, .. })));
     }
 
     #[test]

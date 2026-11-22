@@ -45,6 +45,7 @@ pub mod script;
 pub mod shadow;
 pub mod sound;
 pub mod stats;
+pub mod swamp_tile;
 pub mod talk;
 pub mod terrain_drain;
 pub mod trap;

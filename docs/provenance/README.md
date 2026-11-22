@@ -4241,6 +4241,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `setFirstPerson` global `SetFirstPerson::WasThirdPerson` toggle & F2 lock mirror of `setThirdPerson` (tracking state while first-person view awaits its own step) | `camera.md` rule 8 (Batch 3) | unit test `batch3_set_first_person_set_rel_damage_pre_special_and_add_immunity`; Swamp `doors.log` (`WasThirdPerson 1 -> 0`) |
 | `Connor.kq` `immunities=` key (default `0`), `KQConner::addImmunity <mask>`, `Journey::immunities` carry-over across worlds, and bitwise immunity masking in `Active::connor_liquid` (`256` / `0x100` Swamp vs `0x40` Poison) | `water.md` "Liquid damage" rule 5 (Batch 3) | unit tests `taken_and_given_back_unchanged` and `batch3_set_first_person_set_rel_damage_pre_special_and_add_immunity`; Swamp `doors.log` (`connor immunities now 0x100`, not yet tested by wading in Swamp) |
 
+## B3-2 2026-11-22: `KQSwampTile` & multi-pair/static `ChangeBmp` — core `swamp_tile.rs`, `active.rs`, `fight.rs`; viewer `load.rs`, `anim_view.rs`, `terrain_view.rs`, `door_view.rs`, `main.rs`
+
+| Fact | Source | Checked by |
+| --- | --- | --- |
+| `KQSwampTile` keys (`heightNum` `0` default, `damFactor` `0.48` default), truthy `"true"`/`"false"` handling for `Swamp::Tile::PowerOn`/`SwitchOn`, safe (`fiensafe.cs`) vs unsafe (`script == None`) classification, and click/`ThrowRock` handling | `tile-puzzle.md` rules 36–37 (Batch 3); `MASK/Swamp/kq/worldvar.cs` | `swamp_tile::tests`; Swamp `viewer.log` & `doors.log` (42 tiles loaded, `tile00`/`tile03` rock click -> `ThrowRock`, not yet played by hand) |
+| Clarity `Reveal` highlights only safe `KQSwampTile`s via 2 texture pairs (`gastrap.bmp`->`I_gastrp.bmp`, `wtower5.bmp`->`I_wtowr7.bmp` for `1..=3`; `trapring.bmp`->`I_trprng.bmp`, `trunk.bmp`->`I_trunk.bmp` for `12..=13`) using per-entity cloned `StaticTexture` materials; `Reveal False` restores originals | `tile-puzzle.md` rule 38 (Batch 3) | unit test `swamp_tile_reveal_gas_puffs_and_touch_damage_follow_rules_37_to_40`; Swamp `viewer.log` (4 Reveal textures read; **visual swap not yet checked by eye**) |
+| 0-damage projectile hit & Connor touch (`> 2.0 s` resettable cooldown) on armed unsafe tiles spawn auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250`, plus direct `trunc(-level * 10 * damFactor)` health loss and 1 Fire hit (`HitKind::Fire`) | `tile-puzzle.md` rules 39–40 (Batch 3) | unit tests; Swamp `viewer.log` & `doors.log` (`tile12` rock hit `swmpgas.kqs` `z+750`; `tile03` touch `150 -> 78 -> 77`, cooldown reset) |
+
+
 
 
 

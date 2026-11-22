@@ -104,11 +104,11 @@ struct Playing {
     /// Its drawing (Animation memory step 4); `None` if its animations
     /// couldn't be packed.
     new_draw: Option<crate::anim_gpu::Slots>,
-    /// `changeBmp` (batch 2 D-6, `characters.md` rule 4a): its materials'
-    /// original texture names, the pair drawn now, and the pictures the
-    /// pair replaced (put back when it changes).
+    /// `changeBmp` (batch 2 D-6, `characters.md` rule 4a; Batch 3 B3-2 multi-pair):
+    /// its materials' original texture names, the pair(s) drawn now, and the
+    /// pictures replaced (put back when it changes).
     texture_names: Vec<((usize, i32), String)>,
-    bmp_shown: Option<(String, String)>,
+    bmp_shown: Option<Vec<(String, String)>>,
     bmp_saved: Vec<(Handle<ObjectMaterial>, Option<Handle<Image>>)>,
     /// An unused object's player as built at load: what a script's
     /// `loadKQ` brings in, so its movement starts as at the start
@@ -148,6 +148,13 @@ pub struct AnimSim {
     characters: Option<Log>,
     /// `fight.log` (M5 5c), if it could be made.
     fight: Option<Log>,
+}
+
+impl AnimSim {
+    /// Looks up a preloaded `swap_looks` texture by name (`characters.md` rule 4a / `KQSwampTile` Reveal).
+    pub fn swap_image(&self, name: &str) -> Option<&Handle<Image>> {
+        self.swap_images.get(&name.to_ascii_lowercase())
+    }
 }
 
 /// A step that does nothing (no move, no turn), within rounding.
@@ -977,24 +984,34 @@ pub fn anim_draw(
             let what = match (&wanted, &p.new_draw) {
                 (None, _) => "its own textures again".to_string(),
                 (Some(_), None) => "not drawn: its animations are not packed".to_string(),
-                (Some((old, new)), Some(nd)) => {
-                    let image = sim.swap_images.get(&new.to_ascii_lowercase()).cloned();
-                    let mut changed = 0;
-                    for (k, original) in p.texture_names.iter().filter(|(_, t)| t.eq_ignore_ascii_case(old)) {
-                        let Some(h) = nd.materials.get(k) else { continue };
-                        // The original name again: its own picture (put back above).
-                        if new.eq_ignore_ascii_case(original) {
-                            continue;
+                (Some(pairs), Some(nd)) => {
+                    let mut summaries = Vec::new();
+                    for (old, new) in pairs {
+                        let image = sim.swap_images.get(&new.to_ascii_lowercase()).cloned();
+                        let mut changed = 0;
+                        for (k, original) in p.texture_names.iter().filter(|(_, t)| t.eq_ignore_ascii_case(old)) {
+                            let Some(h) = nd.materials.get(k) else { continue };
+                            // The original name again: its own picture (put back above).
+                            if new.eq_ignore_ascii_case(original) {
+                                continue;
+                            }
+                            let Some(image) = image.clone() else { continue };
+                            if let Some(mut m) = materials.get_mut(h) {
+                                p.bmp_saved.push((h.clone(), m.texture.clone()));
+                                m.texture = Some(image);
+                                changed += 1;
+                            }
                         }
-                        let Some(image) = image.clone() else { continue };
-                        if let Some(mut m) = materials.get_mut(h) {
-                            p.bmp_saved.push((h.clone(), m.texture.clone()));
-                            m.texture = Some(image);
-                            changed += 1;
-                        }
+                        let note = if new.eq_ignore_ascii_case(old) {
+                            "; the same name: its own picture".to_string()
+                        } else if image.is_none() {
+                            format!("; {new} was not read at load: unchanged")
+                        } else {
+                            String::new()
+                        };
+                        summaries.push(format!("{old} -> {new} on {changed} material(s){note}"));
                     }
-                    let note = if new.eq_ignore_ascii_case(old) { "; the same name: its own picture".to_string() } else if image.is_none() { format!("; {new} was not read at load: unchanged") } else { String::new() };
-                    format!("{old} -> {new} on {changed} material(s){note}")
+                    summaries.join("; ")
                 }
             };
             sim.log.detail(format!("update {}: {}: changeBmp: {what} (characters.md rule 4a)", sim.updates, p.name));

@@ -4059,7 +4059,7 @@ Implementing Session A's Batch 3 notes for Swamp (`docs/behaviour/{inventory,scr
    - `setFirstPerson`: global `SetFirstPerson::WasThirdPerson` mirror of `setThirdPerson` (toggle state tracked/logged cleanly while first-person view awaits its own step).
    - `KQConner::addImmunity <mask>` + `.kq` `immunities` key (default `0`) + `Journey::immunities` carry-over across worlds, masking non-immune bits in `Active::connor_liquid` (`256` = swamp immunity).
    - Note: `Swamp/boiloil.cs:4`'s `beep` is a confirmed harmless typo in an unused script (`script-commands.md` rule 5) and is intentionally NOT added.
-2. **Step B3-2: `KQSwampTile` class:**
+2. **Step B3-2: `KQSwampTile` class — Done (2026-11-22, unit/log-verified only):**
    - Parse `heightNum` (`0` default; `1..=3` traps, `12..=13` stumps) and `damFactor` (`0.48` default); load all 42 `tile<col><row>` tiles as clickable (`INVITEM_Rock`) objects; preload `swmpgas.kqs` and Reveal textures (`I_gastrp.bmp`, `I_wtowr7.bmp`, `I_trprng.bmp`, `I_trunk.bmp`).
    - Support multi-pair `bmp_swaps` on both animated and static objects (`static_bmp_swap_step`) so Clarity's `Reveal` highlights only the 12 safe tiles (`fiensafe.cs`).
    - 0-damage projectile hit on unsafe tile while `Swamp::Tile::PowerOn` and `Swamp::Tile::SwitchOn` are truthy spawns auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250`.

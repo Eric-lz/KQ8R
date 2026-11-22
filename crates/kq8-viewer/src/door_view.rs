@@ -865,6 +865,12 @@ pub fn spawn_doors(
         active.world.portals.insert(p.name.to_ascii_lowercase(), p);
     }
     main_log.summary(format!("clarity: objects with groupsAlways bit 2048: {:?} (potions.md rule 31)", active.world.reveal_objects));
+    for t in std::mem::take(&mut objects.swamp_tiles) {
+        active.world.swamp_tiles.insert(t.name.to_ascii_lowercase(), t);
+    }
+    if !active.world.swamp_tiles.is_empty() {
+        main_log.summary(format!("tile2: {} KQSwampTile(s) loaded (tile-puzzle.md rules 36–40)", active.world.swamp_tiles.len()));
+    }
     active.world.connor_immunities = objects.connor_immunities;
     match &objects.connor_stats {
         Some((line, level)) => {
@@ -1763,6 +1769,8 @@ pub fn character_gravity(
     sim.active.world.characters_ai(&lookup.0, b, o);
     // U-9b: the thrown rocks' moves to the traps, their landings.
     sim.active.rocks_after_flight();
+    // tile-puzzle.md rule 39 (B3-2): rock/projectile hits on unsafe KQSwampTiles.
+    sim.active.drain_swamp_tile_hits();
     sim.active.world.characters_gravity(&lookup.0, b, o);
     // fighting.md rule 31a (C-2): the line tests of the weapons laid by a
     // death this update, then thrown-items.md (M5 5e-1): thrown items,
