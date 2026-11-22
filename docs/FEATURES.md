@@ -899,9 +899,10 @@ Checked in the logs and unit tests only, **not played by hand**.
 
 ## Dead City polish (Q197–Q198) and Script coverage batch 1 (2026-11-20, steps B1-1 to B1-8)
 
-Checked by the user on 2026-11-20 for camera shake, `allowShadows`,
-`Snowexit` mushrooms, `litehaze`, and help popups; `Q197`–`Q198` and
-`loadAnim` checked in the logs and unit tests only.
+Checked by the user on 2026-11-20/21 for camera shake, `allowShadows`,
+`Snowexit` mushrooms, `litehaze` (`B1-F2` haze buffer + `H`-key wireframe),
+and help popups (`B1-F1`/`B1-F1b`); `Q197`–`Q198` and `loadAnim` checked in
+the logs and unit tests only.
 
 - **Dead City polish (`Q197`, `Q198`, logs only):** `Tile2`/`Tile3`/
   `Scales`/`Fall` state numbers, all six Scales camera cuts and `walkTo`
@@ -916,18 +917,17 @@ Checked by the user on 2026-11-20 for camera shake, `allowShadows`,
   `allowShadows` on world load and live toggle (**checked by eye: works**);
   `KQCamera::shake` (**checked by eye: works**); dynamic `KQAnimOnce`
   spawning (`loadAnim`, logs only); and `KQHazer` proximity haze zones
-  (`DeadCity`'s `litehaze`: fog ramp **checked by eye**, `B1-F2` shared GPU
-  haze buffer for O(1) `F8`/`setHaze`/`KQHazer` updates, quiet detail-only
-  ramp logging, and wireframe+rings `H`-key marker verified in logs, **not
-  yet re-checked by eye**).
+  (`DeadCity`'s `litehaze`, `B1-F2` shared GPU haze buffer for O(1)
+  `F8`/`setHaze`/`KQHazer` updates, quiet detail-only ramp logging, and
+  wireframe+rings `H`-key marker: **checked by eye 2026-11-21**).
 - **Help popups and F1 Help Book:** scripted (`doPopup`) and built-in
   beginner tips with `1.5 s` delay, `1.0 s` deferral, `3.0 s` cooldown,
   `Options.cs` `notStartingHelp`, startup `stopHelp`, `38×7` wrapping
   with key-name expansion, `intrface.aud` on open, `button1.aud` on popup
-  clicks / arrows / Enter (confirmed by ear 2026-11-21; `Q199` part b
+  clicks / arrows / Enter (confirmed live 2026-11-21; `Q199` part b
   group check open), game pause, instant close, and the 24-page **F1** Help
   Book (`Close`, `<<`, `>>` with Portal-style highlight and animations;
-  **checked by eye and ear 2026-11-21**).
+  **checked live by eye and ear 2026-11-21**).
 
 ## Viewer helpers (not in the original)
 
