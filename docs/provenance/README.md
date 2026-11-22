@@ -4328,7 +4328,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 
 | Behaviour implemented | Source | Verification |
 |---|---|---|
-| `WorldState::place_of` resolves live `self.traps` (`Placement::at(t.settings.position)`) so `bouldtrp.cs`/`bouldtp2.cs` `checkDistance $1 boulder` succeeds; `move_command` skips `Request::Move` when a `KQBoulder` only rotates (`new.position == old`) | `anim-scripts.md` rule 31; `MASK/Gnome/kq/{bouldtrp,bouldtp2}.cs` | unit tests `pushed_object_triggers_mask_1_trap` & `move_boulder_emits_request_for_collider` |
+| `WorldState::place_of` resolves live `self.traps` (`Placement::at(t.settings.position)`) so `bouldtrp.cs`/`bouldtp2.cs` `checkDistance $1 boulder` succeeds; `move_command` skips `Request::Move` when a `KQBoulder` only rotates (`new.position == old`) | `anim-scripts.md` rule 31; `MASK/Gnome/kq/{bouldtrp,bouldtp2}.cs` | unit tests `pushed_object_triggers_mask_1_trap` & `move_boulder_emits_request_for_collider`; live user play check 2026-11-22 (`B4-F1`–`B4-F3` confirmed working) |
+
+## B4-F4 2026-11-22: Numeric `ID #` lookup in `ItemTypes::find` & world items in `place_of` — data `items.rs`; core `active.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `ItemTypes::find` resolves numeric `ID #` strings (`1060`, `1150`, `2050`, ...) passed by `KQMonster::checkInventory` (`$ConInv::*`); `WorldState::place_of` resolves world `KQInventoryItem`s (`Place::World`) for `getLoc` and `checkDistance` | `inventory.md` rule 1 & `anim-scripts.md` rule 31; `MASK/GAME/Kq/Invinfo.itl`, `MASK/Gnome/kq/{weapngnm,armorgnm,emptyloc,warhammr,myweapon,myarmor}.cs` | unit tests `find_accepts_numeric_id_as_well_as_names`, `check_inventory_accepts_numeric_id_for_connor_and_world`, `get_loc_and_check_distance_resolve_world_items` |
 
 
 

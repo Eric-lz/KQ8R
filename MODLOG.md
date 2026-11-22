@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 4 fix B4-F4: Numeric `ID #` lookup in `ItemTypes::find` & world items in `place_of` (Gnome shops)
+- **Changed:** `crates/kq8-data/src/items.rs` (`ItemTypes::find` parses numeric `ID #` strings such as `1060`/`1150`/`2050`, unit test `find_accepts_numeric_id_as_well_as_names`), `crates/kq8-core/src/active.rs` (`WorldState::place_of` resolves world `KQInventoryItem`s in `Place::World`, unit tests `check_inventory_accepts_numeric_id_for_connor_and_world` & `get_loc_and_check_distance_resolve_world_items`), `STATUS.md`, `MODLOG.md`, `docs/provenance/README.md`.
+- **Why:** Fix the Gnome weapon/armor shop bugs (`weapngnm.cs`, `armorgnm.cs`, `emptyloc.cs`, `WarHammr.cs`, `myweapon.cs`, `myarmor.cs`) and record live confirmation that `B4-F1`..`B4-F3` (boulder drop cutscene, Dragon lighting, and Dragon melee combat) work. `KQMonster::checkInventory` was given `$ConInv::*` / literal numeric `ID #`s (`1060`, `1150`, `2050`) that `ItemTypes::find` rejected, leaving `ConnorOwns*Name` unset and preventing swap-back, `"no thanks"` lines, exit restore, and post-purchase deletion; `getLoc`/`checkDistance` also needed `place_of` to resolve world items (`HammerLoc`, shelf occupancy, and armor shelf slots).
+- **Tested how:** `cargo test --workspace` (followed by release build and headless Gnome shop verification).
+- **Result:** All workspace unit tests pass cleanly.
+- **Still broken:** Headless shop verification and user live re-check of the Gnome weapon/armor shops pending.
+- **Next:** Commit `B4-F4`, rebuild `target\release\kq8-viewer.exe`, and run headless Gnome weapon/armor shop log verification.
+
 ## 2026-11-22 Batch 4 fix B4-F1b: `place_of` resolves traps for `checkDistance` and quiet boulder turns
 - **Changed:** `crates/kq8-core/src/active.rs` (`WorldState::place_of` resolves live `KQTrap`s, `WorldState::move_command` emits `Request::Move` for `KQBoulder` only when `new.position != old`, updated `pushed_object_triggers_mask_1_trap` and `move_boulder_emits_request_for_collider`), `MODLOG.md`, `docs/provenance/README.md`.
 - **Why:** Headless Test 1 showed `Bouldtrp` now triggers `On boulder`, but `bouldtrp.cs` line 2 (`checkDistance $1 boulder 3500`) failed with `can't find 'Bouldtrp'` because `WorldState::place_of` omitted `self.traps`; rotation-only `KQMoveEvent`s on `boulder` also emitted unnecessary `(0, 0, 0)` `Request::Move` entries.

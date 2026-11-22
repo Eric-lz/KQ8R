@@ -3386,6 +3386,8 @@ impl WorldState {
             Some(Placement::at(h.position))
         } else if let Some(t) = self.traps.iter().find(|t| !t.gone && t.settings.name.eq_ignore_ascii_case(who)) {
             Some(Placement::at(t.settings.position))
+        } else if let Some(p) = self.items.get(who).and_then(|o| o.placement()) {
+            Some(p)
         } else {
             // A box object (a barrel; M5 5c fix 5).
             self.clickables.iter().find(|c| !c.gone && c.name.eq_ignore_ascii_case(who)).map(|c| c.placement)
@@ -12544,5 +12546,56 @@ mod talk_tests {
         assert_eq!(a.world.anims[0].character.as_ref().unwrap().collision_type, 0x4042);
         let hit = a.world.mask_pick(origin, dir, crate::weapons::SWING_PICK, &[], &[]);
         assert_eq!(hit.as_ref().map(|h| (h.name.as_str(), h.collision_type, h.character)), Some(("Dragon", 0x4042, Some(0))));
+    }
+
+    #[test]
+    fn check_inventory_accepts_numeric_id_for_connor_and_world() {
+        let mut a = active("", &[]);
+        a.world.items = crate::item::tests::items();
+        let carried = a.world.items.make("INVITEM_Crystal", 1, Place::Carried("Connor".into())).unwrap().name.clone();
+        let in_world = a
+            .world
+            .items
+            .make("INVITEM_SilverCoins", 5, Place::World { position: [100.0, 200.0, 300.0], angles: [0.0; 3] })
+            .unwrap()
+            .name
+            .clone();
+        a.world.sources.insert(
+            "t.cs".into(),
+            b"KQMonster::checkInventory Connor 3020 VarA\nset RetA $Console::Return\nKQMonster::checkInventory world 4030 VarB\nset RetB $Console::Return\nKQMonster::checkInventory Connor 0 VarC\nset RetC $Console::Return\n".to_vec(),
+        );
+        assert!(a.scripts.call("t.cs", &[], &mut a.world));
+        assert_eq!(a.scripts.vars.get("RetA"), Some("1"));
+        assert_eq!(a.scripts.vars.get("VarA"), Some(carried.as_str()));
+        assert_eq!(a.scripts.vars.get("RetB"), Some("1"));
+        assert_eq!(a.scripts.vars.get("VarB"), Some(in_world.as_str()));
+        assert_eq!(a.scripts.vars.get("RetC"), Some("0"));
+        assert_eq!(a.scripts.vars.get("VarC"), None);
+    }
+
+    #[test]
+    fn get_loc_and_check_distance_resolve_world_items() {
+        let mut a = active("", &[]);
+        a.world.items = crate::item::tests::items();
+        let in_world = a
+            .world
+            .items
+            .make("INVITEM_Crystal", 1, Place::World { position: [1000.0, 2000.0, 300.0], angles: [0.0, 0.0, 1.5] })
+            .unwrap()
+            .name
+            .clone();
+        let carried = a.world.items.make("INVITEM_SilverCoins", 5, Place::Carried("Connor".into())).unwrap().name.clone();
+        let script = format!(
+            "getLoc {in_world}\nset RLoc $Console::Return\ncheckDistance {in_world} 1100 2000 300 150\nset InRange $Console::Return\ncheckDistance {in_world} 1200 2000 300 150\nset OutRange $Console::Return\ngetLoc {carried}\nset RCarried $Console::Return\n"
+        );
+        a.world.sources.insert("t.cs".into(), script.into_bytes());
+        assert!(a.scripts.call("t.cs", &[], &mut a.world));
+
+        assert_eq!(a.scripts.vars.get("RLoc"), Some("0"));
+        assert_eq!(a.scripts.vars.get("KQObject::locOnly"), Some("1000 2000 300"));
+        assert!(a.scripts.vars.get("KQObject::loc").is_some_and(|l| l.starts_with("1000 2000 300 ")));
+        assert_eq!(a.scripts.vars.get("InRange"), Some("1"));
+        assert_eq!(a.scripts.vars.get("OutRange"), Some("0"));
+        assert_eq!(a.scripts.vars.get("RCarried"), Some("1"));
     }
 }

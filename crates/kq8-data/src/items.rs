@@ -167,8 +167,13 @@ impl ItemTypes {
         (ItemTypes { types, declared }, problems)
     }
 
-    /// The type a script or data file means by `name` (rule 2).
+    /// The type a script or data file means by `name` (rule 2), or by
+    /// numeric `ID #` string (used by Gnome shop scripts with `$ConInv::*`
+    /// and `KQMonster::checkInventory`).
     pub fn find(&self, name: &str) -> Option<&ItemType> {
+        if let Ok(id) = name.trim().parse::<i64>() {
+            return self.types.iter().find(|t| t.id == Some(id));
+        }
         let full = full_name(name);
         self.types.iter().find(|t| t.name.eq_ignore_ascii_case(&full))
     }
@@ -217,6 +222,14 @@ item1=\tKQInventoryItemType\tINVITEM_SilverCoins\t4030\t0\t0\t0\t0\t0\t1\tMoney\
         assert_eq!(full_name("invitem_Crystal"), "INVITEM_invitem_Crystal");
         assert_eq!(name("invitem_Crystal"), None);
         assert_eq!(name("ladybell"), None);
+    }
+
+    #[test]
+    fn find_accepts_numeric_id_as_well_as_names() {
+        let (list, _) = ItemTypes::parse(LIST);
+        assert_eq!(list.find("3020").map(|t| t.name.as_str()), Some("INVITEM_Crystal"));
+        assert_eq!(list.find("4030").map(|t| t.name.as_str()), Some("INVITEM_SilverCoins"));
+        assert_eq!(list.find("0"), None);
     }
 
     #[test]

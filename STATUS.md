@@ -1,21 +1,24 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`) plus three post-playtest fixes
-(`B4-F1`..`B4-F3`: pushed object trap visits + `move boulder` collider sync,
-`changeBmp` shared-`.kqs` material deduplication, and `KQObject::collisionType`
-on characters). Live play confirmed `B4-2` (`useAlternateLightmap` lighting in
-Gnome's `gnome13`/`gnome14` tunnel) works; **`B4-F1`..`B4-F3` live re-check
-and `B4-1` armory/weapon shop check pending**. Previously confirmed live:
-`B1-F1c` (`Q199`b) and `B3-F4` (`Q201`). Read with `AGENTS.md`, `docs/DESIGN.md`,
-`docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top). The short public
-summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
+implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`) plus post-playtest fixes
+(`B4-F1`..`B4-F4`: boulder trap visits + `place_of` traps/items, `changeBmp`
+shared-`.kqs` material deduplication, `KQObject::collisionType` on characters,
+and numeric `ID #` lookup in `ItemTypes::find` for Gnome's weapon/armor shops).
+Live play confirmed `B4-2` (`useAlternateLightmap`), `B4-F1` (boulder drop
+cutscene), `B4-F2` (Dragon idle texture), and `B4-F3` (Dragon melee hits) all
+work; **`B4-F4` Gnome weapon/armor shop live re-check pending**. Previously
+confirmed live: `B1-F1c` (`Q199`b) and `B3-F4` (`Q201`). Read with `AGENTS.md`,
+`docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top).
+The short public summary is `README.md`; the detailed "what works" list is
+`docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
 
-- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F3`):**
-  - **`B4-2` confirmed live:** User confirmed inserting `INVITEM_ShardFuse` switches `gnome13`/`gnome14` alternate lightmaps to `1` and lights up the tunnel; arrows bounce off `Dragon` as expected (`"just bounce off!"`), and `boulder` rolls when pushed.
-  - **`B4-F1` (`traps.md` rules 4–6):** `push_apply` sends each pushed object (`BoxCollider` `Visitor` via `Active::object_moved`) to traps so `boulder` (`colliderType = 257`) triggers `Bouldtrp`/`Bouldtp2` (`colliderMask = 1`), and `move_object` emits `Request::Move` + syncs `clickables` for moved `KQBoulder`s.
+- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F4`):**
+  - **Confirmed live (`B4-2`, `B4-F1`..`B4-F3`):** Tunnel alternate lighting (`useAlternateLightmap gnome13|gnome14`), boulder drop cutscene (`Bouldtrp`), Dragon idle brightness after `changeBmp Dragon normal`, and Dragon melee combat all confirmed working in live play.
+  - **`B4-F4` (`Invinfo.itl` `ID #` & `place_of` items):** `ItemTypes::find` accepts numeric `ID #` strings (`1060`, `1150`, `2050`, ...) passed by `weapngnm.cs` / `armorgnm.cs` / `emptyloc.cs` to `KQMonster::checkInventory`, and `WorldState::place_of` resolves `Place::World` items for `getLoc` / `checkDistance` (`WarHammr.cs`, shop counter/shelf slot checks, `myweapon.cs` / `myarmor.cs` swap-back & purchase deletion).
+  - **`B4-F1` + `B4-F1b` (`traps.md` rules 4–6):** `push_apply` sends each pushed object (`BoxCollider` `Visitor` via `Active::object_moved`) to traps so `boulder` (`colliderType = 257`) triggers `Bouldtrp`/`Bouldtp2` (`colliderMask = 1`), `place_of` resolves live traps for `checkDistance`, and `move_object` emits `Request::Move` + syncs `clickables` on translating `KQBoulder` moves.
   - **`B4-F2` (`characters.md` rule 4a):** `anim_view::dedup_texture_names` deduplicates `texture_names` by `(shape_index, material_id)` (plus a duplicate-handle guard in `bmp_saved`) so `changeBmp Dragon drag11.bmp black64.bmp` doesn't overwrite `drag11.bmp` across `dragworm.anm`'s shared `dw_stop.KQS` movements (`run`/`stop`/`walk`), restoring `Dragon`'s idle texture on `changeBmp Dragon normal`.
   - **`B4-F3` (`KQObject::collisionType`):** `WorldState::collision_type` updates `Character::collision_type` via `character_index` so `fusebox.cs`'s `KQObject::collisionType Dragon +64` flips `0x4002 -> 0x4042` and enables melee `SWING_PICK` targeting.
 - **2026-11-22 (B): Script Coverage Batch 4 (Gnome) (`B4-1`..`B4-4`):**
