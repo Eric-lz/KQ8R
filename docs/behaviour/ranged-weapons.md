@@ -369,23 +369,56 @@ Words used here:
       floor grid** height (`terrh2`, the same height the thrown items
       use, `thrown-items.md`), it is removed;
     - `maxDistance` (rule 28).
-30. **What a hit does** (traced): at the first thing it touches:
-    - if that thing is an **object or a character** (anything placed by
-      the game, not a building): if its collision type has the
-      **"immune to projectiles" bit 0x4000**, it gets a hit of **0**
-      damage (and the bolt's own script, if any, gets `ProjImmune`;
-      `fighting.md` rule 36 says the victim's script gets it, both
-      happen); otherwise it gets a hit of the bolt's damage (rule 22),
-      kind **`Projectile`** (or `Fire` / `Ice` by `weaponType`), then
-      `fighting.md` rules 16–33 (roll, protection, flinch, alarm, death
-      with `projdie`, drops, experience). On Connor, `fighting.md` rule
-      29;
-    - a building, the ground, or the end of its range: no damage;
-    - in every case the bolt is moved to the touching point and
+30. **What a hit does** (traced, updated for Q201): at the first thing it touches:
+    - if that thing is a **placed world object** — including characters,
+      Connor, props, animated objects, doors (`KQDoor`), and
+      **buildings (`KQInterior`, type `0x28`, such as Swamp's
+      `fiengate1`)**, since all of them inherit `KQObject` — it receives
+      an attack hit of the projectile's damage (rule 22 or rule 36),
+      with kind **`Normal` (`0`)**, **`Projectile` (`1`)**, **`Fire`
+      (`2`)**, **`Ice` (`3`)**, or **`4`** (thrown rock, rule 8c):
+      - if the target's collision type has the **"immune to projectiles"
+        bit `0x4000`**, the hit damage is **0** (and the bolt's own
+        script, if any, gets `ProjImmune`; on an object or building the
+        target's own script, if any, also gets `ProjImmune` with no
+        impact sound; `fighting.md` rule 36 says the victim's script gets
+        it, both happen);
+      - on a **character or Connor**: `fighting.md` rules 16–33 (roll,
+        protection, flinch, alarm, death with `projdie`, drops,
+        experience; on Connor, `fighting.md` rule 29). Characters and
+        Connor play their own `ouchSound` (default `sword.aud`) as a
+        placed one-shot (`5,000 / 25,000`, sound group `0`, `1.0 s`
+        cooldown) across projectile kinds `0`–`3` too;
+      - on a **building (`KQInterior`), door (`KQDoor`), or object
+        (`KQObject` / `KQAnimObject`)**: any `.kq` object that omits
+        `ouchSound=` defaults to **`sword.aud`** on load (`sound.md`
+        rule 41). Unless `damage == 0` with a target script
+        (`ProjImmune`) or **`weaponType == 4`**, hitting it plays the
+        **target object's `ouchSound`** (`sword.aud` by default) as a
+        placed one-shot (**`5,000 / 25,000`**, **sound group `0`**,
+        non-looping) **at the target object's placement origin** (not
+        the bolt's impact point), at most once per **`1.0 s`** per
+        target. There is **no sound difference between `weaponType` `0`,
+        `1`, `2`, and `3`**, and buildings have no special stone/wall
+        impact sound (`HITWALL.AUD` and `BOWHIT.AUD` are unused in
+        `Mask.exe`). Rolled damage is also subtracted from the object's
+        `health` (default `0` on objects/buildings, calling `Die` without
+        deleting if `< 0`; repeating on later hits after each `1.0 s`
+        cooldown);
+    - **the ground (floor grid)** or the **end of its range**: no hit
+      event is sent and no damage is dealt;
+    - in every case the bolt is moved to the touching point (or end) and
       **removed at once** (its script, if any, gets `Die`; Daventry's
-      bolts have none). **It does not stick**, bounce or fall. No sound
-      is played by the bolt itself (no `ouchSound` in these files; the
-      victim's ouch sound is `fighting.md` rule 24).
+      bolts have none). **It does not stick**, bounce or fall.
+      - **Removal sound (`KQProjectile` itself):** if **`weaponType ==
+        4`** (thrown rock), removal plays the **projectile's own
+        `ouchSound`** (`rock.aud` on `prrock.kq`) as a placed one-shot
+        (`5,000 / 25,000`, sound group `0`, non-looping) **at the
+        projectile's final position** (for ground, object, building, or
+        range expiry), which is why non-character targets skip their own
+        `ouchSound` on `weaponType == 4`. For `weaponType` `0`, `1`,
+        `2`, and `3`, **`KQProjectile` plays no sound on contact or
+        removal**.
 31. **Characters' bolts are the same** (rules 23–30 except the start
     offset and aim of rules 24–25). So the spriggans' bolt (`Prscbolt.kq`)
     flies at 8,000 straight from the arrow part at the time of its `do`
@@ -656,14 +689,37 @@ in Swamp, `arrotrp1`–`3` in Daventry, and `firetrap` / `firetrp2` /
       `2` = `Fire` as in `PRfire.kq` and `PRfire2.kq`, `3` = `Ice`) and
       `mustReact` (default `0`; `1` in `Swamp/PRarrow2.kq`, forcing the
       victim to flinch regardless of roll).
-    - **Sounds:** Neither `KQCueEvent 500` nor `KQProjectile` launch or
-      contact plays a sound (only rock removal with `weaponType = 4`
-      plays a landing sound). Launch sounds come solely from scripts
-      (`Daventry/arrotrp1–2.cs` `Crossbow.aud`, `DeadCity/firetrap.cs` /
-      `firetrp2.cs` `fireball.aud`, `Swamp/arwtrap1–3.cs`
-      `crossbow.aud`; `Swamp/totem.cs` and `DeadCity/skultrap.cs` play
-      no launch sound). Hit sounds come from the victim's own hit
-      handler (`fighting.md` rules 24, 29).
+    - **Sounds (Q200 c, Q201):** Neither `KQCueEvent 500` nor
+      `KQProjectile` launch, contact, or removal plays a sound for
+      `weaponType` `0`, `1`, `2`, or `3` (`KQProjectile` plays its own
+      `ouchSound` on removal **only** when `weaponType == 4`). Launch
+      sounds come solely from scripts (`Daventry/arrotrp1–2.cs`
+      `Crossbow.aud`, `DeadCity/firetrap.cs` / `firetrp2.cs`
+      `fireball.aud`, `Swamp/arwtrap1–3.cs` `crossbow.aud`;
+      `Swamp/totem.cs` and `DeadCity/skultrap.cs` play no launch sound).
+      On contact (rule 30), impact sounds come from the **hit target's
+      `ouchSound`** (`sound.md` rule 41):
+      - Hitting a character or Connor plays the victim's `ouchSound`
+        (`fighting.md` rules 24, 29).
+      - Hitting a solid `KQObject`, `KQDoor`, or **`KQInterior` building**
+        (such as Swamp's `fiengate1`) sends it a `KQAttackEvent`, so
+        `KQObject`'s base hit handler plays the **target's `ouchSound`**
+        — which defaults to **`sword.aud`** on any `.kq` file that omits
+        `ouchSound=` (`Swamp/fiengate.kq` `[fiengate1]` omits it) — as a
+        placed one-shot (`5,000 / 25,000`, sound group `0`, `1.0 s`
+        per-target cooldown) **at the target object's placement origin**
+        (`(65,536, 98,304, ground)` for `fiengate1`).
+      - Hitting bare terrain (the floor grid) or expiring at
+        `maxDistance` plays **nothing** (unless the projectile's `Die`
+        script itself plays a sound; `GAME/Kq/swmpfrbl.cs` has
+        `#KQSound::play` commented out and `endfrbl.kqs` / `swmpfrbl.kqs`
+        contain no sound cues).
+      - Unused/other files in `MASK/GAME/Sound/`: **`HITWALL.AUD`** and
+        **`BOWHIT.AUD`** are never referenced by `Mask.exe` or any shipped
+        `.kq`/`.cs`/`.anm` file; **`FIREBALL.AUD`** is only played by
+        `DeadCity/firetrap.cs` and `firetrp2.cs`; **`hitdirt.aud`** is
+        only used by melee/movement animation sound cues (`Confswd.anm`,
+        `sprdump.anm`, `sprigan.anm`, `sprigan2.anm`).
 37. **Collision, lifetime, and `Die` script (Q200 d):**
     - Object-launched projectiles use the exact same `KQProjectile`
       class, auto-generated `NoName<N>` name, and defaults as character
@@ -715,6 +771,8 @@ in Swamp, `arrotrp1`–`3` in Daventry, and `firetrap` / `firetrp2` /
 | `KQCueEvent 500` | launch `projectileFile`, then run script `Cue 500` | traced |
 | `Cue 500` damage | `n2` if `1 ≤ n2 ≤ 99,999`, else `objProjDamage` (default 20) | traced |
 | `Cue 500` vectors | `shootOffset` rotated by launcher; `relAimPoint` world axes | traced |
+| impact sound (`weaponType` 0–3) | target `ouchSound` (default `sword.aud`) at target origin; 5,000 / 25,000, group 0, 1.0 s cooldown; nothing on floor grid/range end | traced |
+| impact sound (`weaponType` 4) | projectile `ouchSound` (`rock.aud`) on removal at projectile final pos; 5,000 / 25,000, group 0 (target `ouchSound` skipped) | traced |
 
 ## Data used
 
@@ -737,11 +795,17 @@ in Swamp, `arrotrp1`–`3` in Daventry, and `firetrap` / `firetrp2` /
   `script` (rocks and `swmpfrbl.cs`), `mustReact`.
 - Object projectile launchers (`.kq` keys `projectileFile`,
   `shootOffsetX/Y/Z`, `relAimPointX/Y/Z`, `objProjDamage`):
-  `Swamp/totem.{kq,cs}` (`PRfire2.kq`, `GAME/Kq/swmpfrbl.cs`),
+  `Swamp/totem.{kq,cs}` (`PRfire2.kq`, `GAME/Kq/swmpfrbl.cs`, targeting
+  past Connor into `Swamp/fiengate.kq` `[fiengate1]`),
   `Swamp/shooter.{kq,cs}` (`PRarrow2.kq`, `arwtrap1–3.cs`,
   `whacker1–3.cs`), `Daventry/arrotrp1–3.kq` (`arrotrp1–2.cs`,
   `arrofire.kq`), `DeadCity/firetrap.{kq,cs}`, `firetrp2.{kq,cs}`
   (`PRfire.kq`), `skultrap.{kq,cs}` (`PRarrow.kq`).
+- Sound assets checked (`MASK/GAME/Sound/`): `SWORD.AUD` (default
+  `ouchSound`), `ROCK.AUD` (`prrock.kq`), unused `HITWALL.AUD` and
+  `BOWHIT.AUD`, `FIREBALL.AUD` (Dead City firetrap scripts only),
+  `hitdirt.aud` (animation cues in `Confswd.anm`, `sprdump.anm`,
+  `sprigan.anm`, `sprigan2.anm` only).
 - `GAME/patch/BOUNDS.KQ`: the bolts' boxes.
 - Scripts: `KQConner::setDoMode`, `KQConner::setRequiredWeaponMode`.
 
@@ -825,6 +889,23 @@ in Swamp, `arrotrp1`–`3` in Daventry, and `firetrap` / `firetrp2` /
     (after `KQConner::setRelDamage 0.5`), overriding the `20` default
     with half Connor's health, whereas `whacker1.cs` sends `0` and uses
     the default `20` (`PRarrow2.kq`, `Projectile` with `mustReact=1`).
+- **Projectile impact sounds (`Q201`, added 2026-11-22 — not checked by
+  hand in the running original):**
+  - Stand on Swamp's `Tile2` puzzle while `totem.01`–`06` fire
+    `PRfire2.kq` (`weaponType=2`, `Fire`) east into `fiengate1`
+    (placed at `(65,536, 98,304)`, omitting `ouchSound=`): each
+    fireball hitting `fiengate1` should trigger **`sword.aud`** as a
+    placed one-shot (`5,000 / 25,000`, sound group `0`) positioned at
+    `(65,536, 98,304)` with a `1.0 s` cooldown across consecutive bolts
+    (so two totems hitting `fiengate1` within 1 s play once, not twice).
+  - Firing Connor's Small Crossbow (`weaponType=1`) into a building wall
+    or door omitting `ouchSound=` should likewise play `sword.aud` at
+    the building/door's placement origin; shooting into bare terrain
+    should play nothing.
+  - Throwing a rock (`prrock.kq`, `weaponType=4`) onto flat ground or an
+    object/building should play `rock.aud` (from `prrock.kq`'s
+    `ouchSound`) at the rock's landing point (`5,000 / 25,000`, group
+    `0`) instead of `sword.aud`.
 
 **Our logs (B):** per request: the key or slot, the state (taken or
 dropped), the mode asked, the movements played (`away` / `out` /

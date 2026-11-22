@@ -1,15 +1,38 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-recording the user's live visual checks of **`B3-F2`** (Clarity Swamp tile
-highlights) and **`B3-F3`** (Swamp shooting totems) and queuing **`Q201`**
-(missing projectile wall-impact sound) alongside Study Session (A)'s
-completed study of **Batch 4 (Gnome)** and **`Q199` part (b)**. Read with
-`AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest
+Study Session (A) answered **`Q201`** (projectile wall/building/object impact
+sounds on Swamp totems & general `KQProjectile` contact, and all placed one-shot
+sites in `sound.md`), following the user's live checks of **`B3-F2`** and
+**`B3-F3`** and Study (A)'s **Batch 4 (Gnome)** + **`Q199` part (b)**. Read
+with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest
 entries at the top). The short public summary is `README.md`; the detailed
 "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
+
+- **2026-11-22 (A): Projectile impact sound rules (`Q201`) studied** (traced
+  in `Mask.exe` via Ghidra and checked against `MASK/` data; **not checked by
+  hand in the running original**; no Rust code written):
+  - **Behaviour (`ranged-weapons.md` rules 30 & 36, `sound.md` rule 41 & Open
+    questions 3):** `KQProjectile` plays nothing on contact (`weaponType` 0–3),
+    and plays its own `ouchSound` (`rock.aud`) on removal only when
+    `weaponType == 4` at its final position. Instead, `KQProjectile` contact
+    casts any touched collider's owner to `KQObject` — succeeding for
+    `KQInterior` buildings (like `Swamp/fiengate.kq` `[fiengate1]`), `KQDoor`,
+    props, characters, and Connor — and sends `KQAttackEvent`. Any `KQObject` /
+    `KQInterior` / `KQDoor` omitting `ouchSound=` defaults to **`sword.aud`**
+    on ASCII load and plays that target's `ouchSound` as a placed one-shot
+    (`5,000 / 25,000`, **sound group `0`**, `1.0 s` per-target cooldown) **at
+    the target object's placement origin** (`(65,536, 98,304)` for
+    `fiengate1`), skipped for `weaponType == 4` or scripted `0`-damage
+    `ProjImmune`. Bare terrain hits send no hit event; `HITWALL.AUD` /
+    `BOWHIT.AUD` are unused (`FIREBALL.AUD` is Dead City scripts only,
+    `hitdirt.aud` is `.anm` cues only). All 12 `5,000 / 25,000` placed
+    one-shot sites in `Mask.exe` are now identified.
+  - **Next:** Implementation Session (B) can add `ouchSound` default/`Q201`
+    handling for projectile impacts alongside Batch 4 (Gnome) + `Q199`b; Study
+    Session (A) is ready for Batch 5 (Barren).
 
 - **2026-11-22 (A): Script Coverage Batch 4 (Gnome) + `Q199` (b) studied**
   (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not

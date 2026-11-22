@@ -304,19 +304,34 @@ world (Daventry's waterfall, mill, windmill and fountain).
 
 41. An object's `.kq` may name `ouchSound=<file>` (Daventry: goblins,
     henchman, spriggans, zombie, `milltree.kq` `woodchop.aud`, the rolling
-    rock `prrock.kq`; Connor `GAME/Kq/Connor.kq` `conrow3.aud`). When the
-    object is hit, the sound plays as a **placed one-shot** at the
-    object (5,000 / 25,000, group 0), but **at most once per 1.0 unit of
-    the game clock** (seconds as far as seen) and not for damage of kind 4
-    (not traced what kind 4 is). A hit from the environment (poison
-    ground and the like) on Connor plays no ouch sound; instead, when the
-    game asks for it, a plain `poison<n>.aud`.
-    **Objects too** (traced 2026-10-28, batch 2): an ordinary object
-    (not a character) hit by a damaging `KQAttackEvent` plays its
-    `ouchSound` by the same rule (placed, 5,000 / 25,000, at most once a
-    second, not for kind 4); the kind is remembered and reported by its
-    `Die` call (`doors.md` rules 18–21). Dead City's five uses send it to
-    Connor from trap scripts (`connor-collision.md` rule 16).
+    rock `prrock.kq` `rock.aud`; Connor `GAME/Kq/Connor.kq` `conrow3.aud`).
+    On any ASCII `.kq` load of a `KQObject` subclass — including
+    buildings (`KQInterior`), doors (`KQDoor`), props (`KQObject`,
+    `KQAnimObject`), and characters — omitting `ouchSound=` defaults it to
+    **`sword.aud`**. When hit by a `KQAttackEvent`:
+    - **On non-character objects (`KQObject`, `KQAnimObject`, `KQDoor`,
+      `KQInterior`):** unless damage is `0` with a target script
+      (`ProjImmune`) or the attack's `weaponType` is **`4`** (thrown rock,
+      `ranged-weapons.md` rule 8c), `KQObject`'s base hit handler plays the
+      target's `ouchSound` (`sword.aud` by default) as a **placed one-shot**
+      at the **target object's placement origin** (5,000 / 25,000,
+      **group 0**, non-looping), at most **once per 1.0 unit of the game
+      clock** (seconds) per target; its `weaponType` is remembered and
+      reported by its `Die` call (`doors.md` rules 18–21). Dead City's
+      five uses send it to Connor from trap scripts (`connor-collision.md`
+      rule 16).
+    - **On thrown rock projectiles (`KQProjectile` with `weaponType == 4`):**
+      on removal (ground, object, building, or range end), the projectile
+      itself plays its own `ouchSound` (`rock.aud`) as a placed one-shot
+      (5,000 / 25,000, group 0, non-looping) **at the projectile's final
+      position**, which is why non-character targets skip their own
+      `ouchSound` for kind 4 (`ranged-weapons.md` rule 30). For `weaponType`
+      0, 1, 2, or 3, `KQProjectile` plays nothing itself.
+    - **On characters and Connor:** `fighting.md` rules 24 and 29 play the
+      victim's `ouchSound` (5,000 / 25,000, group 0, 1.0 s cooldown;
+      across projectile kinds 0–3 as well). A hit from the environment
+      (poison ground and the like) on Connor plays no ouch sound; instead,
+      when the game asks for it, a plain `poison<n>.aud`.
 
 ### Items
 
@@ -703,12 +718,17 @@ or 1 → 0 takes 1.4 s).
 2. ~~Keep the original distance curve or fix it?~~ **Decided by the user
    (2026-10-17):** keep the original; a fix may come later as an option
    ("Do not reproduce" 1).
-3. (Answered 2026-10-18: `nofade`, `talking.md`.) Not traced: which
-   screens pause the game (rule 54; found so far: the game's own pause,
-   opening the in-game menu, and loading a world); what damage kind 4 is
-   (rule 41); eight
-   other engine places that play placed one-shots with the same 5,000 /
-   25,000 (likely weapon swings, projectiles, landings; same rules apply).
+3. (Answered 2026-10-18: `nofade`, `talking.md`; updated 2026-11-22,
+   Q201.) ~~what damage kind 4 is~~ (thrown rocks, `ranged-weapons.md` rule
+   8c); ~~eight other engine places that play placed one-shots with the
+   same 5,000 / 25,000~~ (all 12 call sites of that placed one-shot
+   helper in `Mask.exe` are now identified: character/Connor/boss state
+   and base hit `ouchSound`; `KQObject`/`KQInterior`/`KQDoor` `ouchSound`
+   in base hit; `KQProjectile` removal with `weaponType == 4`; animation
+   `playsound` cues; tossed-item drop landing; and resting/dropped
+   inventory item landing — all group 0, `5,000 / 25,000`, non-looping).
+   Still not traced: which screens pause the game (rule 54; found so far:
+   the game's own pause, opening the in-game menu, and loading a world).
 4. Speech was not studied beyond what is written here.
 5. **Music after a video** (rule 57i): the sound system is restarted
    after the video, but the code that brings the music back (if any) was
