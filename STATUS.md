@@ -2,12 +2,13 @@
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
 implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`) plus post-playtest fixes
-(`B4-F1`..`B4-F4`: boulder trap visits + `place_of` traps/items, `changeBmp`
+(`B4-F1`..`B4-F5`: boulder trap visits + `place_of` traps/items, `changeBmp`
 shared-`.kqs` material deduplication, `KQObject::collisionType` on characters,
-and numeric `ID #` lookup in `ItemTypes::find` for Gnome's weapon/armor shops).
+numeric `ID #` lookup in `ItemTypes::find`, `KQMonster::dropItem` equipment/
+rotation/`NewInvItem` + swap-angle preservation for Gnome's weapon/armor shops).
 Live play confirmed `B4-2` (`useAlternateLightmap`), `B4-F1` (boulder drop
 cutscene), `B4-F2` (Dragon idle texture), and `B4-F3` (Dragon melee hits) all
-work; **`B4-F4` Gnome weapon/armor shop live re-check pending**. Previously
+work; **`B4-F4`/`B4-F5` Gnome weapon/armor shop live re-check pending**. Previously
 confirmed live: `B1-F1c` (`Q199`b) and `B3-F4` (`Q201`). Read with `AGENTS.md`,
 `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top).
 The short public summary is `README.md`; the detailed "what works" list is
@@ -15,8 +16,9 @@ The short public summary is `README.md`; the detailed "what works" list is
 
 ## Where we are (2026-11-22)
 
-- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F4`):**
+- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F5`):**
   - **Confirmed live (`B4-2`, `B4-F1`..`B4-F3`):** Tunnel alternate lighting (`useAlternateLightmap gnome13|gnome14`), boulder drop cutscene (`Bouldtrp`), Dragon idle brightness after `changeBmp Dragon normal`, and Dragon melee combat all confirmed working in live play.
+  - **`B4-F5` (`KQMonster::dropItem` & swap angles for Gnome shops):** `drop_item_command` now sets `NewInvItem`, parses optional `rx ry rz` (`-1.1 0 2.4`), resolves `z == -1 / -2` via `resolve_world_position`, un-applies and moves single non-stacking equipment (`WarHammer`, armor) as the same object (`items.md` rule 9), clears hand/readied weapon/`take_ranged_item(NO_RANGED)`, and restores slot placeholders (`INVITEM_Fists`, `INVITEM_NoRanged`, `INVITEM_NoArmor`, stand-in matching `inventory.md` rule 23); `connor_inventory::receive` preserves world item `angles` when equipment swaps back onto a shelf.
   - **`B4-F4` (`Invinfo.itl` `ID #` & `place_of` items):** `ItemTypes::find` accepts numeric `ID #` strings (`1060`, `1150`, `2050`, ...) passed by `weapngnm.cs` / `armorgnm.cs` / `emptyloc.cs` to `KQMonster::checkInventory`, and `WorldState::place_of` resolves `Place::World` items for `getLoc` / `checkDistance` (`WarHammr.cs`, shop counter/shelf slot checks, `myweapon.cs` / `myarmor.cs` swap-back & purchase deletion).
   - **`B4-F1` + `B4-F1b` (`traps.md` rules 4–6):** `push_apply` sends each pushed object (`BoxCollider` `Visitor` via `Active::object_moved`) to traps so `boulder` (`colliderType = 257`) triggers `Bouldtrp`/`Bouldtp2` (`colliderMask = 1`), `place_of` resolves live traps for `checkDistance`, and `move_object` emits `Request::Move` + syncs `clickables` on translating `KQBoulder` moves.
   - **`B4-F2` (`characters.md` rule 4a):** `anim_view::dedup_texture_names` deduplicates `texture_names` by `(shape_index, material_id)` (plus a duplicate-handle guard in `bmp_saved`) so `changeBmp Dragon drag11.bmp black64.bmp` doesn't overwrite `drag11.bmp` across `dragworm.anm`'s shared `dw_stop.KQS` movements (`run`/`stop`/`walk`), restoring `Dragon`'s idle texture on `changeBmp Dragon normal`.

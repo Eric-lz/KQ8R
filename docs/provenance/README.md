@@ -4336,8 +4336,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `ItemTypes::find` resolves numeric `ID #` strings (`1060`, `1150`, `2050`, ...) passed by `KQMonster::checkInventory` (`$ConInv::*`); `WorldState::place_of` resolves world `KQInventoryItem`s (`Place::World`) for `getLoc` and `checkDistance` | `inventory.md` rule 1 & `anim-scripts.md` rule 31; `MASK/GAME/Kq/Invinfo.itl`, `MASK/Gnome/kq/{weapngnm,armorgnm,emptyloc,warhammr,myweapon,myarmor}.cs` | unit tests `find_accepts_numeric_id_as_well_as_names`, `check_inventory_accepts_numeric_id_for_connor_and_world`, `get_loc_and_check_distance_resolve_world_items` |
 
+## B4-F5 2026-11-22: `KQMonster::dropItem` equipment/rotation/`NewInvItem` & swap angles — core `active.rs`, `connor_inventory.rs`
 
-
-
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `KQMonster::dropItem <who> <type> x y z [rx ry rz]` parses optional rotation angles, sets `$NewInvItem`, resolves `z == -1 / -2` via `resolve_world_position`, un-applies and moves single non-stacking equipment (`WarHammer`, armor) as the same object preserving `script`, and clears hand/readied weapon/`take_ranged_item(NO_RANGED)` | `items.md` rules 9 & 11, `inventory.md` rule 17, `ranged-weapons.md` 8f; `MASK/Gnome/kq/{armorgnm,brnzplat,platmail,chnmlst,emptyloc,weapngnm}.cs`, `MASK/barren/kq/tw_weird.cs` | unit tests `drop_item_moves_equipped_armor_with_rotation_unapplies_and_restores_placeholder`, `drop_item_keeps_script_on_short_weapon_and_restores_fists`, `drop_item_takes_one_from_the_stack_and_lays_a_new_one` |
+| Dropping Connor's only `ShortWeapon`, `LongWeapon`, or outer `Armor` (with no `FullArmor`/`GodArmor` carried) restores the matching slot placeholder (`INVITEM_Fists`, `INVITEM_NoRanged`, `INVITEM_NoArmor`) | **Stand-in** matching `inventory.md` rule 23 (so re-entering `Wpngnome`/`Armrgnome` keeps `1280`/`1310`/`2120` in `getConInventory`) | unit tests above (`INVITEM_NoArmor`, `INVITEM_Fists`) |
+| `connor_inventory::receive` preserves `Place::World` item `angles` when equipment swaps an old piece into the picked-up item's world spot | `inventory.md` rule 8 + observed `MASK/Gnome/kq/{worldvar,worldinv}.cs` (`$Gnome::Armory::rot = -1.1 0 2.4`) | unit test `swapping_with_world_equipment_preserves_item_angles` |
 
 

@@ -132,6 +132,10 @@ pub(crate) fn connor_add(w: &mut WorldState, d: Stats, why: &str) -> String {
 pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &str) {
     let Some(i) = w.items.index(name) else { return };
     let o = w.items.objects[i].clone();
+    let lay_angles = match o.place {
+        Place::World { angles, .. } => angles,
+        _ => [0.0; 3],
+    };
     let Some(t) = w.items.kind(&o.kind).cloned() else { return };
     added_extras(w, &o.kind, &t.category);
     // What he had of this type, the new object left out (a give makes it
@@ -174,7 +178,7 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
                     (None, Some(c)) => (c, "at Connor's feet (stand-in: a give has no place)"),
                     (None, None) => ([0.0; 3], "at (0, 0, 0): no place known"),
                 };
-                w.items.objects[k].place = Place::World { position: at, angles: [0.0; 3] };
+                w.items.objects[k].place = Place::World { position: at, angles: lay_angles };
                 line.push_str(&format!("; {old} ({kind}) taken off and put into the world at ({:.0}, {:.0}, {:.0}) {whence}{undone}", at[0], at[1], at[2]));
             }
         }
@@ -880,6 +884,15 @@ mod tests {
         assert_eq!(a.world.items.get(&suit).map(|o| o.place.clone()), Some(Place::World { position: [1.0, 2.0, 3.0], angles: [0.0; 3] }));
         assert_eq!(stats(&a)[3], 1);
         assert!(a.world.items.get(&dagger).unwrap().carried_by("Connor"));
+    }
+
+    #[test]
+    fn swapping_with_world_equipment_preserves_item_angles() {
+        let mut a = active();
+        let gloves = carry(&mut a, "LeatherGloves", 1);
+        let suit = a.world.items.make("FullArmor", 1, Place::World { position: [7.0, 8.0, 9.0], angles: [-1.1, 0.0, 2.4] }).unwrap().name.clone();
+        receive(&mut a.world, &suit, Some([7.0, 8.0, 9.0]), "picked up");
+        assert_eq!(a.world.items.get(&gloves).map(|o| o.place.clone()), Some(Place::World { position: [7.0, 8.0, 9.0], angles: [-1.1, 0.0, 2.4] }));
     }
 
     #[test]

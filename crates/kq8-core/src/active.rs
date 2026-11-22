@@ -1549,34 +1549,108 @@ impl WorldState {
         }
     }
 
-    /// `KQMonster::dropItem <who> <type> x y z` (`ranged-weapons.md` 8f,
-    /// U-9a; `rockHit.cs`): one item of the type is taken from `who`'s
-    /// stack and a new one (count 1) is put still into the world there
-    /// (z −1 / −2: the floor / surface); "is not carrying" otherwise.
+    fn connor_carries_any(&self, categories: &[&str]) -> bool {
+        self.items
+            .objects
+            .iter()
+            .filter(|o| o.carried_by(crate::talk::CONNOR))
+            .filter_map(|o| self.items.kind(&o.kind))
+            .any(|t| categories.iter().any(|c| t.category.eq_ignore_ascii_case(c)))
+    }
+
+    fn clear_dropped_connor_item(&mut self, k: usize, stack: &str, canonical_kind: &str) -> String {
+        let mut note = String::new();
+        if self.items.objects[k].third != -1 {
+            note.push_str(&crate::connor_inventory::unapply(self, stack, "KQMonster::dropItem"));
+        }
+        if self.hand.as_deref().is_some_and(|h| h.eq_ignore_ascii_case(stack)) {
+            self.hand = None;
+        }
+        if self.weapon_ready.as_deref().is_some_and(|r| r.eq_ignore_ascii_case(canonical_kind)) {
+            self.set_weapon(crate::weapons::WeaponMode::None, None);
+        }
+        note
+    }
+
+    /// `KQMonster::dropItem <who> <type> x y z [rx ry rz]` (`items.md` rule
+    /// 11, `inventory.md` rules 17 & 23, `ranged-weapons.md` 8f): takes one
+    /// `<type>` out of `<who>`'s inventory and places it in the world there
+    /// (using `rx ry rz` when given, `0 0 0` otherwise, and `z −1 / −2` as
+    /// floor / surface), setting `NewInvItem` to the dropped object's name.
+    /// Stacking items or stacks of more than 1 drop a new item object; a
+    /// single non-stacking item (`WarHammer`, armour, etc.) is un-applied
+    /// first and moved as the same object (`items.md` rule 9), restoring
+    /// Connor's placeholder (`INVITEM_Fists`, `INVITEM_NoRanged`,
+    /// `INVITEM_NoArmor`) when that slot becomes empty (stand-in matching
+    /// rule 23).
     fn drop_item_command(&mut self, words: &[String], at: &str) -> String {
-        let [_, who, kind, x, y, z, ..] = words else {
-            self.note(format!("{at}: usage: KQMonster::dropItem <who> <type> x y z: '{}'", words.join(" ")));
+        let [_, who, kind, x, y, z, rest @ ..] = words else {
+            self.note(format!("{at}: usage: KQMonster::dropItem <who> <type> x y z [rx ry rz]: '{}'", words.join(" ")));
             return "1".into();
         };
-        let held = self.items.objects.iter().position(|o| o.carried_by(who) && o.kind.eq_ignore_ascii_case(kind) && o.quantity > 0);
+        let resolved = self.items.kind(kind).map(|t| (t.name.clone(), t.category.clone()));
+        let canonical_kind = resolved.as_ref().map_or_else(|| kind.to_string(), |(n, _)| n.clone());
+        let category = resolved.map(|(_, c)| c);
+        let held = self.items.objects.iter().position(|o| o.carried_by(who) && o.kind.eq_ignore_ascii_case(&canonical_kind) && o.quantity > 0);
         let Some(k) = held else {
             self.note(format!("{at}: KQMonster::dropItem: {who} is not carrying {kind}; nothing (ranged-weapons.md 8f)"));
             return "1".into();
         };
         let position = [number_value(x) as f32, number_value(y) as f32, number_value(z) as f32];
+        let angles = match rest {
+            [rx, ry, rz, ..] => [number_value(rx) as f32, number_value(ry) as f32, number_value(rz) as f32],
+            _ => [0.0; 3],
+        };
         let before = self.items.objects[k].quantity;
-        self.items.objects[k].quantity -= 1;
         let stack = self.items.objects[k].name.clone();
+        let stacking = category.as_deref().is_some_and(crate::connor_inventory::stacks);
+        let is_connor = who.eq_ignore_ascii_case(crate::talk::CONNOR);
+        if !stacking && before == 1 {
+            let mut extra = if is_connor { self.clear_dropped_connor_item(k, &stack, &canonical_kind) } else { String::new() };
+            let pos = self.resolve_world_position(position, at);
+            self.items.objects[k].place = Place::World { position: pos, angles };
+            if is_connor {
+                if category.as_deref() == Some("LongWeapon") && self.ranged_weapon().is_none() {
+                    let line = self.take_ranged_item(crate::weapons::NO_RANGED);
+                    extra.push_str(&format!("; {line}"));
+                }
+                let placeholder = match category.as_deref() {
+                    Some("ShortWeapon") if !self.connor_carries_any(&["ShortWeapon"]) => Some("INVITEM_Fists"),
+                    Some("LongWeapon") if !self.connor_carries_any(&["LongWeapon"]) => Some("INVITEM_NoRanged"),
+                    Some("Armor") if !self.connor_carries_any(&["Armor", "FullArmor", "GodArmor"]) => Some("INVITEM_NoArmor"),
+                    _ => None,
+                };
+                if let Some(ph) = placeholder {
+                    if let Ok(made) = self.items.make(ph, 1, Place::Carried(crate::talk::CONNOR.into())) {
+                        let ph_name = made.name.clone();
+                        self.known.insert(ph_name.to_ascii_lowercase());
+                        extra.push_str(&format!("; placeholder {ph_name} ({ph}) restored (inventory.md rule 23, stand-in)"));
+                    }
+                }
+            }
+            self.vars_out.push(("NewInvItem".into(), stack.clone()));
+            self.connor_stats_events += 1;
+            self.note(format!(
+                "{at}: KQMonster::dropItem: {who} moves {stack} ({canonical_kind}) to ({:.0}, {:.0}, {:.0}) turned ({}, {}, {}); NewInvItem = {stack}{extra} (items.md rules 9, 11)",
+                pos[0], pos[1], pos[2], angles[0], angles[1], angles[2]
+            ));
+            return "0".into();
+        }
+        if before == 1 && is_connor {
+            let _ = self.clear_dropped_connor_item(k, &stack, &canonical_kind);
+        }
+        self.items.objects[k].quantity -= 1;
         if self.items.objects[k].quantity == 0 {
             // Ours: an empty stack leaves the inventory.
             self.items.objects[k].place = crate::item::Place::Gone;
         }
-        let made = self.make_world_item(kind, 1, position, [0.0; 3], at);
+        let made = self.make_world_item(&canonical_kind, 1, position, angles, at);
         self.connor_stats_events += 1;
         match made {
             Ok(name) => {
+                self.vars_out.push(("NewInvItem".into(), name.clone()));
                 let p = self.items.get(&name).and_then(|o| o.placement()).map_or(position, |pl| pl.position);
-                self.note(format!("{at}: KQMonster::dropItem: {who}'s {stack} x{before} -> x{}; {name} ({kind} x1) put still at ({:.0}, {:.0}, {:.0}) (ranged-weapons.md 8f)", before - 1, p[0], p[1], p[2]));
+                self.note(format!("{at}: KQMonster::dropItem: {who}'s {stack} x{before} -> x{}; {name} ({canonical_kind} x1) put still at ({:.0}, {:.0}, {:.0}); NewInvItem = {name} (ranged-weapons.md 8f)", before - 1, p[0], p[1], p[2]));
                 "0".into()
             }
             Err(e) => {
@@ -1633,7 +1707,7 @@ impl WorldState {
         format!("weep_suck_{}", self.weep_piece_seq)
     }
 
-    fn make_world_item(&mut self, kind: &str, quantity: i64, mut position: [f32; 3], angles: [f32; 3], at: &str) -> Result<String, String> {
+    fn resolve_world_position(&mut self, mut position: [f32; 3], at: &str) -> [f32; 3] {
         if position[2] == -1.0 || position[2] == -2.0 {
             let floor = position[2] == -1.0;
             match self.heights.as_ref().and_then(|h| h(position[0], position[1], floor)) {
@@ -1641,6 +1715,11 @@ impl WorldState {
                 None => self.note(format!("{at}: z {} at ({:.0}, {:.0}): no ground height known; kept", position[2], position[0], position[1])),
             }
         }
+        position
+    }
+
+    fn make_world_item(&mut self, kind: &str, quantity: i64, position: [f32; 3], angles: [f32; 3], at: &str) -> Result<String, String> {
+        let position = self.resolve_world_position(position, at);
         let name = self.items.make(kind, quantity, Place::World { position, angles })?.name.clone();
         self.known.insert(name.to_ascii_lowercase());
         Ok(name)
@@ -12597,5 +12676,87 @@ mod talk_tests {
         assert_eq!(a.scripts.vars.get("InRange"), Some("1"));
         assert_eq!(a.scripts.vars.get("OutRange"), Some("0"));
         assert_eq!(a.scripts.vars.get("RCarried"), Some("1"));
+    }
+
+    fn shop_drop_types() -> kq8_data::items::ItemTypes {
+        let row = |n: usize, name: &str, id: i64, s1: i64, s3: i64, cat: &str| {
+            format!(
+                "item{n}=\tKQInventoryItemType\t{name}\t{id}\t0\t{s1}\t0\t{s3}\t0\t0\t{cat}\tIDBMP_X\t1 0 0 1\tNoModeChange\t0\t1\tnone\tnone\tnone\tx.kqs\tnone\t1\t256\n"
+            )
+        };
+        let text = format!(
+            "[InventoryItemTypeList]\nnumItems=4\n{}{}{}{}",
+            row(0, "INVITEM_BronzePlate", 2070, 0, 8, "Armor"),
+            row(1, "INVITEM_NoArmor", 2120, 0, 0, "Armor"),
+            row(2, "INVITEM_WarHammer", 1080, 50, 0, "ShortWeapon"),
+            row(3, "INVITEM_Fists", 1280, 0, 0, "ShortWeapon"),
+        );
+        kq8_data::items::ItemTypes::parse(text.as_bytes()).0
+    }
+
+    #[test]
+    fn drop_item_moves_equipped_armor_with_rotation_unapplies_and_restores_placeholder() {
+        let mut a = active("", &[]);
+        a.world.items = crate::item::Items::new(shop_drop_types(), []);
+        a.set_connor_stats(crate::stats::ConnorStats { stats: crate::stats::Stats([20, 10, 0, 5, 0]), level: 1 });
+        let no_armor = a.world.items.add_named("NoArmor", "INVITEM_NoArmor", 1, -1, Place::Carried("Connor".into())).unwrap().name.clone();
+        let bronze = a
+            .world
+            .items
+            .make("INVITEM_BronzePlate", 1, Place::World { position: [10.0, 20.0, 30.0], angles: [-1.1, 0.0, 2.4] })
+            .unwrap()
+            .name
+            .clone();
+        a.world.known.insert(no_armor.to_ascii_lowercase());
+        a.world.known.insert(bronze.to_ascii_lowercase());
+        assert_eq!(a.test_command(&format!("conClickItem {bronze}"), "t").as_deref(), Some("1"));
+        assert_eq!(a.world.items.get(&no_armor).map(|o| o.place.clone()), Some(Place::Gone));
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[3], 13);
+
+        let script = "KQMonster::dropItem Connor INVITEM_BronzePlate 147535 43484 12595 -1.1 0 2.4\nset Ret $Console::Return\nset Dropped $NewInvItem\n";
+        a.world.sources.insert("drop.cs".into(), script.as_bytes().to_vec());
+        assert!(a.scripts.call("drop.cs", &[], &mut a.world));
+        assert_eq!(a.scripts.vars.get("Ret"), Some("0"));
+        assert_eq!(a.scripts.vars.get("Dropped"), Some(bronze.as_str()));
+        let dropped_obj = a.world.items.get(&bronze).unwrap();
+        assert_eq!(dropped_obj.place, Place::World { position: [147535.0, 43484.0, 12595.0], angles: [-1.1, 0.0, 2.4] });
+        assert_eq!(dropped_obj.third, -1);
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[3], 5);
+        assert_eq!(a.world.items.count("Connor", "INVITEM_BronzePlate"), 0);
+        assert_eq!(a.world.items.count("Connor", "INVITEM_NoArmor"), 1);
+    }
+
+    #[test]
+    fn drop_item_keeps_script_on_short_weapon_and_restores_fists() {
+        let mut a = active("", &[]);
+        a.world.items = crate::item::Items::new(shop_drop_types(), []);
+        a.set_connor_stats(crate::stats::ConnorStats { stats: crate::stats::Stats([20, 10, 0, 5, 0]), level: 1 });
+        let fists = a.world.items.make("INVITEM_Fists", 1, Place::Carried("Connor".into())).unwrap().name.clone();
+        let hammer = a
+            .world
+            .items
+            .make("INVITEM_WarHammer", 1, Place::World { position: [60563.0, 61355.0, 18115.0], angles: [0.0; 3] })
+            .unwrap()
+            .name
+            .clone();
+        a.world.items.objects.iter_mut().find(|o| o.name == hammer).unwrap().script = Some("WarHammr.cs".into());
+        a.world.known.insert(fists.to_ascii_lowercase());
+        a.world.known.insert(hammer.to_ascii_lowercase());
+        a.world.weapon_mode = crate::weapons::WeaponMode::Hand;
+        a.world.weapon_ready = Some("INVITEM_Fists".into());
+        assert_eq!(a.test_command(&format!("conClickItem {hammer}"), "t").as_deref(), Some("1"));
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[1], 60);
+        assert_eq!(a.world.weapon_ready.as_deref(), Some("INVITEM_WarHammer"));
+
+        let script = "KQMonster::dropItem Connor INVITEM_WarHammer 60563 61355 18115 0 0 0\nset Dropped $NewInvItem\n";
+        a.world.sources.insert("dropw.cs".into(), script.as_bytes().to_vec());
+        assert!(a.scripts.call("dropw.cs", &[], &mut a.world));
+        assert_eq!(a.scripts.vars.get("Dropped"), Some(hammer.as_str()));
+        let obj = a.world.items.get(&hammer).unwrap();
+        assert_eq!(obj.script.as_deref(), Some("WarHammr.cs"));
+        assert_eq!(obj.place, Place::World { position: [60563.0, 61355.0, 18115.0], angles: [0.0; 3] });
+        assert_eq!(a.world.connor_stats.unwrap().stats.0[1], 10);
+        assert_eq!((a.world.weapon_mode, a.world.weapon_ready.clone()), (crate::weapons::WeaponMode::None, None));
+        assert_eq!(a.world.items.count("Connor", "INVITEM_Fists"), 1);
     }
 }
