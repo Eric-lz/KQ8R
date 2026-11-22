@@ -2135,15 +2135,18 @@ fn message_500(sim: &DoorSim, n: u32) -> Option<String> {
 
 fn queue_help_sound(sim: &mut DoorSim) {
     if std::mem::take(&mut sim.active.world.help.just_opened) {
-        sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(
-            "intrface.aud",
-            "help popup opened (interface.md rule 55)".into(),
-        ));
+        let (file, why) = match sim.active.world.help.open {
+            Some(kq8_core::help::HelpPopup::Book { .. }) => {
+                ("intrface.aud", "F1 help book opened (interface.md rule 56, Q199 b)")
+            }
+            _ => (POPUP_CLICK_SOUND, "help popup opened (interface.md rule 55, Q199 b)"),
+        };
+        sim.active.world.sounds.push(kq8_core::sound::Start::menu_one_shot(file, why.into()));
     }
 }
 
 fn queue_popup_click(sim: &mut DoorSim, why: &str) {
-    sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(
+    sim.active.world.sounds.push(kq8_core::sound::Start::menu_one_shot(
         POPUP_CLICK_SOUND,
         format!("popup click: {why}"),
     ));

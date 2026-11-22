@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 1 fix B1-F1c: Popup sounds in sound group 1 and normal open `button1.aud` (`Q199` b)
+- **Changed:** `crates/kq8-core/src/sound.rs` (`GROUP_MENU = 1`, `Start::menu_one_shot`, and unit test `menu_one_shot_plays_in_group_1_follows_sfx_vol_and_ignores_speech_ducking`), `crates/kq8-viewer/src/gui_view.rs` (`queue_help_sound` plays `button1.aud` for normal/starting-help popups and `intrface.aud` only for F1 Help Book, both via `Start::menu_one_shot` in group `1`; `queue_popup_click` switched to `Start::menu_one_shot`), `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/provenance/README.md`.
+- **Why:** Apply Study Session (A)'s answer to `Q199` part (b) (`docs/behaviour/interface.md` rules 55–56): popup sounds belong in sound group `1` (affected by SFX volume, unaffected by speech ducking) and normal/starting-help popup opens play `button1.aud` while F1 Help Book opens play `intrface.aud`.
+- **Tested how:** `cargo test --workspace` after edits.
+- **Result:** All workspace unit tests pass (including `menu_one_shot_plays_in_group_1_follows_sfx_vol_and_ignores_speech_ducking`); live ear check of normal popup open `button1.aud` and group 1 speech-ducking independence pending.
+- **Still broken:** `Q201` (projectile wall/building/object impact sound), Batch 4 (Gnome).
+- **Next:** Implement `Q201` (`B3-F4`) next.
+
 ## 2026-11-22 Study (A): Projectile impact sound rules (`Q201`)
 - **Changed:** `docs/behaviour/ranged-weapons.md` (updated rule 30, section 9 rule 36 `Sounds`, Numbers and units, Data used, How to check), `docs/behaviour/sound.md` (updated rule 41 and Open questions item 3), `docs/behaviour/QUESTIONS.md` (marked `Q201` answered), `MODLOG.md`, `STATUS.md`, and untracked `re/notes.md` (no Rust code written).
 - **Why:** Answer `Q201` queued after the user's `B3-F3` play check showed Swamp's `totem.01`–`06` fireballs hitting `fiengate1` without an impact sound (`Swamp/totem.*`, `PRfire2.kq`, and `swmpfrbl.cs` specify no sound), and resolve the untraced `5,000 / 25,000` placed one-shot sites in `sound.md`.

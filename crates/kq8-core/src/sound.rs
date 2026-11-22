@@ -34,6 +34,9 @@ use std::collections::BTreeSet;
 pub const GROUPS: usize = 6;
 /// World sound effects (rule 50).
 pub const GROUP_EFFECTS: usize = 0;
+/// Menu / popup screen sound effects (`interface.md` rules 55–56, Q199 b):
+/// controlled by SFX volume, unaffected by speech ducking.
+pub const GROUP_MENU: usize = 1;
 /// World music, `KQMusic` (rules 50, 57a).
 pub const GROUP_WORLD_MUSIC: usize = 5;
 /// Speech (rules 50, 58).
@@ -212,6 +215,11 @@ impl Start {
     /// A plain one-shot in group 0 (rules 40, 42).
     pub fn plain_one_shot(name: &str, why: String) -> Self {
         Start { name: name.to_string(), placed: None, looping: false, group: GROUP_EFFECTS, why }
+    }
+
+    /// A plain one-shot in group 1 (`interface.md` rules 55–56, Q199 b).
+    pub fn menu_one_shot(name: &str, why: String) -> Self {
+        Start { name: name.to_string(), placed: None, looping: false, group: GROUP_MENU, why }
     }
 
     /// A line of speech in group 3 (rule 58): Connor's plain (`at`
@@ -1134,5 +1142,25 @@ mod tests {
         s.update(HOUSEKEEPING, &ears());
         assert!(!s.is_playing(id), "a fade that reaches 0 stops the sound");
         assert!(s.log.iter().any(|l| l.contains("faded out to 0")));
+    }
+
+    #[test]
+    fn menu_one_shot_plays_in_group_1_follows_sfx_vol_and_ignores_speech_ducking() {
+        let mut g = Groups::default();
+        let used = g.apply_script(b"KQSound::setSfxVol 0.5\n");
+        assert_eq!(used, ["KQSound::setSfxVol 0.5"]);
+        let mut s = SoundSystem::new(g);
+        s.set_ducking(true);
+        s.start(&Start::menu_one_shot("button1.aud", "popup open".into()), found(1.0), &ears());
+        s.start(&Start::plain_one_shot("door4.aud", "world fx".into()), found(1.0), &ears());
+        assert_eq!(
+            s.orders[0],
+            Order::Start { id: 0, name: "button1.aud".into(), looping: false, gains: [0.5, 0.5] }
+        );
+        assert_eq!(
+            s.orders[1],
+            Order::Start { id: 1, name: "door4.aud".into(), looping: false, gains: [0.1, 0.1] }
+        );
+        assert!(s.log.iter().any(|l| l.contains("start #0 button1.aud") && l.contains("group 1")));
     }
 }

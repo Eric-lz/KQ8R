@@ -1,10 +1,9 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-Study Session (A) answered **`Q201`** (projectile wall/building/object impact
-sounds on Swamp totems & general `KQProjectile` contact, and all placed one-shot
-sites in `sound.md`), following the user's live checks of **`B3-F2`** and
-**`B3-F3`** and Study (A)'s **Batch 4 (Gnome)** + **`Q199` part (b)**. Read
+**Batch 1 fix `B1-F1c`** (`Q199` part (b): popup sounds in group `1` and
+`button1.aud` on normal help popup open) following Study Session (A)'s
+answers to **`Q201`** and **Batch 4 (Gnome)** + **`Q199` part (b)**. Read
 with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest
 entries at the top). The short public summary is `README.md`; the detailed
 "what works" list is `docs/FEATURES.md`.
@@ -53,9 +52,10 @@ entries at the top). The short public summary is `README.md`; the detailed
     open, Left/Right arrows, button/checkbox clicks, and Enter all play
     `button1.aud` in **sound group 1** (F1 Help Book open plays `intrface.aud`
     in **sound group 1**).
-  - **Next:** Implementation Session (B) can build Batch 4 (Gnome) and verify
-    group 1 for `Q199`b; Study Session (A) is ready for **`Q201`** (projectile
-    wall-impact sound) and Batch 5 (Barren).
+  - **Next:** `Q199`b implemented in **`B1-F1c`** (unit-tested; pending ear check
+    on normal help open & speech-ducking independence); Implementation
+    Session (B) is implementing **`Q201`** next, then Batch 4 (Gnome);
+    Study Session (A) is ready for Batch 5 (Barren).
 
 - **2026-11-22 (A): `KQCueEvent 500` object projectile launchers (`Q200`)
   studied** (traced in `Mask.exe` via Ghidra and checked against all 5
@@ -168,14 +168,18 @@ entries at the top). The short public summary is `README.md`; the detailed
     for O(1) updates on `F8`, `setHaze`, and `KQHazer` ramps, quiet detail-only
     ramp logs, and wireframe-only cube + `radius`/`innerRadius` `H`-key markers —
     **checked by the user by eye on 2026-11-21**).
-  - **Help popups & F1 Help Book (`B1-7` + `B1-F1`/`B1-F1b`):** `doPopup`,
+  - **Help popups & F1 Help Book (`B1-7` + `B1-F1`/`B1-F1b`/`B1-F1c`):** `doPopup`,
     `notStartingHelp`, `stopHelp`, `movekeys.kq` -> `500.MSG` expansion,
-    `38×7` wrap, `intrface.aud`, game pause, and 24-page F1 Help Book;
+    `38×7` wrap, F1 Help Book `intrface.aud` open, normal popup `button1.aud`
+    open, game pause, and 24-page F1 Help Book;
     `B1-F1`/`B1-F1b` fixed the 2026-11-20 visual check findings (`Close, <<, >>`
     order, Portal-style highlight/arrow/Enter/mouse animations, instant
     `Panel::Popup` show/hide, and `button1.aud` on popup clicks, arrows,
-    and Enter — **checked live in game by the user on 2026-11-21**; `Q199`
-    part b open for exact sound group check).
+    and Enter — **checked live in game by the user on 2026-11-21**);
+    `B1-F1c` (`Q199` b) moves all popup sounds (`queue_help_sound`,
+    `queue_popup_click`) into sound group `1` (`GROUP_MENU`, SFX slider,
+    unaffected by speech ducking) and uses `button1.aud` when opening
+    normal/starting-help popups (unit-tested; pending ear check).
   - **Script coverage regenerated (`B1-8`):** `docs/SCRIPT-COVERAGE.md`
     updated (`37 -> 20` distinct missing commands, `0` stubs remaining
     across all worlds; `CastleD` now `0` missing, `Daventry` `2`,

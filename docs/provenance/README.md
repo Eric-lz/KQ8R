@@ -4272,6 +4272,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Load `ObjectLauncher` for placed non-unused, non-`Class::of` objects with `projectileFile` (`crates/kq8-viewer/src/load.rs`, `door_view.rs`); `KQCueEvent 500` launches projectile from `base + rot(shootOffset)` toward unrotated `start + relAimPoint` (`n2` in `1..=99_999` else `objProjDamage` = `20`, `bolt_kind` `0`/`2`/`3`/other, no launcher sound) and falls through to script `Cue 500` | `ranged-weapons.md` §9 (rules 34–37); `MASK/GAME/Swamp/totem.cs` | unit tests `cue_500_launches_object_projectile_falls_through_to_script_and_runs_die_script` & `a_door_gets_end_loop_after_open_and_get_end_loop_relays`; Swamp headless run (`totem.01`–`06` firing `PRfire2.kq` on 8 s loop in `doors.log`/`fight.log`); **live check 2026-11-22: totems fire across puzzle, hit and damage Connor as expected** |
 | `WorldState::queue_bolt_die` + `Active::drain_bolt_die_calls` call projectile script `Die Normal` (non-`Weep`) on contact/maxDistance/floor-end with `place_of` / `KQObject::getLoc` returning `dead_bolt_pos` before deletion | `ranged-weapons.md` §9 (rule 36); `MASK/GAME/Swamp/swmpfrbl.cs` | unit test `cue_500_launches_object_projectile_falls_through_to_script_and_runs_die_script`; Swamp headless run (`swmpfrbl.cs` spawning auto-deleted `endfrbl.kqs` copies `NoName63`–`NoName67` at bolt end locations); **live check 2026-11-22: `endfrbl.kqs` bursts on impact (missing wall-impact sound queued as `Q201`)** |
 
+## B1-F1c 2026-11-22: Popup sound group 1 and normal open `button1.aud` (`Q199` b) — core `sound.rs`; viewer `gui_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Added `GROUP_MENU = 1` + `Start::menu_one_shot` in `crates/kq8-core/src/sound.rs` (`setSfxVol`, unaffected by speech ducking); switched `queue_help_sound` (`button1.aud` for normal/starting-help open, `intrface.aud` only for F1 Help Book) and `queue_popup_click` in `crates/kq8-viewer/src/gui_view.rs` to `menu_one_shot` | `interface.md` rules 55–56 (`Q199` b) | unit test `sound::tests::menu_one_shot_plays_in_group_1_follows_sfx_vol_and_ignores_speech_ducking` (ear check pending) |
+
 
 
 
