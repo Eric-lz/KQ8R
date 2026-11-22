@@ -4324,6 +4324,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `WorldState::collision_type` updates `Character::collision_type` when `name` resolves via `character_index` so `KQObject::collisionType Dragon +64` toggles `0x4002 <-> 0x4042` for `SWING_PICK` melee targeting | `doors.md` rule 12 / `script-commands.md`; `MASK/Gnome/kq/{dragworm.kq,fusebox.cs}` | unit test `collision_type_updates_character_for_swing_pick` (`0x4002 -> 0x4042`, picked by `SWING_PICK`) |
 
+## B4-F1b 2026-11-22: `place_of` resolves live traps for `checkDistance` & quiet boulder turns — core `active.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `WorldState::place_of` resolves live `self.traps` (`Placement::at(t.settings.position)`) so `bouldtrp.cs`/`bouldtp2.cs` `checkDistance $1 boulder` succeeds; `move_command` skips `Request::Move` when a `KQBoulder` only rotates (`new.position == old`) | `anim-scripts.md` rule 31; `MASK/Gnome/kq/{bouldtrp,bouldtp2}.cs` | unit tests `pushed_object_triggers_mask_1_trap` & `move_boulder_emits_request_for_collider` |
+
 
 
 

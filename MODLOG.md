@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 4 fix B4-F1b: `place_of` resolves traps for `checkDistance` and quiet boulder turns
+- **Changed:** `crates/kq8-core/src/active.rs` (`WorldState::place_of` resolves live `KQTrap`s, `WorldState::move_command` emits `Request::Move` for `KQBoulder` only when `new.position != old`, updated `pushed_object_triggers_mask_1_trap` and `move_boulder_emits_request_for_collider`), `MODLOG.md`, `docs/provenance/README.md`.
+- **Why:** Headless Test 1 showed `Bouldtrp` now triggers `On boulder`, but `bouldtrp.cs` line 2 (`checkDistance $1 boulder 3500`) failed with `can't find 'Bouldtrp'` because `WorldState::place_of` omitted `self.traps`; rotation-only `KQMoveEvent`s on `boulder` also emitted unnecessary `(0, 0, 0)` `Request::Move` entries.
+- **Tested how:** `cargo test -p kq8-core` (and full `B4-F1`..`B4-F3` release build + headless Gnome verification next).
+- **Result:** `kq8-core` unit tests pass.
+- **Still broken:** Headless Gnome release verification and user live check pending.
+- **Next:** Commit `B4-F1b`, rebuild `target\release\kq8-viewer.exe`, and run headless Gnome checks for `bouldtrp.cs` and `Dragon`.
+
 ## 2026-11-22 Batch 4 fix B4-F3: `KQObject::collisionType` updates characters (`Dragon` melee hits)
 - **Changed:** `crates/kq8-core/src/active.rs` (`WorldState::collision_type` character branch via `character_index`, unit test `collision_type_updates_character_for_swing_pick`), `STATUS.md`, `MODLOG.md`, `docs/provenance/README.md`.
 - **Why:** Fix the live Gnome bug where `Dragon` (`dragworm.kq` `colliderType = 16386 = 0x4002`) stayed un-targetable by melee weapons even after `fusebox.cs` ran `KQObject::collisionType Dragon +64` when the lights turned on: `WorldState::collision_type` did not handle `KQMonster` / `AnimObject` characters, so `+64` failed with `object kind not tracked yet` and left bit `0x40` clear (`SWING_PICK` never matched). Also records live user confirmation of `useAlternateLightmap` (`B4-2`: `gnome13`/`gnome14` light up when inserting `INVITEM_ShardFuse`).

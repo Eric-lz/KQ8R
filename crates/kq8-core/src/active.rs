@@ -3384,6 +3384,8 @@ impl WorldState {
             (!self.river_controls[i].gone).then_some(self.river_controls[i].placement)
         } else if let Some(h) = self.hazers.iter().find(|h| !h.gone && h.name.eq_ignore_ascii_case(who)) {
             Some(Placement::at(h.position))
+        } else if let Some(t) = self.traps.iter().find(|t| !t.gone && t.settings.name.eq_ignore_ascii_case(who)) {
+            Some(Placement::at(t.settings.position))
         } else {
             // A box object (a barrel; M5 5c fix 5).
             self.clickables.iter().find(|c| !c.gone && c.name.eq_ignore_ascii_case(who)).map(|c| c.placement)
@@ -3446,7 +3448,7 @@ impl WorldState {
             } else {
                 false
             };
-            if is_boulder {
+            if is_boulder && new.position != old {
                 if let Some(c) = self.clickables.iter_mut().find(|c| !c.gone && c.name.eq_ignore_ascii_case(&who)) {
                     c.placement = new;
                 }
@@ -12464,8 +12466,9 @@ mod talk_tests {
     #[test]
     fn pushed_object_triggers_mask_1_trap() {
         use crate::trap::TrapSettings;
-        let script = b"if test $2 == On\n set Gnome::Boulder::Hit $3\nendif\n".to_vec();
+        let script = b"if test $2 == On\n checkDistance $1 boulder 3500\n if test $Console::Return == 1\n  set Gnome::Boulder::Hit $3\n endif\nendif\n".to_vec();
         let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".to_string()], [("bouldtrp.cs".into(), script)]);
+        a.add_anims([boulder_anim("boulder", [100_000.0, 91_250.0, 20_540.0], None)]);
         a.add_traps([Trap::new(TrapSettings {
             name: "Bouldtrp".into(),
             position: [100_000.0, 91_250.0, 20_700.0],
@@ -12504,6 +12507,10 @@ mod talk_tests {
         a.add_anims([boulder_anim("boulder", [103_894.0, 90_758.0, 20_540.0], None)]);
         a.start();
         a.world.requests.clear();
+
+        // Rotation-only move does not emit Request::Move.
+        assert_eq!(a.test_command("move boulder 1 0 0 0 0 0 1.5", "t").as_deref(), Some("0"));
+        assert!(a.world.requests.is_empty(), "{:?}", a.world.requests);
 
         assert_eq!(a.test_command("move boulder 0 101950 91915 17470", "t").as_deref(), Some("0"));
         assert_eq!(a.world.anims[0].player.base.position, [101_950.0, 91_915.0, 17_470.0]);
