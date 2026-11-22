@@ -113,6 +113,8 @@ pub fn item_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option
 pub struct CorpseDraw {
     /// Lower-case shape name -> its model.
     parts: BTreeMap<String, Parts>,
+    /// Lower-case shape name -> `BOUNDS.KQ` box for solid corpses (`KQMandragorTree`).
+    bounds: BTreeMap<String, ([f32; 3], [f32; 3])>,
     /// How many of the world's corpses have their entity.
     drawn: usize,
     /// The bolts in the air drawn now (M5 5c-9), by name, and their places
@@ -121,16 +123,22 @@ pub struct CorpseDraw {
 }
 
 /// `shapes`: lower-case shape name -> index into `built`.
-pub fn spawn_corpses(commands: &mut Commands, shapes: BTreeMap<String, usize>, built: &[Parts]) {
+pub fn spawn_corpses(commands: &mut Commands, shapes: BTreeMap<String, usize>, built: &[Parts], bounds: BTreeMap<String, ([f32; 3], [f32; 3])>) {
     let parts = shapes.into_iter().filter_map(|(k, slot)| built.get(slot).map(|p| (k, p.clone()))).collect();
-    commands.insert_resource(CorpseDraw { parts, drawn: 0, bolts: BTreeMap::new() });
+    commands.insert_resource(CorpseDraw { parts, bounds, drawn: 0, bolts: BTreeMap::new() });
 }
 
 /// Each new corpse: its model where the character stood, turned the same
-/// way (rule 32). **Ours**: no shadow (not a caster) and no draw-distance
-/// test (always drawn when in view); the skin swap is not applied (only
-/// `bossprig` has one in Daventry).
-pub fn corpse_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Option<ResMut<CorpseDraw>>, shared: Res<crate::Shared>) {
+/// way (rule 32). `KQMandragorTree` corpses (`c.solid`) register a solid
+/// `BoxCollider`; others have no collider.
+pub fn corpse_draw(
+    mut commands: Commands,
+    sim: Option<Res<DoorSim>>,
+    draw: Option<ResMut<CorpseDraw>>,
+    mut colliders: Option<ResMut<crate::terrain_view::ObjectColliders>>,
+    mut order: Option<ResMut<crate::terrain_view::ColliderOrder>>,
+    shared: Res<crate::Shared>,
+) {
     let (Some(sim), Some(mut draw)) = (sim, draw) else { return };
     let corpses = &sim.active.world.corpses;
     while draw.drawn < corpses.len() {
@@ -145,7 +153,22 @@ pub fn corpse_draw(mut commands: Commands, sim: Option<Res<DoorSim>>, draw: Opti
             let part = commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()))).id();
             commands.entity(body).add_child(part);
         }
-        shared.log.lock().unwrap().summary(format!("corpse of {}: {} drawn at ({:.0}, {:.0}, {:.0})", c.name, c.shape, c.position[0], c.position[1], c.position[2]));
+        let mut solid_note = "";
+        if c.solid {
+            if let (Some(&(min, max)), Some(col), Some(ord)) = (draw.bounds.get(&c.shape.to_ascii_lowercase()), colliders.as_deref_mut(), order.as_deref_mut()) {
+                let idx = col.0.len();
+                col.0.push(kq8_core::collide::BoxCollider {
+                    name: c.drawn_name(),
+                    min,
+                    max,
+                    placement: kq8_core::collide::Placement { rotation: c.rotation, position: c.position },
+                    kind: kq8_core::collide::ColliderKind::default(),
+                });
+                ord.0.push(idx);
+                solid_note = " (solid collider)";
+            }
+        }
+        shared.log.lock().unwrap().summary(format!("corpse of {}: {} drawn at ({:.0}, {:.0}, {:.0}){solid_note}", c.name, c.shape, c.position[0], c.position[1], c.position[2]));
     }
 }
 

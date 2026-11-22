@@ -148,6 +148,9 @@ pub enum Request {
     /// `KQMonster::preSpecial Connor` (`script-commands.md` rule 12b):
     /// marks Connor's playing movement interruptable and resets wanted to `"Stop"`.
     ConnorPreSpecial { at: String },
+    /// `KQMandragorRoot` proximity knock-back (`fighting.md` 7b): pushes Connor
+    /// horizontally away from the tree keeping Z, faces tree, plays `Special reactback`.
+    ConnorRepel { position: [f32; 3], heading: f32, at: String },
     /// `setHaze <n>` (`object-lighting.md` rule 33a, Q161): the caller
     /// sets `hazeDistance` n and `visibleDistance` 1.5 n at once.
     /// `quiet`: continuous `KQHazer` ramp updates stay in detail logs only.
@@ -2567,7 +2570,7 @@ impl WorldState {
             }
         }
         let rotation = kq8_data::objects::rotation([n[3], n[4], n[5]]);
-        self.corpses.push(crate::fight::Corpse { name: name.clone(), shape: file.clone(), position, rotation, loaded: true });
+        self.corpses.push(crate::fight::Corpse { name: name.clone(), shape: file.clone(), position, rotation, loaded: true, solid: false });
         // A world object by that name now (`deleteObject` finds it).
         let key = name.to_ascii_lowercase();
         self.deleted.remove(&key);
@@ -3258,9 +3261,11 @@ impl WorldState {
             self.note(format!("{at}: move {who}: flags {flags} unknown; not moved"));
             return "1".into();
         }
+        let mut moved_anim = None;
         let base = if let Some(i) = self.object_index(&who) {
             Some(&mut self.objects[i].player.base)
         } else if let Some(i) = self.anim_index(&who) {
+            moved_anim = Some(i);
             Some(&mut self.anims[i].player.base)
         } else if let Some(i) = self.chest_index(&who) {
             Some(&mut self.chests[i].chest.player.base)
@@ -3283,6 +3288,9 @@ impl WorldState {
                 new.position[2],
                 note.map_or(String::new(), |n| format!("; {n}"))
             ));
+            if let Some(i) = moved_anim.filter(|&i| self.anims[i].character.as_deref().is_some_and(|c| c.mandragore_tree.is_some())) {
+                self.sync_mandragore_roots(i);
+            }
             return "0".into();
         }
         if let Some(i) = self.hazers.iter().position(|h| !h.gone && h.name.eq_ignore_ascii_case(&who)) {
@@ -6919,6 +6927,11 @@ impl Active {
             }
             let connor_at = self.world.connor_at.map(|p| [p[0], p[1]]);
             let obj = &mut self.world.anims[i];
+            let was_tree_base = obj
+                .character
+                .as_deref()
+                .is_some_and(|c| c.mandragore_tree.is_some())
+                .then_some((obj.player.base.position, obj.player.base.rotation));
             let (a, notes) = match obj.character.as_deref_mut() {
                 Some(c) => {
                     c.in_range = in_range;
@@ -6931,6 +6944,12 @@ impl Active {
                 }
                 None => (obj.player.advance(dt), Vec::new()),
             };
+            if let Some((old_pos, old_rot)) = was_tree_base {
+                let now_base = self.world.anims[i].player.base;
+                if now_base.position != old_pos || now_base.rotation != old_rot {
+                    self.world.sync_mandragore_roots(i);
+                }
+            }
             let who = self.world.anims[i].player.name.clone();
             for n in notes {
                 // M5 5c: the character's own fight lines go to fight.log too.
@@ -6989,6 +7008,14 @@ impl Active {
                 let stage = self.world.anims[i].character.as_deref().and_then(|c| c.tower.as_ref()).and_then(|t| t.fall);
                 if stage.and_then(|f| f.movement()).is_some_and(|f| f.eq_ignore_ascii_case(&m)) {
                     self.tower_fall_next(i, now);
+                    continue;
+                }
+                // fighting.md 7b (B3-4): root sinking (`Die`) enters underground wait;
+                // root `Birth` resurfaces or enters permanent death if tree died.
+                if m.eq_ignore_ascii_case("Die") && self.world.mandragore_root_die_ended(i, now) {
+                    continue;
+                }
+                if m.eq_ignore_ascii_case("Birth") && self.world.mandragore_root_resurfaced(i, now) {
                     continue;
                 }
                 // fighting.md rule 32 (M5 5c-7): its die movement ended.
@@ -10255,6 +10282,123 @@ endif
         let mut a = Active::new(Vars::default(), vec![], vec![], ["Connor".into()], []);
         a.test_command("KQMonster::setState Connor Tile2", "test");
         assert!(a.world.requests.iter().any(|r| matches!(r, Request::ConnorTile2 { .. })));
+    }
+
+    #[test]
+    fn mandragores_link_snap_repel_laugh_sink_rebirth_and_tree_death() {
+        use crate::fight::{Fight, HitKind};
+        use crate::mandragore::{MandragorRoot, MandragorTree, RootPhase};
+        use crate::named_anim::tests::{movement, still_then_open};
+        use kq8_data::characters::{AiSettings, CharacterKeys, MANDRAGORE_TYPE};
+
+        let mut a = with_object("x\n", "x");
+        a.set_connor_stats(crate::stats::ConnorStats { stats: crate::stats::Stats([150, 10, 0, 0, 0]), level: 1 });
+        let make_keys = |text: &[u8]| CharacterKeys::from_section(&kq8_data::kq_text::parse(text)[0]).unwrap();
+        let tree_k = make_keys(b"[M]\nclassType=KQMandragorTree\nanimFile=mandrg.anm\nalarmRadius=15000\ndeadDts=mt_dead.kqs\n");
+        let root_k = make_keys(b"[R]\nclassType=KQMandragorRoot\nanimFile=mandroot.anm\nalarmRadius=15000\ntooClose=700\nrepelDist=800\n");
+
+        let mut tp = still_then_open("mand3t");
+        tp.movements = vec![
+            movement("stop", 0.0, 1.0, true, false, vec![]),
+            movement("laugh", 0.0, 3.0, false, false, vec![]),
+            movement("die", 0.0, 3.0, false, false, vec![]),
+            movement("firedie", 0.0, 3.0, false, false, vec![]),
+        ];
+        let tpos = [10_000.0, 10_000.0, 500.0];
+        tp.base.position = tpos;
+        let mut tc = crate::character::Character::new(false, 0x20, 0.0, false, false, true, 1);
+        tc.collision_type = MANDRAGORE_TYPE;
+        tc.mandragore_tree = Some(MandragorTree::new(0, 2));
+        let mut ts = crate::fight::tests::settings([300, 25, 0, 15, 20_000], 1.0);
+        ts.dead_dts = Some("mt_dead.kqs".into());
+        tc.fight = Some(Fight::new(ts));
+        let mut tai = AiSettings::from_keys(&tree_k);
+        tai.team = Some("mand3".into());
+        tai.alarm_radius = 15_000.0;
+        tc.ai = Some(crate::character_ai::Ai::new(tai, tpos, 1960.0, false));
+
+        let mk_root = |name: &str, offset: [f32; 3], seed: u64| {
+            let mut rp = still_then_open(name);
+            rp.movements = vec![
+                movement("stop", 0.0, 1.0, true, false, vec![]),
+                movement("birth", 0.0, 3.0, false, false, vec![]),
+                movement("die", 0.0, 3.0, false, false, vec![]),
+            ];
+            let mut rc = crate::character::Character::new(false, 0x20, 0.0, false, false, true, seed);
+            rc.collision_type = MANDRAGORE_TYPE;
+            rc.mandragore_root = Some(MandragorRoot::new(offset, 0.25, 700.0, 800.0));
+            rc.fight = Some(Fight::new(crate::fight::tests::settings([250, 15, 0, 30, 0], 1.0)));
+            let mut rai = AiSettings::from_keys(&root_k);
+            rai.team = Some("mand3".into());
+            rai.alarm_radius = 15_000.0;
+            rc.ai = Some(crate::character_ai::Ai::new(rai, tpos, 2140.0, false));
+            AnimObject { player: rp, script: None, gone: false, character: Some(Box::new(rc)), translucency: None }
+        };
+        a.add_anims([
+            AnimObject { player: tp, script: None, gone: false, character: Some(Box::new(tc)), translucency: None },
+            mk_root("mand3l", [-600.0, -1000.0, 0.0], 2),
+            mk_root("mand3r", [600.0, -1000.0, 0.0], 3),
+        ]);
+        for n in ["mand3t", "mand3l", "mand3r"] {
+            a.world.characters_in_range.insert(n.into());
+            a.world.characters_solid.insert(n.into());
+        }
+        a.world.init_mandragores();
+
+        assert_eq!(a.world.anims[1].player.base.position, [9400.0, 9000.0, 500.0]);
+        assert_eq!(a.world.anims[2].player.base.position, [10_600.0, 9000.0, 500.0]);
+        assert!(!a.world.anims[0].character.as_ref().unwrap().gravity);
+        assert!(!a.world.anims[1].character.as_ref().unwrap().gravity);
+
+        // 0-damage hit on root sends parent tree to Special laugh without hitting tree itself.
+        a.world.hit_character(1, "Connor", 0, HitKind::Projectile);
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::Special);
+        assert_eq!(a.world.anims[0].player.movement_name(), "laugh");
+
+        // Root repels Connor when within tooClose (700), keeping Z, skipping while Special.
+        a.update();
+        a.world.connor_at = Some([9400.0, 8800.0, 555.0]);
+        a.world.requests.clear();
+        a.world.check_mandragore_repel(1, "test");
+        let repel = a.world.requests.iter().find_map(|r| match r {
+            Request::ConnorRepel { position, .. } => Some(*position),
+            _ => None,
+        });
+        assert_eq!(repel.map(|p| p[2]), Some(555.0));
+        a.world.requests.clear();
+        a.world.connor_state = Some(crate::character::state_number::SPECIAL);
+        a.world.check_mandragore_repel(1, "in special");
+        assert!(a.world.requests.is_empty());
+        a.world.connor_state = None;
+
+        // Killing one root sinks it, sets tree rootDownCount=1 & noTurn=true, then rebirths & restores.
+        a.world.character_dies(1, HitKind::Normal, false);
+        assert_eq!(a.world.anims[1].character.as_ref().unwrap().mandragore_root.as_ref().unwrap().phase, RootPhase::Sinking);
+        assert_eq!(a.world.anims[1].character.as_ref().unwrap().collision_type, 0);
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().mandragore_tree.as_ref().unwrap().root_down_count, 1);
+        assert!(a.world.anims[0].character.as_ref().unwrap().no_turn);
+
+        for _ in 0..25 {
+            a.update();
+            a.world.characters_ai(&FlatGround, &[], &[]);
+        }
+        let r1 = a.world.anims[1].character.as_ref().unwrap();
+        assert_eq!(r1.mandragore_root.as_ref().unwrap().phase, RootPhase::Alive);
+        assert_eq!((r1.collision_type, r1.collision_mask), (0x4042, 0x201f));
+        assert_eq!(a.world.anims[0].character.as_ref().unwrap().mandragore_tree.as_ref().unwrap().root_down_count, 0);
+        assert!(!a.world.anims[0].character.as_ref().unwrap().no_turn);
+
+        // Tree death on Fire still awards 20,000 XP, leaves solid mt_dead.kqs corpse, and kills roots permanently (0 XP).
+        a.world.character_dies(0, HitKind::Fire, false);
+        for _ in 0..15 {
+            a.update();
+        }
+        assert!(a.world.anims[0].gone && a.world.anims[1].gone && a.world.anims[2].gone);
+        let cs = a.world.connor_stats.unwrap();
+        assert_eq!((cs.level, cs.stats.0[4]), (4, 19_930));
+        assert!(a.world.fight_log.iter().any(|l| l.contains("Connor gets its experience 20000")));
+        assert_eq!(a.world.corpses.len(), 1);
+        assert_eq!((a.world.corpses[0].shape.as_str(), a.world.corpses[0].solid), ("mt_dead.kqs", true));
     }
 
     #[test]

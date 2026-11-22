@@ -516,6 +516,8 @@ pub struct Corpse {
     /// Made by a script's `loadObject` (`anim-scripts.md` rule 34): drawn
     /// under its own name (so `deleteObject` finds it), not `<name>_corpse`.
     pub loaded: bool,
+    /// `KQMandragorTree` (`fighting.md` 7b): keeps the corpse's default collision instead of non-solid.
+    pub solid: bool,
 }
 
 impl Corpse {
@@ -850,6 +852,15 @@ impl crate::active::WorldState {
         if self.anims[j].character.as_deref().is_none_or(|c| c.fight.is_none()) {
             return;
         }
+        if let Some(phase) = self.anims[j].character.as_deref().and_then(|c| c.mandragore_root.as_ref()).map(|r| r.phase) {
+            if phase != crate::mandragore::RootPhase::Alive {
+                self.fight_note(&name, format!("hit from {from} ({}) ignored: root is {phase:?} (fighting.md 7b)", kind.name()));
+                return;
+            }
+        }
+        if d <= 0 && self.mandragore_zero_hit_laugh(j, from, kind, now) {
+            return;
+        }
         let mut notes = Vec::new();
         // 22.2: active if it was not (if there is room).
         if !self.anims[j].character.as_deref().and_then(|c| c.ai.as_ref()).is_some_and(|ai| ai.active) {
@@ -1011,8 +1022,19 @@ impl crate::active::WorldState {
             return;
         }
         self.alarm_pub(j, "hit while not alarmed (a team or a chase radius of 0): alarmed at once (fighting.md rule 28)", now);
-        if let Some(ai) = self.anims[j].character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
-            ai.react_at = now;
+        let a = &mut self.anims[j];
+        if let Some(c) = a.character.as_deref_mut() {
+            let is_tree = c.mandragore_tree.is_some();
+            if let Some(ai) = c.ai.as_mut() {
+                ai.react_at = now;
+                if is_tree {
+                    ai.hit_count = ai.hit_count.max(2);
+                    ai.chase_until = now + RUN_ALARM_CHASE;
+                }
+            }
+            if is_tree && c.state == crate::character::State::Move {
+                c.set_moving(&mut a.player, true);
+            }
         }
     }
 }
@@ -1024,6 +1046,10 @@ impl crate::active::WorldState {
     /// (collision type and mask 0); its state never changes again.
     pub(crate) fn character_dies(&mut self, j: usize, kind: HitKind, now_flag: bool) {
         let now = self.now();
+        if !now_flag && self.mandragore_root_sink(j, kind) {
+            return;
+        }
+        let is_tree = self.anims[j].character.as_deref().is_some_and(|c| c.mandragore_tree.is_some());
         let a = &mut self.anims[j];
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };
@@ -1079,6 +1105,9 @@ impl crate::active::WorldState {
             ),
         );
         self.drop_items(j);
+        if is_tree {
+            self.kill_mandragore_roots(&name, now);
+        }
         if now_flag {
             self.death_ended(j, now);
         }
@@ -1446,15 +1475,20 @@ impl crate::active::WorldState {
         let a = &mut self.anims[j];
         let name = a.player.name.clone();
         let (position, rotation) = (a.player.base.position, a.player.base.rotation);
+        let is_tree = a.character.as_deref().is_some_and(|c| c.mandragore_tree.is_some());
         let Some(f) = a.character.as_deref().and_then(|c| c.fight.as_ref()) else { return };
         let kind = f.last_kind.unwrap_or(HitKind::Normal);
         let exp = f.stats.0[4];
         let s = &f.settings;
-        let shape = match kind {
-            HitKind::Normal => s.dead_dts.clone(),
-            HitKind::Projectile => s.projd_kqs.clone().or_else(|| s.dead_dts.clone()),
-            HitKind::Ice => s.ided_kqs.clone(),
-            HitKind::Fire => None,
+        let shape = if is_tree {
+            s.dead_dts.clone()
+        } else {
+            match kind {
+                HitKind::Normal => s.dead_dts.clone(),
+                HitKind::Projectile => s.projd_kqs.clone().or_else(|| s.dead_dts.clone()),
+                HitKind::Ice => s.ided_kqs.clone(),
+                HitKind::Fire => None,
+            }
         };
         let type_name = s.type_name.clone();
         a.gone = true;
@@ -1479,8 +1513,9 @@ impl crate::active::WorldState {
         // 32.2: the corpse.
         let corpse = match shape {
             Some(shape) => {
-                let line = format!("a corpse {shape} where it stood ({:.0}, {:.0}, {:.0}), turned the same way, no shadow, not solid", position[0], position[1], position[2]);
-                self.corpses.push(Corpse { name: name.clone(), shape, position, rotation, loaded: false });
+                let solidity = if is_tree { "solid" } else { "not solid" };
+                let line = format!("a corpse {shape} where it stood ({:.0}, {:.0}, {:.0}), turned the same way, no shadow, {solidity}", position[0], position[1], position[2]);
+                self.corpses.push(Corpse { name: name.clone(), shape, position, rotation, loaded: false, solid: is_tree });
                 line
             }
             None => format!("no corpse ({})", if kind == HitKind::Fire { "Fire: burnt away" } else { "no shape for this kind" }),

@@ -799,6 +799,8 @@ pub fn spawn_doors(
     }
     // The other animated objects (3i-4), drawn by anim_view.
     active.add_anims(anims);
+    // Mandragores (fighting.md 7b, B3-4): link roots to parent trees, switch gravity off, snap to shoulders.
+    active.world.init_mandragores();
     // Copies prepared for a script's loadKQ (3k-4).
     active.set_dormant(std::mem::take(&mut objects.dormant));
     // K-2: the KQMonster::add prototypes.
@@ -1281,7 +1283,7 @@ pub fn trap_step(
         // thrown away at DoChoice: so dropped).
         let refused_by_choice = connor.choice.as_ref().is_some_and(|c| !c.made)
             && match &r {
-                Request::ConnorSpecial { .. } | Request::ConnorWait { .. } | Request::ConnorDies { .. } => true,
+                Request::ConnorSpecial { .. } | Request::ConnorRepel { .. } | Request::ConnorWait { .. } | Request::ConnorDies { .. } => true,
                 Request::ConnorAuto { auto, .. } => matches!(auto.kind, kq8_core::connor_auto::AutoKind::Walk { .. }),
                 _ => false,
             };
@@ -1297,6 +1299,7 @@ pub fn trap_step(
         // request finishes it first (handsOff on) or is refused.
         let state = match &r {
             Request::ConnorSpecial { at, .. } => Some(("setState special", at.clone())),
+            Request::ConnorRepel { at, .. } => Some(("Mandragore repel (Special)", at.clone())),
             Request::ConnorWait { at } => Some(("setState Wait", at.clone())),
             // fighting.md rule 29 (M5 5c-4): his dying state is a state
             // change too (**ours**: during a jump the same rule 28 applies).
@@ -1403,6 +1406,10 @@ pub fn trap_step(
             }
             Request::ConnorSpecial { items, hold, at } => {
                 let line = connor.start_special(&items, hold, &at);
+                format!("{at}: applied{again}: Connor {line}")
+            }
+            Request::ConnorRepel { position, heading, at } => {
+                let line = connor.repel(position, heading, &at);
                 format!("{at}: applied{again}: Connor {line}")
             }
             Request::ConnorPreSpecial { at } => {

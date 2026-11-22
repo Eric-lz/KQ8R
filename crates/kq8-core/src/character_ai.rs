@@ -177,6 +177,8 @@ impl WorldState {
     pub fn characters_ai(&mut self, ground: &dyn GroundLookup, buildings: &[crate::collide::BuildingCollider], objects: &[crate::collide::BoxCollider]) {
         let update = self.updates;
         let now = self.now();
+        // fighting.md 7b (B3-4): Mandragore roots wake after `rebirthDelay`.
+        self.mandragore_underground_step(now);
         // Rule 21: off (not updated now) → off the list.
         for i in 0..self.anims.len() {
             let a = &self.anims[i];
@@ -242,7 +244,8 @@ impl WorldState {
             ai.unseen = if ai.sees { 0 } else { ai.unseen.saturating_add(1) };
             let wants_in = !ai.active && ai.sees && state == crate::character::State::Wait;
             // Rule 30: from Birth only when he is within its alarm radius.
-            let rises = !ai.active
+            let rises = c.mandragore_root.is_none()
+                && !ai.active
                 && ai.sees
                 && state == crate::character::State::Birth
                 && ai.settings.alarm_radius > 0.0
@@ -282,7 +285,14 @@ impl WorldState {
                 let (x, y) = (p[0] - d * h.sin(), p[1] + d * h.cos());
                 let ground_behind = floor_scene.line_hit([x, y, p[2]], [x, y, p[2] - 100_000.0], 0x8, &a.player.name.to_ascii_lowercase()).map_or(p[2], |(hit, _)| hit[2]);
                 self.tower_rules(i, now, ahead, behind, ground_behind);
+            } else if self.anims[i].character.as_deref().is_some_and(|c| c.mandragore_tree.is_some()) {
+                self.mandragore_tree_rules(i, now);
             } else {
+                if self.anims[i].character.as_deref().is_some_and(|c| {
+                    c.mandragore_root.as_ref().is_some_and(|r| r.phase == crate::mandragore::RootPhase::Alive) && c.state == crate::character::State::Wait
+                }) {
+                    self.check_mandragore_repel(i, "root Wait");
+                }
                 self.alarm_rules(i, now);
             }
             self.idle(i, now);
@@ -792,7 +802,8 @@ impl WorldState {
         let a = &mut self.anims[i];
         let name = a.player.name.clone();
         let Some(c) = a.character.as_deref_mut() else { return };
-        let delay = f64::from(c.random());
+        let is_tree = c.mandragore_tree.is_some();
+        let delay = if is_tree { 0.0 } else { f64::from(c.random()) };
         let Some(ai) = c.ai.as_mut() else { return };
         ai.alarmed = true;
         ai.on_way_home = false;
@@ -802,9 +813,60 @@ impl WorldState {
         let line = format!("alarmed: {why}; reacts in {delay:.2} s (rule 23); chase timer {CHASE_TIME} s; no alarm line in its file (Daventry has none)");
         let team = ai.settings.team.clone();
         self.character_note(&name, line);
-        if !told {
+        if !told && (!is_tree || now > 0.0) {
             self.spread_alarm(i, &name, team.as_deref(), now);
         }
+    }
+
+    /// `KQMandragorTree` (`fighting.md` 7b): ignores `Unborn`/active/`goHome`, takes Connor
+    /// immediately with 0 delay, alerts team (`mand<N>` roots) if game time > 0 without a sight
+    /// check, and refreshes the team's `last_seen` while Connor stays within `alarmRadius`.
+    fn mandragore_tree_rules(&mut self, i: usize, now: f64) {
+        if self.ai_off {
+            self.alarm_rules(i, now);
+            return;
+        }
+        let Some(connor) = self.connor_reported() else {
+            self.alarm_rules(i, now);
+            return;
+        };
+        let (pos, active, alarmed, sees, radius, team, name) = {
+            let a = &self.anims[i];
+            let Some(ai) = a.character.as_deref().and_then(|c| c.ai.as_ref()) else { return };
+            (a.player.base.position, ai.active, ai.alarmed, ai.sees, ai.settings.alarm_radius, ai.settings.team.clone(), a.player.name.clone())
+        };
+        let d = distance(pos, connor);
+        if !alarmed && radius > 0.0 && sees && d < radius {
+            if !active {
+                self.join_active(i, now);
+                if let Some(ai) = self.anims[i].character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+                    if !ai.active {
+                        self.active_list.push(name.to_ascii_lowercase());
+                        ai.active = true;
+                        self.character_note(&name, "KQMandragorTree made active ignoring MaxMonsters (fighting.md 7b)".to_string());
+                    }
+                }
+            }
+            self.alarm(i, &format!("Mandragore tree sees Connor {d:.0} away within alarmRadius {radius:.0} (fighting.md 7b)"), false, now);
+        } else if active && alarmed && now > 0.0 {
+            self.spread_alarm(i, &name, team.as_deref(), now);
+        }
+        let now_active = self.anims[i].character.as_deref().and_then(|c| c.ai.as_ref()).is_some_and(|ai| ai.active);
+        if now_active && radius > 0.0 && d < radius {
+            if let Some(t) = team.as_deref() {
+                for a in &mut self.anims {
+                    if a.gone {
+                        continue;
+                    }
+                    if let Some(ai) = a.character.as_deref_mut().and_then(|c| c.ai.as_mut()) {
+                        if ai.settings.team.as_deref().is_some_and(|u| u.eq_ignore_ascii_case(t)) {
+                            ai.last_seen = Some(connor);
+                        }
+                    }
+                }
+            }
+        }
+        self.alarm_rules(i, now);
     }
 
     /// Rule 24: the active characters with an alarm radius that see Connor

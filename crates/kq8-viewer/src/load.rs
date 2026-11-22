@@ -286,7 +286,7 @@ pub fn load_model(
 /// connor-movement.md "Starting and stopping") and wading (2h, water.md).
 /// Transitions to or via a movement not listed here are skipped. M4 4e-7
 /// adds his gestures; M5 5c-4 his flinch and deaths from a hit.
-pub const CONNOR_MOVEMENTS: [&str; 61] = [
+pub const CONNOR_MOVEMENTS: [&str; 62] = [
     "stop",
     "walk",
     "run",
@@ -336,6 +336,7 @@ pub const CONNOR_MOVEMENTS: [&str; 61] = [
     "gestureh",
     // Hit (M5 5c-4, fighting.md rule 29): the flinch, the deaths.
     "react",
+    "reactback",
     "magicReact",
     "die",
     "dropweapon",
@@ -3460,7 +3461,7 @@ impl Placer<'_> {
                 }
                 None => None,
             };
-            let unborn = list.has("Birth") && !list.has("PreBirth");
+            let unborn = keys.class != kq8_data::characters::Class::MandragorRoot && list.has("Birth") && !list.has("PreBirth");
             CharacterAssets {
                 box_type: pending.as_ref().map(|l| l.type_name.clone()).or_else(|| keys.monster_type.clone()),
                 from: pending.as_ref().map_or_else(|| format!("{label} ({} line {})", load.from, load.line), |l| l.from.clone()),

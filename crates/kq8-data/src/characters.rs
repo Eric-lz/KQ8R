@@ -84,6 +84,10 @@ pub enum Class {
     Death,
     /// `KQTowerSkeleton` (`fighting.md` section 7a): Dead City's tower.
     TowerSkeleton,
+    /// `KQMandragorTree` (`fighting.md` section 7b): Swamp's Mandragore trunk.
+    MandragorTree,
+    /// `KQMandragorRoot` (`fighting.md` section 7b): Swamp's Mandragore root.
+    MandragorRoot,
 }
 
 impl Class {
@@ -99,6 +103,10 @@ impl Class {
             Some(Class::Death)
         } else if c.eq_ignore_ascii_case("KQTowerSkeleton") {
             Some(Class::TowerSkeleton)
+        } else if c.eq_ignore_ascii_case("KQMandragorTree") {
+            Some(Class::MandragorTree)
+        } else if c.eq_ignore_ascii_case("KQMandragorRoot") {
+            Some(Class::MandragorRoot)
         } else {
             None
         }
@@ -110,6 +118,8 @@ impl Class {
             Class::GeometryTalker => "KQGeometryTalker",
             Class::Death => "KQDeath",
             Class::TowerSkeleton => "KQTowerSkeleton",
+            Class::MandragorTree => "KQMandragorTree",
+            Class::MandragorRoot => "KQMandragorRoot",
         }
     }
 }
@@ -630,12 +640,24 @@ pub struct CharacterKeys {
     /// rule 24): fallback start offset `(itemType, [x, y, z])` when the
     /// projectile's `meshName` is absent (`weeper.kq`).
     pub shoot_offsets: Vec<(String, [f32; 3])>,
+    /// `KQMandragorTree` (`fighting.md` 7b): `rootDownCount` (default `0`), `maxRoots` (default `2`).
+    pub root_down_count: i32,
+    pub max_roots: i32,
+    /// `KQMandragorRoot` (`fighting.md` 7b): shoulder offset, rebirth delay, repel distances.
+    pub root_offset: [f32; 3],
+    pub rebirth_delay: f32,
+    pub too_close: f32,
+    pub repel_dist: f32,
 }
 
 /// A character's own collision type and mask when its file sets none
 /// (`characters.md` rule 8, Q122).
 pub const CHARACTER_TYPE: u32 = 0x42;
 pub const CHARACTER_MASK: u32 = 0x281F;
+/// Mandragore trunk and roots start projectile-immune (`0x42 | 0x4000`, `fighting.md` 7b).
+pub const MANDRAGORE_TYPE: u32 = 0x4042;
+/// `KQMandragorRoot` collider mask restored when `Birth` finishes (`fighting.md` 7b).
+pub const MANDRAGORE_ROOT_RESURFACE_MASK: u32 = 0x201f;
 
 impl CharacterKeys {
     /// `None` when the section is not a character.
@@ -644,6 +666,9 @@ impl CharacterKeys {
         let text = |k: &str| s.get(k).map(|v| v.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("").to_string()).filter(|v| !v.is_empty());
         let number = |k: &str| s.number(k).and_then(Result::ok);
         let switch = |k: &str, default: bool| number(k).map_or(default, |v| v != 0.0);
+        let default_type = if matches!(class, Class::MandragorTree | Class::MandragorRoot) { MANDRAGORE_TYPE } else { CHARACTER_TYPE };
+        let is_root = class == Class::MandragorRoot;
+        let is_tree = class == Class::MandragorTree;
         Some(CharacterKeys {
             class,
             anim_file: text("animFile"),
@@ -662,7 +687,7 @@ impl CharacterKeys {
             skin: text("originalBmp").zip(text("alternateBmp")),
             step_up: number("stepUpAmount").map(|v| v as f32),
             step_down: number("stepDownAmount").map(|v| v as f32),
-            collider_type: number("colliderType").map_or(CHARACTER_TYPE, |v| v as i64 as u32),
+            collider_type: number("colliderType").map_or(default_type, |v| v as i64 as u32),
             collider_mask: number("colliderMask").map_or(CHARACTER_MASK, |v| v as i64 as u32),
             goodbye: line_keys(s, "GB"),
             welcome_back: line_keys(s, "WB"),
@@ -693,6 +718,20 @@ impl CharacterKeys {
                     Some((w.first()?.to_string(), [f(1)?, f(2)?, f(3)?]))
                 })
                 .collect(),
+            root_down_count: if is_tree { number("rootDownCount").map_or(0, |v| v as i32) } else { 0 },
+            max_roots: if is_tree { number("maxRoots").map_or(2, |v| v as i32) } else { 2 },
+            root_offset: if is_root {
+                [
+                    number("offsetX").map_or(0.0, |v| v as f32),
+                    number("offsetY").map_or(0.0, |v| v as f32),
+                    number("offsetZ").map_or(0.0, |v| v as f32),
+                ]
+            } else {
+                [0.0; 3]
+            },
+            rebirth_delay: if is_root { number("rebirthDelay").map_or(10.0, |v| v as f32) } else { 10.0 },
+            too_close: if is_root { number("tooClose").map_or(1000.0, |v| v as f32) } else { 1000.0 },
+            repel_dist: if is_root { number("repelDist").map_or(1500.0, |v| v as f32) } else { 1500.0 },
         })
     }
 
@@ -869,6 +908,12 @@ impl AiSettings {
             src(line.chase == Field::FromType),
             src(line.attack_dist == Field::FromType)
         );
+        if matches!(keys.class, Class::MandragorTree | Class::MandragorRoot) && line.alarm_radius == Field::FromType {
+            if let Some(kq_alarm) = keys.alarm_radius {
+                s.alarm_radius = kq_alarm;
+                s.from.push_str("; .kq alarmRadius overrides Monstats.mtl (fighting.md 7b)");
+            }
+        }
         s.tower_alarm(keys)
     }
 
@@ -1530,5 +1575,32 @@ useDynamicLighting 1
 
         let plain = kq_text::parse(b"[Arrow]\nclassType=KQProjectile\n");
         assert!(ProjectileKeys::from_section(&plain[0]).unwrap().weep.is_none());
+    }
+
+    #[test]
+    fn mandragore_keys_and_defaults() {
+        let tree = kq_text::parse(b"[mandragor]\nclassType=KQMandragorTree\ndeadDts=mt_dead.kqs\ntooClose=1600\nrepelDist=1800\n");
+        let tk = CharacterKeys::from_section(&tree[0]).unwrap();
+        assert_eq!(tk.class, Class::MandragorTree);
+        assert_eq!((tk.collider_type, tk.collider_mask), (MANDRAGORE_TYPE, CHARACTER_MASK));
+        assert_eq!((tk.root_down_count, tk.max_roots), (0, 2));
+        // Tree ignores tooClose and repelDist from mandrg.kq (fighting.md 7b).
+        assert_eq!((tk.too_close, tk.repel_dist), (1000.0, 1500.0));
+
+        let root = kq_text::parse(
+            b"[mandragorRootL]\nclassType=KQMandragorRoot\nalarmRadius=15000\noffsetX=-600\noffsetY=-1000\noffsetZ=0\nrebirthDelay=5\ntooClose=700\nrepelDist=800\n",
+        );
+        let rk = CharacterKeys::from_section(&root[0]).unwrap();
+        assert_eq!(rk.class, Class::MandragorRoot);
+        assert_eq!(rk.collider_type, MANDRAGORE_TYPE);
+        assert_eq!(rk.root_offset, [-600.0, -1000.0, 0.0]);
+        assert_eq!((rk.rebirth_delay, rk.too_close, rk.repel_dist), (5.0, 700.0, 800.0));
+
+        // Mandragore .kq alarmRadius (15,000) overrides Monstats.mtl (4,000 / 3,000) when line uses `@`.
+        let types = "[MonsterTypeList]\nclassType=KQMonsterTypeList\nnumTypes=1\ntype0=\tKQMonsterType\tmandragorRootL\t250\t15\t30\t0\tmandrtl.kq\tnone\tnone\tnone\tguard\t3000\t0\t2000\t1.0\n";
+        let (mt, problems) = MonsterTypes::parse(types.as_bytes());
+        assert!(problems.is_empty(), "{problems:?}");
+        let (ml, _) = MonsterList::from_section(&kq_text::parse(LIST.as_bytes())[0]);
+        assert_eq!(AiSettings::from_line(&rk, &ml.lines[3], &mt.types[0]).alarm_radius, 15_000.0);
     }
 }

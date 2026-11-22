@@ -1994,6 +1994,23 @@ impl ConnorSim {
         line
     }
 
+    /// `KQMandragorRoot` proximity knock-back (`fighting.md` 7b): moves Connor horizontally to
+    /// `position` keeping Z, faces `heading` (toward the parent tree), and enters `Special reactback`.
+    pub fn repel(&mut self, position: [f32; 3], heading: f32, at: &str) -> String {
+        let old = (self.mover.position, self.walker.heading);
+        self.mover.position = position;
+        self.walker.heading = heading;
+        self.current = (self.mover.position, self.walker.heading, self.walker.phase, self.walker.bank);
+        self.previous = self.current;
+        let spec = self.start_special(kq8_core::mandragore::REPEL_MOVEMENT, false, at);
+        let line = format!(
+            "repelled from ({:.0}, {:.0}, {:.0}) heading {:.3} to ({:.0}, {:.0}, {:.0}) heading {:.3}; {spec}",
+            old.0[0], old.0[1], old.0[2], old.1, position[0], position[1], position[2], heading
+        );
+        self.log.detail(format!("connor update {}: {line} ({at})", self.updates));
+        line
+    }
+
     /// The share of the movement playing now that one update plays, for
     /// blending the drawn frame between updates.
     fn phase_step_now(&self) -> f32 {

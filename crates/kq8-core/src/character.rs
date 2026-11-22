@@ -192,6 +192,10 @@ pub struct Character {
     pub pre_birth: bool,
     /// `KQTowerSkeleton` (`fighting.md` 7a, T-1): its own values.
     pub tower: Option<crate::tower_skeleton::TowerSkeleton>,
+    /// `KQMandragorTree` (`fighting.md` 7b, B3-4): trunk state.
+    pub mandragore_tree: Option<crate::mandragore::MandragorTree>,
+    /// `KQMandragorRoot` (`fighting.md` 7b, B3-4): shoulder root state.
+    pub mandragore_root: Option<crate::mandragore::MandragorRoot>,
     /// Its part in the fight (M5 5c, `fighting.md`), set by the loader for
     /// a monster-list line; `None` = it never fights.
     pub fight: Option<crate::fight::Fight>,
@@ -275,6 +279,8 @@ impl Character {
             geometry,
             mouth_moves: false,
             tower: None,
+            mandragore_tree: None,
+            mandragore_root: None,
             pre_birth: false,
             random_stop: flags & kq8_data::characters::RANDOM_STOP != 0,
             birth_delay,
@@ -882,7 +888,7 @@ impl Character {
     }
 
     /// Wait (rule 13): asks for `Stop`, random by `flags` bit 0x10.
-    fn enter_wait(&mut self, player: &mut NamedAnimPlayer, notes: &mut Vec<String>) {
+    pub(crate) fn enter_wait(&mut self, player: &mut NamedAnimPlayer, notes: &mut Vec<String>) {
         self.state = State::Wait;
         self.start_up_in_state(player, notes);
         self.special.clear();

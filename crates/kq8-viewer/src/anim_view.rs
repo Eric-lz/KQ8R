@@ -462,7 +462,7 @@ pub fn spawn_animated(
         // A character's ball is its rule-9 box.
         // A character's states (M4 4d-3).
         let mut character = a.character.as_ref().map(|c| {
-            let has_birth = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("Birth"));
+            let has_birth = c.keys.class != kq8_data::characters::Class::MandragorRoot && a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("Birth"));
             Box::new(kq8_core::character::Character::new(
                 c.keys.class == kq8_data::characters::Class::GeometryTalker,
                 c.keys.flags,
@@ -485,6 +485,14 @@ pub fn spawn_animated(
             if k.class == kq8_data::characters::Class::TowerSkeleton {
                 ch.tower = Some(kq8_core::tower_skeleton::TowerSkeleton::new(k.real_alarm, k.stun_pause, k.react_pause, 0.0));
             }
+            if k.class == kq8_data::characters::Class::MandragorTree {
+                ch.gravity = false;
+                ch.mandragore_tree = Some(kq8_core::mandragore::MandragorTree::new(k.root_down_count, k.max_roots));
+            }
+            if k.class == kq8_data::characters::Class::MandragorRoot {
+                ch.gravity = false;
+                ch.mandragore_root = Some(kq8_core::mandragore::MandragorRoot::new(k.root_offset, k.rebirth_delay, k.too_close, k.repel_dist));
+            }
             ch.hits_buildings = k.collider_mask & 0x8 != 0;
             // M4 4d-12-3: what Connor's scene needs to make it solid.
             (ch.collision_type, ch.collision_mask) = (k.collider_type, k.collider_mask);
@@ -492,7 +500,7 @@ pub fn spawn_animated(
             // character-movement.md (M5 5a-4): its rules; home = where it
             // was placed; the eye at the top of its box (rule 20).
             let eye = ch.bounds.map_or(1000.0, |(_, max)| max[2]);
-            let has_hide = a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("hide"));
+            let has_hide = k.class != kq8_data::characters::Class::MandragorRoot && a.movements.iter().any(|(n, _, _)| n.eq_ignore_ascii_case("hide"));
             ch.unborn = c.unborn;
             let mut ai = kq8_core::character_ai::Ai::new(c.ai.clone(), p.position, eye, has_hide);
             // fighting.md rule 2 (M5 5c-1): its stats.
@@ -512,7 +520,7 @@ pub fn spawn_animated(
                 let step = kq8_core::connor_mover::STEP;
                 ch.mover = Some(Box::new(kq8_core::connor_mover::Mover::character(
                     p.position,
-                    k.gravity,
+                    ch.gravity,
                     min,
                     max,
                     (k.collider_type, k.collider_mask),

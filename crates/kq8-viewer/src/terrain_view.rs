@@ -339,6 +339,18 @@ pub fn setup_objects(
             None
         }
     };
+    let corpse_bounds: std::collections::BTreeMap<String, ([f32; 3], [f32; 3])> = objects
+        .corpse_shapes
+        .keys()
+        .filter_map(|k| {
+            bounds
+                .as_ref()
+                .and_then(|t| t.lookup(k))
+                .map(|e| (e.min, e.max))
+                .or_else(|| objects.shapes.iter().find(|(n, _)| n.eq_ignore_ascii_case(k)).map(|(_, m)| (m.min, m.max)))
+                .map(|b| (k.clone(), b))
+        })
+        .collect();
     commands.insert_resource(crate::shadow_view::ShadowWorld { mask: objects.shadow_world_mask, allow: objects.allow_shadows });
     let balls = crate::draw_distance::ShapeBalls::new(bounds, objects.shapes.iter().map(|(name, m)| (name.as_str(), m.min, m.max)));
     // Animated objects whose movement plays or can be switched (3c,
@@ -470,7 +482,7 @@ pub fn setup_objects(
     }
     crate::item_view::spawn_items(&mut commands, item_looks, &built, &mut object_materials, &balls);
     // fighting.md rule 32 (M5 5c-7): the corpses' models.
-    crate::item_view::spawn_corpses(&mut commands, std::mem::take(&mut objects.corpse_shapes), &built);
+    crate::item_view::spawn_corpses(&mut commands, std::mem::take(&mut objects.corpse_shapes), &built, corpse_bounds);
     // potions.md rule 20 (M5 5g-4): the shield's orbit.
     crate::potion_view::spawn_orbit(&mut commands, std::mem::take(&mut objects.orbit), &built, &mut object_materials);
     // M5 5d-3: the templates' models, for copies loaded while playing.
