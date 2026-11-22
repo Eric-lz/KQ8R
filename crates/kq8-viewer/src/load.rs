@@ -2949,25 +2949,48 @@ impl Placer<'_> {
         }
     }
 
-    /// `KQObject::setScript <character> <file>` in a start-up script
+    /// `KQObject::setScript <name> <file>` in a start-up script
     /// (Daventry's `newWorld.cs`: "sprigan by knights tomb is in
-    /// monsters.kq but needs a special cs file"): the character placed
-    /// so far under that name runs `<file>` from now on (`none` removes
-    /// it). **From the data**, no behaviour note (Q154).
+    /// monsters.kq but needs a special cs file"; Swamp's `newWorld.cs`:
+    /// `tile02..tile54` `fiensafe.cs`): any character, animated object,
+    /// placed object collider/clickable, door, or trap placed so far
+    /// under that name runs `<file>` from now on (`none` removes it).
+    /// **From the data**, no behaviour note (Q154).
     fn set_character_script(&mut self, name: &str, value: &str, words: &[String], at: &str) -> Option<String> {
         let script = (!value.eq_ignore_ascii_case("none")).then(|| value.to_string());
         let mut found = false;
+        let mut char_found = false;
         for m in self.monsters.iter_mut().filter(|m| m.name.eq_ignore_ascii_case(name)) {
             m.script = script.clone();
             found = true;
+            char_found = true;
         }
         for a in self.animated.iter_mut().filter(|a| self.placed[a.placed].0.name.eq_ignore_ascii_case(name)) {
             a.script = script.clone();
             found = true;
+            char_found = true;
         }
-        let line = if found { format!("{at}: {}: character script now {script:?}", words.join(" ")) } else { format!("{at}: {}: not an item or a character; not run at load", words.join(" ")) };
+        for (i, (p, _, _)) in self.placed.iter().enumerate() {
+            if p.name.eq_ignore_ascii_case(name) {
+                if let Some(info) = self.collision.get_mut(i) {
+                    info.script = script.clone();
+                }
+                found = true;
+            }
+        }
+        for d in self.doors.iter_mut().filter(|d| d.placement.name.eq_ignore_ascii_case(name)) {
+            d.script = script.clone();
+            found = true;
+        }
+        for t in self.traps.iter_mut().filter(|t| t.name.eq_ignore_ascii_case(name)) {
+            t.script = script.clone();
+            found = true;
+        }
+        let line = if found { format!("{at}: {}: script now {script:?}", words.join(" ")) } else { format!("{at}: {}: no object by that name; not run at load", words.join(" ")) };
         self.item_lines.push(line.clone());
-        self.character_lines.push(line);
+        if char_found {
+            self.character_lines.push(line);
+        }
         None
     }
 

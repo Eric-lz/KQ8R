@@ -944,13 +944,15 @@ other Swamp commands and liquid immunity not yet played by hand):
   `KQConner::addImmunity` / `Journey` liquid damage immunity masking (Swamp
   `0x100` vs Poison `0x40`) — still unit/log-verified only.
 - **Swamp gas-tile puzzle (`KQSwampTile` and Connor `Tile2` state — checked
-  live `2026-11-22` with open bugs):** `Rtswdoor` (`hmhand`), puzzle
-  cutscene start, and 10 × 7 `Tile2` movement/rock throws work almost
-  flawlessly, and throwing a rock triggers tile flames; **open bugs:**
-  every tile triggers flames with no safe tile recognized and Clarity does
-  not highlight safe tiles (`2c`), tile flames do not hurt Connor (`2d`),
-  and the 6 side flaming-arrow towers (3 per side, none in the center row)
-  do not work (`2e`).
+  live `2026-11-22`; `B3-F1` fix pending live re-check):** `Rtswdoor`
+  (`hmhand`), puzzle cutscene start, and 10 × 7 `Tile2` movement/rock
+  throws work almost flawlessly; **fixed in `B3-F1` (logs verified, pending
+  live re-check):** startup `KQObject::setScript` now assigns `fiensafe.cs`
+  to the 12 safe tiles so safe tiles do not fire flames and highlight under
+  Clarity (`2c`), and tile flame damage works with `F3` god mode off (`2d`
+  was caused by god mode being on; log polished); **still open:** the 6
+  side flaming-arrow towers (`totem.01`–`06`, 3 per side) await Study
+  Session (A) on `Q200` / `KQCueEvent 500` (`2e`).
 - **Mandragore (`KQMandragorTree` and `KQMandragorRoot` — checked live by eye
   `2026-11-22`):** shoulder-linked roots that follow tree turns, knock
   Connor back with `reactback`, sink temporarily when killed while freezing

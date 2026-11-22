@@ -1,20 +1,21 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-recording the user's live visual check of **Script Coverage Batch 3 (Swamp)**
-(`B3-1`..`B3-5`). Read with `AGENTS.md`,
+**Batch 3 fix `B3-F1`** (safe Swamp tiles / Clarity startup `setScript` fix,
+god-mode log polish, and `Q200`). Read with `AGENTS.md`,
 `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the
 top). The short public summary is `README.md`; the detailed "what works"
 list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
 
-- **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5`,
+- **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`,
   `794` workspace unit tests; headless `--sound off` Swamp viewer logs;
   live user play check 2026-11-22: `B3-4` Mandragores confirmed working by
-  eye, `B3-2`/`B3-3` gas-tile puzzle checked in play with 3 open bugs
-  recorded (`2c`, `2d`, `2e`) plus `2b` first-person camera note; `B3-1`
-  commands & liquid immunity still unit/log-verified only):**
+  eye, `B3-2`/`B3-3` gas-tile puzzle checked in play; `2c` fixed in `B3-F1`
+  and `2d` traced to `F3` god mode — pending re-check by eye; `2e`
+  awaiting `Q200`; `2b` first-person camera note; `B3-1` commands & liquid
+  immunity still unit/log-verified only):**
   - **Swamp script commands & liquid immunity (`B3-1`):** `KQConner::pay`
     (`INVITEM_` fallback, `unapply` + empty hand/ready-weapon when spent),
     `KQConner::setRelDamage` (`$CurRelDamage` / `$CurRelHealth`),
@@ -25,27 +26,32 @@ list is `docs/FEATURES.md`.
     `KQConner::addImmunity` / `Journey::immunities` masking liquid damage
     (Swamp `0x100` vs Poison `0x40`). Intentional `Swamp/boiloil.cs:4` `beep`
     typo left unimplemented (`script-commands.md` rule 5).
-  - **`KQSwampTile` gas traps & Clarity Reveal (`B3-2`):** all 42 tiles
-    parsed (`heightNum`, `damFactor = 0.48`), clickable (`INVITEM_Rock`),
-    multi-pair static/animated `ChangeBmp` meant to highlight only the 12
-    safe tiles (`fiensafe.cs`) on Clarity `Reveal`, `0`-damage projectile hits
-    spawn auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250` while armed,
-    and Connor collisions on `> 2.0 s` resettable cooldown subtract
-    `trunc(-level * 10 * damFactor)` health directly + 1 `Fire` hit. **Live
-    check 2026-11-22:** throwing a rock onto a tile launches flames, **open
-    bug 2c** (every tile launches flames on rock/jump with no safe tile
-    recognized, and Clarity does not highlight the safe tiles), and **open
-    bug 2d** (flames are not hurting Connor).
+  - **`KQSwampTile` gas traps & Clarity Reveal (`B3-2` + `B3-F1`):** all 42
+    tiles parsed (`heightNum`, `damFactor = 0.48`), clickable (`INVITEM_Rock`),
+    multi-pair static/animated `ChangeBmp` highlights only the 12 safe tiles
+    (`fiensafe.cs`) on Clarity `Reveal`, `0`-damage projectile hits spawn
+    auto-deleted `swmpgas.kqs` at `+750`/`+1,000`/`+1,250` while armed, and
+    Connor collisions on `> 2.0 s` resettable cooldown subtract
+    `trunc(-level * 10 * damFactor)` health directly + 1 `Fire` hit. **`B3-F1`
+    fix:** startup `KQObject::setScript` in `load.rs` now updates placed
+    static clickables (`collision`) as well as items/characters, fixing bug
+    `2c` (all 12 `fiensafe.cs` safe tiles now register `Init`, emit no gas/damage
+    when touched, and highlight on Clarity `Reveal` in Swamp logs — pending
+    user re-check by eye); bug `2d` was `F3` god mode suppressing tile damage
+    in the user's run (log message now says `damage skipped (god mode on)`;
+    unsafe `tile53` drops health `150 -> 78 -> 77` with `F3` off — pending
+    user re-check by eye).
   - **`Tile2` Connor state & built-in rock throw (`B3-3`):** state `16,384`
     (`10 × 7` grid placing `tile00..tile56` in cols `2..=7` plus row-3 West/East
     door spots), 4 forbidden empty-corner edge blocks, lit stone highlight,
     row-3 door cues (`fiendoor Cue 1`, `Rtswdoor ConnorAction "do"`), `Die`
     allowed while `tileExit 0` holds, weapon-swap refusal `0/0/37/23`, and
-    built-in `Tile2` rock throw (`handsOff 1` -> `away` -> `Prrock.kq`
+    built-in `Tile2` rock throw (`handsOff 1` -> `away` -> `throw` with `Prrock.kq`
     `throw` -> `handsOff 0`, staying in `Tile2`). **Live check 2026-11-22:**
     `Rtswdoor` (`hmhand`), puzzle cutscene start, and `Tile2` play work almost
-    flawlessly; **open bug 2e** (the 6 side flaming-arrow towers, 3 per side,
-    none in the center row, are not working).
+    flawlessly; **open bug `2e` (`Q200` queued in `docs/behaviour/QUESTIONS.md`):**
+    the 6 side flaming-arrow towers (`totem.01`–`06`, 3 per side, none in the
+    center row) await Study Session (A)'s trace of `KQCueEvent 500`.
   - **Mandragore (`B3-4`, `KQMandragorTree` & `KQMandragorRoot` — confirmed
     working by eye in play 2026-11-22):** `0x4042` (`ProjImmune`) + `0`-damage
     `Special laugh`, `.kq` `alarmRadius` (`15,000`) override, immediate
@@ -63,10 +69,10 @@ list is `docs/FEATURES.md`.
     missing command (only `beep`), `0` missing Connor states (`Tile2` is
     `built`), and `KQSwampTile` / `KQMandragorTree` / `KQMandragorRoot` all
     `named`.
-  - **Next:** Investigate and fix Swamp puzzle open bugs `2c` (safe tiles /
-    Clarity highlight), `2d` (tile flame damage on Connor), and `2e` (6 side
-    flaming-arrow towers), then Study Session (A) Batch 4 (Gnome; `Q199` part
-    b still open).
+  - **Next:** User re-checks Clarity highlighting (`2c`) and unsafe tile
+    damage with `F3` off (`2d`) live in Swamp; Study Session (A) traces `Q200`
+    (`KQCueEvent 500` for `2e` / `totem.01`–`06`) plus Batch 4 (Gnome; `Q199`
+    part b still open).
 
 - **2026-11-20/21 (B): `Q197`–`Q198` + Script Coverage Batch 1 + `B1-F1`/`B1-F1b`/`B1-F2` built**
   (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1" and "Batch 1 follow-up fixes";

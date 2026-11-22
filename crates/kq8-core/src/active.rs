@@ -4923,7 +4923,13 @@ impl Active {
                 } else {
                     "no placement: no gas".to_string()
                 };
-                if !self.world.god_mode && !self.world.connor_dying && !self.world.connor_roping {
+                let dmg_note = if self.world.god_mode {
+                    "damage skipped (god mode on)"
+                } else if self.world.connor_dying {
+                    "damage skipped (Connor dying)"
+                } else if self.world.connor_roping {
+                    "damage skipped (Connor roping)"
+                } else {
                     if let Some(mut c) = self.world.connor_stats {
                         let delta = crate::swamp_tile::touch_health_delta(c.level, tile.dam_factor);
                         let before = c.stats.0[0];
@@ -4934,8 +4940,9 @@ impl Active {
                         self.world.fight_note("Connor", format!("KQSwampTile {name} (damFactor {}): health {before} -> {after} ({delta}, direct; tile-puzzle.md rule 40)", tile.dam_factor));
                     }
                     self.world.hit_connor_full(name, 1, crate::fight::HitKind::Fire, false, false);
-                }
-                format!("{name}: unsafe armed KQSwampTile touch: {gas_note}; direct health drop + 1 Fire hit (tile-puzzle.md rule 40)")
+                    "direct health drop + 1 Fire hit"
+                };
+                format!("{name}: unsafe armed KQSwampTile touch: {gas_note}; {dmg_note} (tile-puzzle.md rule 40)")
             };
             self.world.note(format!("game time {now:.3} s: {line}"));
             if !self.world.con_collision.contains(&key) {

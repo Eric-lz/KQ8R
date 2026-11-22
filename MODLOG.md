@@ -3,6 +3,17 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 3 fix B3-F1: Startup `KQObject::setScript` for placed objects (safe Swamp tiles & Clarity), god-mode log polish, and `Q200`
+- **Changed:** `crates/kq8-viewer/src/load.rs` (`set_character_script` now also updates `self.collision` entries matched via `self.placed`, `self.doors`, and `self.traps` during world startup scripts, and logs `script now ...` to `items.log`), `crates/kq8-core/src/active.rs` (`connor_touch` logs `damage skipped (god mode on)` / `Connor dying` / `Connor roping` instead of claiming a health drop when god mode suppresses it), `docs/behaviour/QUESTIONS.md` (added `Q200` tracing `KQCueEvent 500` on `KQObject` projectile launchers across Swamp/Daventry/Dead City), `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `docs/provenance/README.md`.
+- **Why:** Fix live check bug `2c` (`newWorld.cs` lines 209–220 `KQObject::setScript tileXX fiensafe.cs` was skipped at load because `load.rs` only handled items and characters, leaving all 42 `KQSwampTile`s unsafe and unhighlighted by Clarity), clarify bug `2d` (the Swamp playtest log showed `F3` god mode was active at update 150, suppressing tile damage; polished the log message), and queue `Q200` for Study Session (A) to trace `KQCueEvent 500` for bug `2e` (`totem.01`–`06`).
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; two headless `--sound off --no-ai` Swamp runs without `--god` (`--at 60000,100600,0 --lift 2000 --console "give Clarity 1",1 ... --key left:IDCTL_HEALTHBAR_7,3` on safe `tile54`; `--at 60000,98600,0 --lift 2000 --frames 30` on unsafe `tile53`), inspecting `items.log`, `doors.log`, and `fight.log`. **Live visual check of Clarity highlighting and non-god tile damage in Swamp is pending.**
+- **Result:** All 794 workspace tests pass (5 `kq8-audio`, 612 `kq8-core`, 150 `kq8-data`, 27 `kq8-viewer`). Startup logs confirm all 12 `fiensafe.cs` tiles (`tile02`, `tile11`, `tile16`, `tile20`, `tile23`, `tile26`, `tile31`, `tile32`, `tile34`, `tile35`, `tile45`, `tile54`) receive `fiensafe.cs` (`Init` runs at update 0), Clarity `Reveal True` queues green highlights on only those 12 safe tiles (`no highlight` on the 30 unsafe tiles), safe `tile54` touch produces no gas/damage, and unsafe `tile53` touch without `--god` spawns `swmpgas.kqs` at `z+1250`, drops health `150 -> 78 -> 77`, and triggers `react` (`RESULT: PASS`).
+- **Still broken / not tested:**
+  - Live visual confirmation in Swamp of Clarity green tile highlights (`2c`) and unsafe tile damage with `F3` god mode off (`2d`).
+  - **Bug `2e` (`totem.01`–`06` flaming projectiles):** awaiting Study Session (A) answer to `Q200` on `KQCueEvent 500`.
+  - **Note `2b` (`Rtswdoor` `setFirstPerson` camera):** user to check original camera behavior later.
+- **Next:** User checks Clarity + tile damage (`F3` off) live in Swamp; Study Session (A) traces `Q200` (`KQCueEvent 500`), then implement `KQCueEvent 500` in Batch 3 fix `B3-F2`.
+
 ## 2026-11-22 Batch 3 user visual check: Mandragores verified; Swamp gas-tile puzzle bugs recorded
 - **Changed:** `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md` (documentation only; no Rust code changed).
 - **Why:** Record the user's 2026-11-22 live in-game check of Batch 3 (Swamp) in `kq8-viewer` before diagnosing or fixing any bugs.
