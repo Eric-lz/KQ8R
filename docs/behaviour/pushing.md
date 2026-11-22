@@ -334,6 +334,43 @@ Words used here:
     Before the class runs, the pedestal's model lights are rebuilt; it
     is deleted straight after, so that has no visible effect.
 
+### Gnome's boulder (`KQBoulder`) (traced and data, Batch 4)
+
+12a. **Inheritance and setup:** `KQBoulder` is a `KQAnimObject` subclass
+     used by Gnome's single pushable boulder (`Gnome/boulder.kq`:
+     `colliderType=257` = `0x101` physical pushable, `colliderMask=15`,
+     `useGravity=0`, `collisionShape=1`, looping `pushston.kqs`). When
+     added to the world, it forces itself active, unfreezes its
+     animation, advances one update (`1/15 s`, `0.0667 s`) so
+     `pushston.kqs` initializes, records its starting position as `prevPos`
+     (persisted in saves), and queues `KQCueEvent 50` on itself **`0.5 s`**
+     later.
+12b. **Freezing after start:** When `KQCueEvent 50` arrives, `KQBoulder`
+     clears its forced-active flag and freezes its animation so the boulder
+     stays still instead of rolling in place. (All other cues delegate to
+     `KQObject`'s cue handler.)
+12c. **Rolling while pushed:** Because `colliderType` has `0x100`
+     (physical pushable) and not `0x10000`, pushing moves the boulder with
+     the normal physical push rule (rules 2–6). On Connor collision, if
+     **Connor is in `Push` state** AND the boulder's position differs from
+     `prevPos` by at least **`1e-6`** on any axis:
+     - Computes the horizontal yaw from Connor's position toward `prevPos`
+       (the direction Connor is pushing) plus **`π`** (`180°`, matching
+       `pushston.kqs`'s roll axis), and queues a `KQMoveEvent` **`0.1 s`**
+       later with relative position `(0, 0, 0)` and **absolute rotation**
+       `(0, 0, yaw + π)` to turn the boulder along its roll direction.
+     - Updates `prevPos` to the boulder's current position.
+     - Temporarily clears Connor's bit (`0x4`) from its collision mask,
+       unfreezes its animation, advances `pushston.kqs` by **one update
+       (`1/15 s`)**, then re-freezes the animation and restores its
+       collision mask.
+12d. **Drop sequence (data):** When pushed within `3,500` units of
+     `bouldtrp` (`Gnome/bouldtrp.cs`), the script moves `boulder` off the
+     ledge, plays `boulder2.kq` (`rockdrop.kqs` + `bldrfall.aud`), deletes
+     `boulder2`, and moves `boulder` to `(101950, 91915, 17470)`; pushing
+     it within `3,000` of `bouldtp2` (`bouldtp2.cs`) cues `brikwall` (`Cue
+     1`), which deletes `boulder`.
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -449,9 +486,10 @@ Words used here:
 
 ## Open questions
 
-1. The other pushable classes (`KQBoulder` in Gnome, `KQPushTile` in
-   Temple 3, the Barren symbols as `KQDoor`) may react in their own
-   way; not traced. (`KQPaddleObject`: rules 11a–11h, 2026-10-27.)
+1. The other pushable classes (`KQPushTile` in Temple 3, the Barren
+   symbols as `KQDoor`) may react in their own way; not traced.
+   (`KQBoulder` in Gnome is now covered in rules 12a–12d; `KQPaddleObject`
+   in rules 11a–11h, 2026-10-27.)
    Paddle details still open: one engine flag the push sets (the
    conversation code sets the same one; meaning unknown); when exactly
    an `AnimOnce` object reports its end; none of rules 11a–11h checked

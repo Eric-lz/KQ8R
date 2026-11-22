@@ -1,13 +1,36 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-**Batch 3 fix `B3-F3`** (`KQCueEvent 500` object projectile launchers per
-**`Q200`**) and **`B3-F2`** (`StaticTexture` basename fix for Clarity Swamp
-tile highlights). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
-`MODLOG.md` (newest entries at the top). The short public summary is
-`README.md`; the detailed "what works" list is `docs/FEATURES.md`.
+Study Session (A) covered **Batch 4 (Gnome)** and answered **`Q199` part (b)**,
+following **Batch 3 fix `B3-F3`** (`KQCueEvent 500` object projectile launchers
+per **`Q200`**) and **`B3-F2`** (`StaticTexture` basename fix for Clarity
+Swamp tile highlights). Read with `AGENTS.md`, `docs/DESIGN.md`,
+`docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top). The short public
+summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
+
+- **2026-11-22 (A): Script Coverage Batch 4 (Gnome) + `Q199` (b) studied**
+  (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not
+  checked by hand in the running original**; no Rust code written):
+  - **Gnome script commands (`script-commands.md` 12c–12e, `object-lighting.md`
+    rule 12):** `conClickItem <obj>` synchronously dispatches an empty-hand
+    `ConnorAction` (`do`) from Connor (bypassing reach/turn/`handsOff`/queue)
+    and returns `1`; `cls` is a debug-console clear (safe no-op returning `0`);
+    `useAlternateLightmap <interior> <0|1>` switches `usingAltLighting`,
+    immediately reloads `.dil` (`gnome13`/`14` in Gnome, `temple` in Temple 4),
+    and re-uploads lightmap textures.
+  - **Gnome's boulder (`KQBoulder`, `pushing.md` 12a–12d):** advances
+    `pushston.kqs` 1 frame on add and freezes on `Cue 50` after `0.5 s`; when
+    pushed by Connor in `Push` state (`Δ ≥ 1e-6`), queues a `KQMoveEvent`
+    `0.1 s` later setting absolute yaw `yaw + π` and advances `pushston.kqs`
+    by 1 frame.
+  - **Popup sounds (`Q199` b, `interface.md` rules 55–56):** normal popup
+    open, Left/Right arrows, button/checkbox clicks, and Enter all play
+    `button1.aud` in **sound group 1** (F1 Help Book open plays `intrface.aud`
+    in **sound group 1**).
+  - **Next:** Implementation Session (B) can build Batch 4 (Gnome) and verify
+    group 1 for `Q199`b; Study Session (A) is ready for Batch 5 (Barren).
 
 - **2026-11-22 (A): `KQCueEvent 500` object projectile launchers (`Q200`)
   studied** (traced in `Mask.exe` via Ghidra and checked against all 5

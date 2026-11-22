@@ -694,15 +694,25 @@ Traced 2026-11-20 (Batch 1).
     - **Controls:** shows an **OK** button (`#148` in `500.MSG`), and
       for numbers `< 170` also shows the **"Turn off Help Getting
       Started"** checkbox (`#147`, displaying `X` when checked).
-    - Plays **`intrface.aud`** and **pauses the game** while open.
-      Clicking OK (or pressing Enter or F1) hides the popup and
-      **unpauses the game**. Clicking the checkbox flips starting help
-      off/on (`0 ↔ 1`), unless permanently disabled (`2`).
-56. **F1 Help Book browse mode:** pressing **F1** opens `IDCTL_POPUP` in
-    browse mode over a fixed **24-entry table** of `500.MSG` condition
-    numbers: **`127–146`, `149–151`, `153`** (indices `0–23`), with
-    **Close** (`#155`), **`<<`**, and **`>>`** buttons (and left/right
-    arrow keys) wrapping around `0 ↔ 23`.
+    - **Opening and controls (Q199 b):** opening `IDCTL_POPUP` in normal /
+      starting-help mode plays **`button1.aud`** as a plain one-shot in
+      **sound group 1** (menu/screen sounds: SFX slider, unaffected by
+      speech ducking and not paused when the popup pauses the game) and
+      **pauses the game** while open. Clicking OK, clicking the checkbox,
+      or pressing Enter all route through the same control-action handler,
+      which plays **`button1.aud`** in **sound group 1** at entry;
+      clicking OK (or pressing Enter or F1) hides the popup and **unpauses
+      the game**. Clicking the checkbox flips starting help off/on (`0 ↔
+      1`), unless permanently disabled (`2`).
+56. **F1 Help Book browse mode (Q199 b):** pressing **F1** opens
+    `IDCTL_POPUP` in browse mode over a fixed **24-entry table** of
+    `500.MSG` condition numbers: **`127–146`, `149–151`, `153`**
+    (indices `0–23`), playing **`intrface.aud`** in **sound group 1** on
+    open, with **Close** (`#155`), **`<<`**, and **`>>`** buttons (and
+    left/right arrow keys) wrapping around `0 ↔ 23`. Moving the button
+    highlight with Left/Right arrows, clicking any button, or pressing
+    Enter all play **`button1.aud`** as a plain one-shot in **sound
+    group 1**.
 57. **`notStartingHelp <0|1|2>`:** sets the starting-help switch (`0` =
     tips shown, `1` = turned off by player, `2` = permanently disabled /
     greyed out in Options). The shipped `MASK/Options.cs` runs

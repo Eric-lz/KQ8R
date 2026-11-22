@@ -133,15 +133,28 @@ and shady sides differ only a little (30–42%).
 
 ## Rules: buildings (`.dig` + `.dil`)
 
-12. **Which `.dil`** (traced). A building (`KQInterior`) on hardware uses
-    `<shapeName>.dil` (same base name as the `.dig`). Exception: if its
-    `.kq` names `althwLightmapName` **and** the alternate lighting is on
-    (`usingAltLighting=1` in the file, or the console command
-    `useAlternateLightmap <name> 1`), it uses that file instead. The
+12. **Which `.dil`** (traced, expanded Batch 4). A building (`KQInterior`)
+    on hardware uses `<shapeName>.dil` (same base name as the `.dig`).
+    Exception: if its `.kq` names `althwLightmapName` **and** the alternate
+    lighting is on (`usingAltLighting=1` in the file, or via
+    `useAlternateLightmap <name> <0|1>`), it uses that file instead. The
     software renderer uses `swLightmapName` / `altswLightmapName` (the
     `*_s.dil` files); ignore those. Daventry names no alternates: every
-    building uses its own `.dil`. (Alternates exist only in Gnome and
-    Temple 4, switched by `fusebox.cs` and `altar.cs`.)
+    building uses its own `.dil`.
+    - **`useAlternateLightmap <interiorName> <0|1>`** requires 3 words
+      (else prints its usage line and returns `0`). It looks up the named
+      object and requires it to be a `KQInterior` (prints `useAlternateLightmap:
+      Could not find object <name>` if missing; silently does nothing if
+      another class). It stores the nonzero/zero flag in the building's
+      `usingAltLighting` field (persisted in saved games), immediately loads
+      the chosen `.dil` (`althwLightmapName` when on and present, else
+      `<shapeBase>.dil` on hardware; `altswLightmapName` / `swLightmapName`
+      on software), swaps the building's active lightmap, and flushes/re-uploads
+      the building's lightmap textures at once, leaving `$Console::Return = 0`.
+    - Shipped alternate pairs exist only in Gnome and Temple 4, switched
+      by `Gnome/fusebox.cs` and `temple4/altar.cs`: Gnome `gnome13`
+      (`gnome13.dil` ↔ `gnome13l.dil`), Gnome `gnome14` (`gnome14.dil` ↔
+      `gnome14l.dil`), and Temple 4 `temple` (`tmpl401.dil` ↔ `tmpl401r.dil`).
 
 ### `.dil` layout (`ITRLighting`), traced and measured on all 235 files
 

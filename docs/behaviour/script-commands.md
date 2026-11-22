@@ -167,6 +167,34 @@ hints with no visible gameplay effect.
     Swamp `swhnchmn.cs` (`Connor`), Gnome `armorgnm.cs`, `brikwall.cs`,
     `gnometlk.cs`, `weapngnm.cs`, Barren `chest1.cs`, `symbol.cs`, Ice World
     `grifnymp.cs`.
+12c. **`conClickItem <objectName>` (traced and data, Batch 4):** requires
+     exactly 2 words (`conClickItem <objectName>`); otherwise prints usage
+     and sets `$Console::Return = 0`. Looks up `<objectName>` as a `KQObject`
+     (if missing, prints `conClickItem: can't find object name <name>`,
+     returns `0`) and looks up Connor (if missing, prints
+     `conClickItem: can't find Connor`, returns `0`). Creates an empty-hand
+     (`do`, no held item) `ConnorAction` event from Connor and dispatches it
+     **synchronously** directly to the target object's event handler,
+     bypassing reach checks, turning Connor, `handsOff`, and the event
+     queue. Returns **`1`** (`$Console::Return = 1`) whenever both the
+     target object and Connor exist. Data: 38 uses across Gnome (28, e.g.
+     `armorgnm.cs`, `brnzplat.cs`, `chnmlst.cs`, `myarmor.cs` auto-picking
+     up armor pieces from the armory stand) and Barren (10).
+12d. **`cls` (traced and data, Batch 4):** built-in debug console command
+     that clears the debug console's scrollback line buffer and returns
+     `0` (`$Console::Return = 0`). Has no gameplay or visual effect; safe
+     no-op returning `0`. Data: 1 use (`Gnome/EMPTYLOC.CS` line 10,
+     developer leftover).
+12e. **`useAlternateLightmap <interiorName> <0|1>` (traced and data, Batch
+     4):** requires exactly 3 words (otherwise prints usage, returns `0`).
+     Looks up `<interiorName>` as a `KQInterior` (prints
+     `useAlternateLightmap: Could not find object <name>` if missing;
+     silently ignores non-interiors) and switches its alternate lightmap
+     flag (`0` = normal `.dil`, nonzero = `althwLightmapName` on hardware)
+     with immediate lightmap reload and texture re-upload; returns `0`.
+     Full rules in `object-lighting.md` rule 12. Data: 5 uses — Gnome
+     `fusebox.cs` (`gnome13`, `gnome14` on/off) and `temple4/altar.cs`
+     (`temple` on).
 
 ### Loading, cache, timing, and persistence hints
 
@@ -195,6 +223,9 @@ hints with no visible gameplay effect.
 | `loadAnim` shipped uses | 20 scripts | data |
 | `KQConner::setRelDamage` shipped uses | 8 scripts (`arwtrap1–3.cs` 0.5, `fienfir*.cs` .2, `rollside.cs` 0.2, `witchdoc.cs` 1.0) | data |
 | `KQMonster::preSpecial` shipped uses | 8 scripts | data |
+| `conClickItem` | 38 uses (Gnome 28, Barren 10); returns `1` on success | traced, data |
+| `useAlternateLightmap` | 5 uses (Gnome 4, `temple4` 1); returns `0` | traced, data |
+| `cls` | 1 use (`Gnome/EMPTYLOC.CS`); no-op returning `0` | traced, data |
 
 ## Data used
 
@@ -203,7 +234,8 @@ hints with no visible gameplay effect.
 - `MASK/swamp/kq/{boiloil,arwtrap1,arwtrap2,arwtrap3,fienfire,fienfir2,fienfir3,swhnchmn}.cs`.
 - `MASK/IceWorld/kq/{icelord,lucreto,sentry,grifnymp}.cs` (`Preload`, `preSpecial`).
 - `MASK/Barren/kq/{dockup,gsetup,witchdoc,chest1,symbol}.cs` (`setcat`, `setRelDamage`, `preSpecial`).
-- `MASK/Gnome/kq/{rollside,armorgnm,brikwall,gnometlk,weapngnm}.cs`.
+- `MASK/Gnome/kq/{rollside,armorgnm,brikwall,gnometlk,weapngnm,fusebox,brnzplat,chnmlst,myarmor}.cs`.
+- `MASK/temple4/kq/altar.cs`.
 - `MASK/daventry/kq/{drawings,girl,horsie,ax}.cs`,
   `MASK/temple2/kq/cauldtp.cs` (`getConnorFlag`, `mouseAction`).
 - `MASK/swamp/kq/fienfir*.cs`, `MASK/temple4/kq/vortrap.cs`,
@@ -248,6 +280,13 @@ hints with no visible gameplay effect.
     movement, then `KQMonster::setState Connor Special ...`: confirm the
     `Special` movement starts immediately and cached movement resets to
     `"Stop"`.
+  - Run `conClickItem <item>` on a placed world item: confirm it picks the
+    item directly into Connor's inventory without reach/turn/`handsOff`
+    checks and sets `$Console::Return = 1`.
+  - Run `cls`: confirm it is accepted as a no-op returning `$Console::Return
+    = 0`.
+  - Run `useAlternateLightmap gnome13 1` then `0` in Gnome: confirm
+    `gnome13` swaps immediately between `gnome13.dil` and `gnome13l.dil`.
 
 ## Open questions
 
