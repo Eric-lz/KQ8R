@@ -415,7 +415,8 @@ damage, and Reveal highlights.
     comment-only script `fiensafe.cs` (`KQObject::setScript`), which
     marks them as safe; the remaining 30 have **no script** and act as
     unsafe gas traps. Six totems (`totem.01`–`totem.06`, `totem.kq`) stand
-    along the west side (x = 44,727) and repeat `Cue 500` every 8 s while
+    along the west side (x = 44,727) and repeat `Cue 500` every 8 s
+    (see `ranged-weapons.md` section 9) while
     both `Swamp::Tile::SwitchOn` (toggled by `traplvr.cs`, starts `true`)
     and `Swamp::Tile::PowerOn` are true. Entry into `Tile2` comes from
     `swdoor.cs` (east double doors unlocked with `INVITEM_hmhand`),

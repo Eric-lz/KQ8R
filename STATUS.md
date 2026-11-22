@@ -1,13 +1,35 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-**Batch 3 fix `B3-F1`** (safe Swamp tiles / Clarity startup `setScript` fix,
-god-mode log polish, and `Q200`). Read with `AGENTS.md`,
+Session A answered **`Q200`** (`KQCueEvent 500` object projectile launchers,
+unblocking Swamp bug `2e`), following **Batch 3 fix `B3-F1`** (safe Swamp
+tiles / Clarity startup `setScript` fix, god-mode log polish, and `Q200`).
+Read with `AGENTS.md`,
 `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the
 top). The short public summary is `README.md`; the detailed "what works"
 list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
+
+- **2026-11-22 (A): `KQCueEvent 500` object projectile launchers (`Q200`)
+  studied** (traced in `Mask.exe` via Ghidra and checked against all 5
+  launcher families in `MASK/`; **not checked by hand in the running
+  original**; no Rust code written):
+  - **Behaviour (`ranged-weapons.md` section 9, `clicking.md` rule 21):**
+    `KQCueEvent 500 [<n2>] [<n3>]` on `KQObject` **first** launches
+    `projectileFile` and **then** falls through to run the object's
+    `script` with `Cue 500 <n2> [<n3>]`. `shootOffset` rotates with the
+    launcher's orientation (`dirX`/`Y`/`Z`, no `meshName` lookup), while
+    `relAimPoint` stays in world axes (`aim = start + relAimPoint`).
+    Damage is `n2` if `1 ≤ n2 ≤ 99,999`, else `objProjDamage` (default
+    `20`), with `weaponType` (`1` `Projectile`, `2` `Fire`) and
+    `mustReact` from the projectile `.kq`, no built-in launch/hit sounds
+    (scripts/victims handle sounds), standard `KQProjectile` collision
+    (launcher ignored), and `Die` running on contact, `maxDistance`, and
+    floor hits (`PRfire2.kq` → `GAME/Kq/swmpfrbl.cs` → `endfrbl.kqs`).
+  - **Next:** Implementation Session (B) can now implement `KQCueEvent 500`
+    (`B3-F2`, Swamp bug `2e`); `Q199` part (b) and Batch 4 (Gnome) remain
+    for Study Session (A).
 
 - **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`,
   `794` workspace unit tests; headless `--sound off` Swamp viewer logs;

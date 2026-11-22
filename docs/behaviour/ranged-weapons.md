@@ -594,6 +594,96 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
   `fighting.md` rule 16). The weeper's bolt never sends a hit (it only
   drains), so on it the key changes nothing.
 
+### 9. Object projectile launchers (`KQCueEvent 500`) (traced and data, Q200)
+
+Static traps and scenery objects (`totem.01`–`06` in Swamp, `shooter1`–`3`
+in Swamp, `arrotrp1`–`3` in Daventry, and `firetrap` / `firetrp2` /
+`skultrap` in Dead City) fire projectiles when a script sends them a
+`KQCueEvent` whose first number is **500**.
+
+34. **Order of actions (Q200 a):** When any `KQObject` (or any subclass
+    that delegates unhandled cues to `KQObject`'s cue handler, including
+    animated objects and traps) receives `KQCueEvent 500 [<n2>] [<n3>]`,
+    it **first** spawns and launches a projectile from its
+    `projectileFile`, and **then** falls through to run its own `script`
+    (if it has one) with `$1` = object name, `$2` = `Cue`, `$3` = `500`,
+    `$4` = `<n2>`, and `$5` = `<n3>` (omitted when `<n3>` is `0`). Unlike
+    cue `3333` (`EndLoop`), cue `500` does **not** suppress the `Cue`
+    script call: launcher scripts (`Swamp/totem.cs`,
+    `Daventry/arrotrp1–2.cs`, `DeadCity/firetrap.cs`, `firetrp2.cs`)
+    rely on this fall-through to play launch sounds and schedule the
+    next `sendEvent ... KQCueEvent 500 0`.
+35. **Start position and aim direction (Q200 b):** A launcher's `.kq`
+    file supplies `projectileFile`, `shootOffsetX`/`Y`/`Z` (default
+    `0, 0, 0`), `relAimPointX`/`Y`/`Z` (default `0, 0, 0`), and
+    `objProjDamage` (default `20`):
+    - **`shootOffset`** is in the launcher's own model space: it is
+      **rotated by the launcher's full orientation** (`dirX`, `dirY`,
+      `dirZ`, row-vector multiplication, matching Connor and characters)
+      and added to the launcher's world position to form the launch
+      point (`start = launcher_pos + rotate(shootOffset)`). Unlike
+      Connor and characters (rule 24), `Cue 500` never inspects
+      `meshName` on the launcher's model.
+    - **`relAimPoint`** is in **world axes (not rotated by the
+      launcher's orientation)**: the aim point passed to launch is
+      `(launcher_pos + relAimPoint) + rotate(shootOffset)`, i.e.
+      `start + relAimPoint`. Thus the projectile flies straight along the
+      unrotated `relAimPoint` vector in world space.
+    - Confirmed across all five launcher families in the game's data:
+      - Swamp `totem.01`–`06` (`totem.kq`, `dirZ=1.57`,
+        `shootOffsetZ=1075`, `relAimPointX=1000`): launches from `z +
+        1,075` (`17,420`) straight east (`+X`) across the puzzle tiles;
+      - Daventry `arrotrp1` (`dirZ=1.57`, `relAimPointX=1000` → `+X`) vs
+        `arrotrp2`–`3` (`dirZ=-1.57`, `relAimPointX=-1000` → `-X`);
+      - Dead City `firetrap` (`dirX=-0.81, dirZ=3.14`,
+        `relAimPointY=1000` → `+Y`) vs `firetrp2` (`dirX=-0.63, dirZ=0`,
+        `relAimPointY=-1000` → `-Y`);
+      - Dead City `skultrap` (`dirX=-0.72, dirZ=-1.57`,
+        `relAimPointX=-1000` → `-X`);
+      - Swamp `shooter1`–`3` (`dir=0`, `shootOffsetY=-300`,
+        `relAimPointY=-1000` → `-Y`).
+36. **Damage, hit kind, and sounds (Q200 c):**
+    - **Damage:** If the `KQCueEvent`'s second integer (`n2`) is between
+      **1 and 99,999** inclusive (`0 < n2 < 100,000`), the projectile
+      carries damage **`n2`** (used by Swamp `arwtrap1`–`3.cs` passing
+      `$CurRelHealth` after `KQConner::setRelDamage 0.5`). Otherwise
+      (`n2 ≤ 0` or `n2 ≥ 100,000`, including omitted `n2` which defaults
+      to `0`), the projectile carries the launcher's **`objProjDamage`**
+      (default **`20`**; no `.kq` file in the game overrides
+      `objProjDamage`).
+    - **Hit kind and forced reaction:** Read from the projectile `.kq`
+      file's `weaponType` (default `1` = `Projectile`; `0` = `Normal`,
+      `2` = `Fire` as in `PRfire.kq` and `PRfire2.kq`, `3` = `Ice`) and
+      `mustReact` (default `0`; `1` in `Swamp/PRarrow2.kq`, forcing the
+      victim to flinch regardless of roll).
+    - **Sounds:** Neither `KQCueEvent 500` nor `KQProjectile` launch or
+      contact plays a sound (only rock removal with `weaponType = 4`
+      plays a landing sound). Launch sounds come solely from scripts
+      (`Daventry/arrotrp1–2.cs` `Crossbow.aud`, `DeadCity/firetrap.cs` /
+      `firetrp2.cs` `fireball.aud`, `Swamp/arwtrap1–3.cs`
+      `crossbow.aud`; `Swamp/totem.cs` and `DeadCity/skultrap.cs` play
+      no launch sound). Hit sounds come from the victim's own hit
+      handler (`fighting.md` rules 24, 29).
+37. **Collision, lifetime, and `Die` script (Q200 d):**
+    - Object-launched projectiles use the exact same `KQProjectile`
+      class, auto-generated `NoName<N>` name, and defaults as character
+      bolts (rules 26–30): collision type `1`, mask `0x1F`,
+      `collisionShape = 1` (ball stack built from `BOUNDS.KQ` for its
+      `shapeName`, e.g. `swmpfrbl.kqs` −70..70 × −110..110 × 0..130 →
+      radius `110`), `collisionDetail = 1` (projectiles pass through
+      each other), speed default `2,000`, `maxDistance` default `8,000`,
+      and the **launcher object itself is ignored** on contact.
+    - On **any** end — collision contact (moved to the contact point,
+      keeping current `z` when the contact has no 3D point), exceeding
+      `maxDistance`, or reaching/falling below the floor grid — the
+      projectile runs its own `script` (if any) with `Die
+      <lastWeaponType>` (default `Normal`, since nothing hits the
+      projectile itself) and then deletes itself. In Swamp, `PRfire2.kq`
+      (`velocity=9000`, `maxDistance=21000`, `weaponType=2`,
+      `script=swmpfrbl.cs`) runs `GAME/Kq/swmpfrbl.cs` on `Die`, which
+      reads `KQObject::getLoc $1` and spawns `loadAnim @ endfrbl.kqs
+      0.0 1.0 0 0 $KQObject::loc` with `setDeleteWhenDone $ObjectName 1`.
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -622,6 +712,9 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
 | immune bit | collision type 0x4000 → 0 damage, `ProjImmune` | traced |
 | swing target | picked thing within 2,350; kept until another pick | traced |
 | turn before swing | > 45° off: swing when ≤ 8 updates of turn left | traced |
+| `KQCueEvent 500` | launch `projectileFile`, then run script `Cue 500` | traced |
+| `Cue 500` damage | `n2` if `1 ≤ n2 ≤ 99,999`, else `objProjDamage` (default 20) | traced |
+| `Cue 500` vectors | `shootOffset` rotated by launcher; `relAimPoint` world axes | traced |
 
 ## Data used
 
@@ -641,7 +734,14 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
   `scbstop.KQS`, `spbattck.KQS`).
 - `<world>/kq/pr*.kq`: `velocity`, `maxDistance`, `shapeName`,
   `meshName`, `weaponType`, `emitter`, `colliderMask`, `shadowMask`,
-  `script` (rocks).
+  `script` (rocks and `swmpfrbl.cs`), `mustReact`.
+- Object projectile launchers (`.kq` keys `projectileFile`,
+  `shootOffsetX/Y/Z`, `relAimPointX/Y/Z`, `objProjDamage`):
+  `Swamp/totem.{kq,cs}` (`PRfire2.kq`, `GAME/Kq/swmpfrbl.cs`),
+  `Swamp/shooter.{kq,cs}` (`PRarrow2.kq`, `arwtrap1–3.cs`,
+  `whacker1–3.cs`), `Daventry/arrotrp1–3.kq` (`arrotrp1–2.cs`,
+  `arrofire.kq`), `DeadCity/firetrap.{kq,cs}`, `firetrp2.{kq,cs}`
+  (`PRfire.kq`), `skultrap.{kq,cs}` (`PRarrow.kq`).
 - `GAME/patch/BOUNDS.KQ`: the bolts' boxes.
 - Scripts: `KQConner::setDoMode`, `KQConner::setRequiredWeaponMode`.
 
@@ -668,6 +768,12 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
   surface (buildings are in its mask).
 - Bolts already flying keep flying when the shooter dies or Connor
   changes weapon.
+- `Swamp/tiletrap.cs` also sends `KQCueEvent 500` to `totem.07`, which
+  does not exist in `Swamp/newworld.cs` (ignored cleanly like any
+  missing event target).
+- Object-launched projectiles with a `script` (such as Swamp's
+  `PRfire2.kq` → `GAME/Kq/swmpfrbl.cs`) run `Die` on collision contact,
+  `maxDistance` expiry, and floor-grid contact alike.
 
 ## Do not reproduce
 
@@ -686,6 +792,10 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
   the first shot only, from whatever frame plays then): keep it; a
   character's `attack` is always the movement playing at its `do` cue,
   so the result is the same.
+- **Missing `projectileFile` on `KQCueEvent 500`:** in the original,
+  sending `KQCueEvent 500` to an object with no `projectileFile` (or an
+  unreadable file) dereferences a null pointer and crashes. Instead, log
+  a warning, skip launching, and still run the object's `Cue 500` script.
 - Keep the rest, including no ammunition and the steepness limit.
 
 ## How to check
@@ -703,6 +813,18 @@ projectile keys: `duration`, `suckFile`, `suckEnd`, `suckSound`,
   ground the floor grid stops it before the range's end).
 - Weeper drain: log Connor's health each update while drained; expect
   −1 every 4th update, 11 in all for `duration` 3, then Connor in Wait.
+- **Object projectile launchers (`KQCueEvent 500`, added 2026-11-22,
+  Q200):**
+  - Swamp `totem.01`–`06`: once `Swamp::Tile::PowerOn` becomes `true`,
+    each totem launches `PRfire2.kq` (`swmpfrbl.kqs`) from `(44,727, y,
+    17,420)` straight east (`+X`, velocity `9,000`), dealing `20` `Fire`
+    damage to Connor if hit, spawning auto-deleted `endfrbl.kqs` on
+    `Die` (whether hitting an object/wall or exceeding `21,000` range),
+    and rescheduling its next `KQCueEvent 500` every 8 s via `totem.cs`.
+  - Swamp `shooter1`: `arwtrap1.cs` sends `KQCueEvent 500 $CurRelHealth`
+    (after `KQConner::setRelDamage 0.5`), overriding the `20` default
+    with half Connor's health, whereas `whacker1.cs` sends `0` and uses
+    the default `20` (`PRarrow2.kq`, `Projectile` with `mustReact=1`).
 
 **Our logs (B):** per request: the key or slot, the state (taken or
 dropped), the mode asked, the movements played (`away` / `out` /

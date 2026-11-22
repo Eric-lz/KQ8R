@@ -164,9 +164,10 @@ gets.
       (already right).
     - **`Cue <n1> <n2> [<n3>]`** for a `KQCueEvent` (`doors.md` rule 23),
       with two reserved first numbers: **3333** gives `EndLoop` (above)
-      instead of `Cue`, and **500** launches the object's projectile
-      instead of calling the script (combat; not studied). No script in
-      any world sends either number by hand (data).
+      instead of `Cue`, and **500** first launches the object's
+      `projectileFile` **and then** still calls the script with `Cue 500
+      <n2> [<n3>]` (`ranged-weapons.md` section 9; 37 script lines across
+      Daventry, Dead City, and Swamp send `KQCueEvent 500`).
     - `ConnorAction`, `TooFar`, `Die`, `ProjImmune`, `ConnorCollision`,
       `WorldCollision` as described in `doors.md` and
       `connor-collision.md`.
@@ -326,7 +327,7 @@ whose script says `KQMonster::speak Connor Connor …`.
 | not-clickable building type in the data | 0x88 (`colliderType=136`) | data |
 | reach | 2 × `attackDist` = 4,700 | traced (`doors.md`) |
 | reach to a building | Connor to its `.dig` header box, in the building's axes | traced |
-| reserved cue numbers | 3333 = `EndLoop`, 500 = projectile | traced |
+| reserved cue numbers | 3333 = `EndLoop` (replaces `Cue`), 500 = launch projectile then `Cue` | traced |
 
 ## Data used
 
