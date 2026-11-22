@@ -932,22 +932,31 @@ the logs and unit tests only.
 ## Script coverage batch 3 — Swamp (2026-11-21/22, steps B3-1 to B3-5)
 
 Verified across `794` workspace unit tests and headless Swamp `--sound off`
-viewer logs only (**not yet checked by eye or played by hand**).
+viewer logs; checked live by the user on `2026-11-22` (Mandragores confirmed
+working by eye; gas-tile puzzle mostly working with open bugs noted below;
+other Swamp commands and liquid immunity not yet played by hand):
 
 - **Swamp script helpers and liquid immunity:** `KQConner::pay`,
   `KQConner::setRelDamage`, `KQMonster::preSpecial`, `setFirstPerson`
-  state tracking, and `Connor.kq` / `KQConner::addImmunity` / `Journey`
-  liquid damage immunity masking (Swamp `0x100` vs Poison `0x40`).
-- **Swamp gas-tile puzzle (`KQSwampTile` and Connor `Tile2` state):** all
-  42 tiles, Clarity `Reveal` green highlights on safe tiles only, armed
-  gas puffs (`swmpgas.kqs`) and `damFactor` + `Fire` touch damage, 10 × 7
-  `Tile2` jumping rules with lit stone highlighting and row-3 door cues,
-  and built-in `Tile2` rock throwing.
-- **Mandragore (`KQMandragorTree` and `KQMandragorRoot`):** shoulder-linked
-  roots that follow tree turns, knock Connor back with `reactback`, sink
-  temporarily while freezing the tree's turn (`noTurn`), laugh at
-  projectile hits (`0x4042`), and die permanently with a solid
-  `mt_dead.kqs` tree corpse (`20,000` XP).
+  state tracking (note `2b`: clicking `Rtswdoor` plays Connor's hand-slot
+  animation and speech in third person while first-person camera awaits its
+  own step; user to verify original behavior later), and `Connor.kq` /
+  `KQConner::addImmunity` / `Journey` liquid damage immunity masking (Swamp
+  `0x100` vs Poison `0x40`) — still unit/log-verified only.
+- **Swamp gas-tile puzzle (`KQSwampTile` and Connor `Tile2` state — checked
+  live `2026-11-22` with open bugs):** `Rtswdoor` (`hmhand`), puzzle
+  cutscene start, and 10 × 7 `Tile2` movement/rock throws work almost
+  flawlessly, and throwing a rock triggers tile flames; **open bugs:**
+  every tile triggers flames with no safe tile recognized and Clarity does
+  not highlight safe tiles (`2c`), tile flames do not hurt Connor (`2d`),
+  and the 6 side flaming-arrow towers (3 per side, none in the center row)
+  do not work (`2e`).
+- **Mandragore (`KQMandragorTree` and `KQMandragorRoot` — checked live by eye
+  `2026-11-22`):** shoulder-linked roots that follow tree turns, knock
+  Connor back with `reactback`, sink temporarily when killed while freezing
+  the tree's turn (`noTurn`), laugh at projectile hits (`0x4042`), and die
+  permanently alongside the tree transforming into a solid `mt_dead.kqs`
+  dead trunk (`20,000` XP).
 
 ## Viewer helpers (not in the original)
 
