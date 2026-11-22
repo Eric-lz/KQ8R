@@ -1,12 +1,13 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-Study Session (A) covered **Batch 4 (Gnome)** and answered **`Q199` part (b)**,
-following **Batch 3 fix `B3-F3`** (`KQCueEvent 500` object projectile launchers
-per **`Q200`**) and **`B3-F2`** (`StaticTexture` basename fix for Clarity
-Swamp tile highlights). Read with `AGENTS.md`, `docs/DESIGN.md`,
-`docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top). The short public
-summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
+recording the user's live visual checks of **`B3-F2`** (Clarity Swamp tile
+highlights) and **`B3-F3`** (Swamp shooting totems) and queuing **`Q201`**
+(missing projectile wall-impact sound) alongside Study Session (A)'s
+completed study of **Batch 4 (Gnome)** and **`Q199` part (b)**. Read with
+`AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest
+entries at the top). The short public summary is `README.md`; the detailed
+"what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
 
@@ -30,7 +31,8 @@ summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
     `button1.aud` in **sound group 1** (F1 Help Book open plays `intrface.aud`
     in **sound group 1**).
   - **Next:** Implementation Session (B) can build Batch 4 (Gnome) and verify
-    group 1 for `Q199`b; Study Session (A) is ready for Batch 5 (Barren).
+    group 1 for `Q199`b; Study Session (A) is ready for **`Q201`** (projectile
+    wall-impact sound) and Batch 5 (Barren).
 
 - **2026-11-22 (A): `KQCueEvent 500` object projectile launchers (`Q200`)
   studied** (traced in `Mask.exe` via Ghidra and checked against all 5
@@ -48,17 +50,18 @@ summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
     (scripts/victims handle sounds), standard `KQProjectile` collision
     (launcher ignored), and `Die` running on contact, `maxDistance`, and
     floor hits (`PRfire2.kq` → `GAME/Kq/swmpfrbl.cs` → `endfrbl.kqs`).
-  - **Next:** User checks `B3-F2` (Clarity tile highlights) and `B3-F3` (Swamp
-    shooting totems `totem.01`–`06`) live in Swamp; `Q199` part (b) and
-    Batch 4 (Gnome) remain for Study Session (A).
+  - **Next:** `KQCueEvent 500` implemented in `B3-F3` and confirmed by eye
+    (`2026-11-22`); missing wall-impact sound queued as **`Q201`** for Study
+    Session (A).
 
 - **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`..`B3-F3`,
   `796` workspace unit tests; headless `--sound off` Swamp viewer logs;
-  live user play check 2026-11-22: `B3-4` Mandragores, safe Swamp tiles,
-  rock throws onto unsafe tiles, and tile flame damage confirmed working by
-  eye; `B3-F2` Clarity highlights and `B3-F3` 6 shooting totems built and
-  log-verified — pending visual check by eye; `2b` first-person camera note;
-  `B3-1` commands & liquid immunity still unit/log-verified only):**
+  live user play checks 2026-11-22: `B3-4` Mandragores, safe Swamp tiles,
+  rock throws onto unsafe tiles, tile flame damage, `B3-F2` Clarity tile
+  highlights, and `B3-F3` 6 shooting totems confirmed working by eye;
+  missing projectile wall-impact sound queued as `Q201`; `2b` first-person
+  camera note; `B3-1` commands & liquid immunity still unit/log-verified
+  only):**
   - **Swamp script commands & liquid immunity (`B3-1`):** `KQConner::pay`
     (`INVITEM_` fallback, `unapply` + empty hand/ready-weapon when spent),
     `KQConner::setRelDamage` (`$CurRelDamage` / `$CurRelHealth`),
@@ -78,9 +81,9 @@ summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
     `trunc(-level * 10 * damFactor)` health directly + 1 `Fire` hit. **Live
     check 2026-11-22 (`B3-F1`):** safe tiles, rock throws onto unsafe tiles,
     and flame damage on Connor all confirmed working by eye! **`B3-F2` fix:**
-    `StaticTexture` now strips archive prefixes (`texture_basename`) so
-    Clarity swaps all 24 static parts on the 12 safe tiles in `viewer.log` —
-    pending visual re-check by eye.
+    `StaticTexture` strips archive prefixes (`texture_basename`), and **live
+    check 2026-11-22** confirmed Clarity highlights the safe Swamp tiles as
+    expected.
   - **`Tile2` Connor state & built-in rock throw (`B3-3`):** state `16,384`
     (`10 × 7` grid placing `tile00..tile56` in cols `2..=7` plus row-3 West/East
     door spots), 4 forbidden empty-corner edge blocks, lit stone highlight,
@@ -92,10 +95,11 @@ summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
     flawlessly; **`B3-F3` fix (`Q200`):** `KQCueEvent 500` object projectile
     launchers (`ObjectLauncher` + rotated `shootOffset` + unrotated world
     `relAimPoint` + `mustReact` + fall-through to script `Cue 500` + `Die Normal`
-    at dead bolt coords via `KQObject::getLoc`) built and log-verified: all 6
-    side towers (`totem.01`–`06`) fire `PRfire2.kq` (`9000` units/s, range
-    `21000`, `Fire`, damage `20`) every 8 s and `swmpfrbl.cs` spawns
-    auto-deleted `endfrbl.kqs` explosions — pending visual check by eye.
+    at dead bolt coords via `KQObject::getLoc`) confirmed working by eye
+    (**live check 2026-11-22**): the 6 side towers (`totem.01`–`06`) shoot
+    across the puzzle, burst into `endfrbl.kqs`, and hit/damage Connor as
+    expected; **open item `Q201`:** missing built-in impact sound when a
+    projectile hits the wall behind Connor (`fiengate1`).
   - **Mandragore (`B3-4`, `KQMandragorTree` & `KQMandragorRoot` — confirmed
     working by eye in play 2026-11-22):** `0x4042` (`ProjImmune`) + `0`-damage
     `Special laugh`, `.kq` `alarmRadius` (`15,000`) override, immediate
@@ -113,9 +117,9 @@ summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
     missing command (only `beep`), `0` missing Connor states (`Tile2` is
     `built`), and `KQSwampTile` / `KQMandragorTree` / `KQMandragorRoot` all
     `named`.
-  - **Next:** User checks `B3-F2` Clarity highlighting (`2c`) and `B3-F3` Swamp
-    shooting totems (`2e`, `totem.01`–`06`) live in Swamp; Study Session (A)
-    studies Batch 4 (Gnome) plus `Q199` part (b).
+  - **Next:** Study Session (A) traces **`Q201`** (projectile wall-impact
+    sound) plus Batch 5 (Barren); Implementation Session (B) implements
+    Batch 4 (Gnome) + `Q199`b sound group 1.
 
 - **2026-11-20/21 (B): `Q197`–`Q198` + Script Coverage Batch 1 + `B1-F1`/`B1-F1b`/`B1-F2` built**
   (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1" and "Batch 1 follow-up fixes";
