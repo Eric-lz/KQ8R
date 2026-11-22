@@ -95,6 +95,10 @@ pub struct WallLights {
     pub name: String,
     pub data: Arc<WallData>,
     pub atlas: Arc<LightAtlas>,
+    normal_data: Arc<WallData>,
+    normal_atlas: Arc<LightAtlas>,
+    alt: Option<(Arc<WallData>, Arc<LightAtlas>)>,
+    pub using_alt: bool,
     /// This copy's own light picture and haze factors.
     pub image: Handle<Image>,
     pub factors: Handle<ShaderBuffer>,
@@ -106,8 +110,64 @@ pub struct WallLights {
 }
 
 impl WallLights {
-    pub fn new(name: String, data: Arc<WallData>, atlas: Arc<LightAtlas>, image: Handle<Image>, factors: Handle<ShaderBuffer>, collider: Option<usize>) -> Self {
-        WallLights { name, data, atlas, image, factors, collider, lit: Vec::new() }
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        name: String,
+        normal_data: Arc<WallData>,
+        normal_atlas: Arc<LightAtlas>,
+        alt: Option<(Arc<WallData>, Arc<LightAtlas>)>,
+        using_alt: bool,
+        image: Handle<Image>,
+        factors: Handle<ShaderBuffer>,
+        collider: Option<usize>,
+    ) -> Self {
+        let active_alt = using_alt && alt.is_some();
+        let (data, atlas) = if active_alt {
+            let (d, a) = alt.as_ref().expect("checked");
+            (d.clone(), a.clone())
+        } else {
+            (normal_data.clone(), normal_atlas.clone())
+        };
+        WallLights {
+            name,
+            data,
+            atlas,
+            normal_data,
+            normal_atlas,
+            alt,
+            using_alt: active_alt,
+            image,
+            factors,
+            collider,
+            lit: Vec::new(),
+        }
+    }
+
+    /// Switches between the normal `.dil` and alternate `.dil` lightmap
+    /// (`object-lighting.md` rule 12) and uploads the base atlas immediately.
+    pub fn set_alternate(&mut self, use_alt: bool, images: &mut Assets<Image>) -> &'static str {
+        let want_alt = use_alt && self.alt.is_some();
+        if use_alt && self.alt.is_none() {
+            return "no alternate lightmap loaded";
+        }
+        self.using_alt = want_alt;
+        if want_alt {
+            let (d, a) = self.alt.as_ref().expect("checked");
+            self.data = d.clone();
+            self.atlas = a.clone();
+        } else {
+            self.data = self.normal_data.clone();
+            self.atlas = self.normal_atlas.clone();
+        }
+        self.lit.clear();
+        if let Some(mut img) = images.get_mut(&self.image) {
+            if let Some(bytes) = img.data.as_mut() {
+                if bytes.len() == self.atlas.rgba.len() {
+                    bytes.copy_from_slice(&self.atlas.rgba);
+                }
+            }
+        }
+        if want_alt { "alternate" } else { "normal" }
     }
 }
 
@@ -261,10 +321,62 @@ pub fn light_walls(
 mod tests {
     use super::*;
 
+    fn empty_dil() -> BuildingLight {
+        let mut d = Vec::new();
+        for v in [5u32, 4, 0, 0, 0, 0, 0, 0] {
+            d.extend(v.to_le_bytes());
+        }
+        d.extend(0u32.to_le_bytes());
+        let mut body = (11i16).to_le_bytes().to_vec();
+        body.extend(b"ITRLighting\0");
+        body.extend(4i32.to_le_bytes());
+        body.extend(d);
+        let mut out = b"PERS".to_vec();
+        out.extend((body.len() as u32).to_le_bytes());
+        out.extend(body);
+        BuildingLight::parse(&out).unwrap()
+    }
+
     #[test]
     fn box_distance_is_zero_inside() {
         assert_eq!(box_distance([1.0, 1.0, 1.0], [0.0; 3], [2.0; 3]), 0.0);
         assert_eq!(box_distance([5.0, 1.0, 1.0], [0.0; 3], [2.0; 3]), 3.0);
         assert_eq!(box_distance([5.0, 6.0, 1.0], [0.0; 3], [2.0; 3]), 5.0);
+    }
+
+    #[test]
+    fn set_alternate_swaps_atlas_and_writes_image() {
+        let mut images = Assets::<Image>::default();
+        let dil = empty_dil();
+        let normal_atlas = Arc::new(LightAtlas::white(0));
+        let mut alt_atlas_val = LightAtlas::white(0);
+        alt_atlas_val.rgba = vec![10, 20, 30, 255];
+        let alt_atlas = Arc::new(alt_atlas_val);
+        let normal_data = Arc::new(WallData { light: dil.clone(), facing: Vec::new(), min: [0.0; 3], max: [0.0; 3], lightable: Vec::new() });
+        let alt_data = Arc::new(WallData { light: dil, facing: Vec::new(), min: [0.0; 3], max: [0.0; 3], lightable: Vec::new() });
+        let image = images.add(normal_atlas.image());
+
+        let mut w = WallLights::new(
+            "gnome13".into(),
+            normal_data.clone(),
+            normal_atlas.clone(),
+            Some((alt_data, alt_atlas)),
+            false,
+            image.clone(),
+            Handle::default(),
+            None,
+        );
+        assert!(!w.using_alt);
+        assert_eq!(w.set_alternate(true, &mut images), "alternate");
+        assert!(w.using_alt);
+        assert_eq!(images.get(&image).unwrap().data.as_deref(), Some(&[10, 20, 30, 255][..]));
+
+        assert_eq!(w.set_alternate(false, &mut images), "normal");
+        assert!(!w.using_alt);
+        assert_eq!(images.get(&image).unwrap().data.as_deref(), Some(&[255, 255, 255, 255][..]));
+
+        let mut plain = WallLights::new("plain".into(), normal_data, normal_atlas, None, true, image, Handle::default(), None);
+        assert!(!plain.using_alt);
+        assert_eq!(plain.set_alternate(true, &mut images), "no alternate lightmap loaded");
     }
 }

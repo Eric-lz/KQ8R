@@ -254,6 +254,8 @@ pub enum Request {
     AllowShadows { allow: bool, at: String },
     /// `KQCamera::shake <seconds> <xMax> <xPeriod> <zMax> <zPeriod>` (`camera.md`).
     CamShake { seconds: f32, x_max: f32, x_period: f32, z_max: f32, z_period: f32, at: String },
+    /// `useAlternateLightmap <interiorName> <0|1>` (`object-lighting.md` rule 12).
+    UseAlternateLightmap { name: String, alt: bool, at: String },
 }
 
 /// A panel command of a script (`interface.md` rule 15, M4 4c-2).
@@ -995,6 +997,8 @@ pub struct WorldState {
     pub allow_shadows: bool,
     /// Whether `world.cs` explicitly set `allowShadows` on load (so `Journey` preserves world settings).
     pub allow_shadows_from_world: bool,
+    /// Per-interior `useAlternateLightmap` flags (`object-lighting.md` rule 12; lower-case name -> alt).
+    pub alt_lightmaps: BTreeMap<String, bool>,
     /// Connor's forward or back key is held now (`character-movement.md`
     /// rule 25, Q133 b; a scripted walk sends no key), set by the caller.
     pub connor_move_key: bool,
@@ -3119,6 +3123,45 @@ impl WorldState {
         "0".into()
     }
 
+    /// `useAlternateLightmap <interiorName> <0|1>` (`object-lighting.md` rule 12,
+    /// `script-commands.md` rule 12e): switches a `KQInterior` between its normal
+    /// `.dil` lightmap and its `althwLightmapName`.
+    fn use_alternate_lightmap(&mut self, words: &[String], at: &str) -> String {
+        let [_, name, flag] = words else {
+            self.note(format!("{at}: usage: useAlternateLightmap <object> <0|1>; nothing"));
+            return "0".into();
+        };
+        if !self.is_gone(name) {
+            if let Some(canonical) = self
+                .buildings
+                .iter()
+                .find(|b| b.name.eq_ignore_ascii_case(name))
+                .map(|b| b.name.clone())
+            {
+                let alt = number_value(flag) != 0.0;
+                self.alt_lightmaps.insert(canonical.to_ascii_lowercase(), alt);
+                self.requests.push(Request::UseAlternateLightmap {
+                    name: canonical.clone(),
+                    alt,
+                    at: at.to_string(),
+                });
+                self.note(format!(
+                    "{at}: useAlternateLightmap {canonical} {} (object-lighting.md rule 12)",
+                    u8::from(alt)
+                ));
+                return "0".into();
+            }
+            if self.known.contains(&name.to_ascii_lowercase()) {
+                self.note(format!(
+                    "{at}: useAlternateLightmap {name} {flag}: not a KQInterior; ignored (script-commands.md rule 12e)"
+                ));
+                return "0".into();
+            }
+        }
+        self.note(format!("{at}: useAlternateLightmap: Could not find object {name}"));
+        "0".into()
+    }
+
     /// `doPopup <textNumber>` (`interface.md` rule 53): schedules a help popup from `500.MSG`
     /// after 1.5 game seconds.
     fn do_popup(&mut self, words: &[String], at: &str) -> String {
@@ -4668,6 +4711,7 @@ impl ScriptHost for WorldState {
             "mouseAction" => Some(self.mouse_action(words, at)),
             "KQGame::selectScreen" => Some(self.select_screen(words, at)),
             "allowShadows" => Some(self.allow_shadows_cmd(words, at)),
+            "useAlternateLightmap" => Some(self.use_alternate_lightmap(words, at)),
             "doPopup" => Some(self.do_popup(words, at)),
             "notStartingHelp" => Some(self.not_starting_help_cmd(words, at)),
             "stopHelp" | "stophelp" => Some(self.stop_help_cmd(at)),
@@ -4874,6 +4918,7 @@ impl Active {
                 was_third_person: false,
                 forced_first_person: false,
                 connor_immunities: 0,
+                alt_lightmaps: BTreeMap::new(),
                 connor_jump: None,
                 talk: Talk::default(),
                 notify: BTreeMap::new(),
@@ -12115,5 +12160,46 @@ mod talk_tests {
         assert_eq!(a.world.items.count(CONNOR, "INVITEM_BronzePlate"), 1);
         assert!(a.world.requests.is_empty(), "conClickItem must not turn Connor or queue requests: {:?}", a.world.requests);
         assert_eq!(a.test_command("cls", "t").as_deref(), Some("0"));
+    }
+
+    #[test]
+    fn use_alternate_lightmap_switches_interior_ignores_non_interior_and_returns_0() {
+        let mut a = active("", &[]);
+        a.add_buildings([ActiveBuilding {
+            name: "gnome13".into(),
+            collision_type: 0,
+            script: None,
+            accepts_inventory: None,
+            accept_all_items: false,
+            too_far_away_action: 1,
+            do_not_point_at: false,
+            bounds: ([0.0; 3], [0.0; 3]),
+            placement: Placement::at([0.0; 3]),
+        }]);
+        a.world.known.insert("anvil".into());
+
+        assert_eq!(a.test_command("useAlternateLightmap gnome13", "t").as_deref(), Some("0"));
+        assert!(a.world.requests.is_empty());
+
+        assert_eq!(a.test_command("useAlternateLightmap missing 1", "t").as_deref(), Some("0"));
+        assert!(a.take_log().iter().any(|n| n.contains("useAlternateLightmap: Could not find object missing")));
+
+        assert_eq!(a.test_command("useAlternateLightmap anvil 1", "t").as_deref(), Some("0"));
+        assert!(a.world.requests.is_empty());
+
+        assert_eq!(a.test_command("useAlternateLightmap gnome13 1", "t").as_deref(), Some("0"));
+        assert_eq!(a.world.alt_lightmaps.get("gnome13"), Some(&true));
+        assert!(matches!(
+            a.world.requests.as_slice(),
+            [Request::UseAlternateLightmap { name, alt: true, .. }] if name == "gnome13"
+        ));
+        a.world.requests.clear();
+
+        assert_eq!(a.test_command("useAlternateLightmap GNOME13 0", "t").as_deref(), Some("0"));
+        assert_eq!(a.world.alt_lightmaps.get("gnome13"), Some(&false));
+        assert!(matches!(
+            a.world.requests.as_slice(),
+            [Request::UseAlternateLightmap { name, alt: false, .. }] if name == "gnome13"
+        ));
     }
 }

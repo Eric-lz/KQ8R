@@ -430,7 +430,13 @@ pub fn setup_objects(
     // Each building's surface corners (model space), for the haze log (6f).
     let mut wall_surfaces: Vec<Vec<Vec<[f32; 3]>>> = Vec::new();
     // Buildings' light pictures and point-light data (M1 7d, rule 16).
-    type WallInfo = (std::sync::Arc<crate::building_light::LightAtlas>, std::sync::Arc<crate::wall_lights::WallData>);
+    #[derive(Clone)]
+    struct WallInfo {
+        atlas: std::sync::Arc<crate::building_light::LightAtlas>,
+        data: std::sync::Arc<crate::wall_lights::WallData>,
+        alt: Option<(std::sync::Arc<crate::wall_lights::WallData>, std::sync::Arc<crate::building_light::LightAtlas>)>,
+        start_alt: bool,
+    }
     let mut wall_info: Vec<Option<WallInfo>> = Vec::new();
     // Each model's lights in its shown frame (M1 7c, rule 26b).
     let mut shape_lights: Vec<std::sync::Arc<Vec<Vec<kq8_data::shape::ModelLight>>>> = Vec::new();
@@ -486,7 +492,22 @@ pub fn setup_objects(
         if model.light_atlas.is_some() {
             shape_textures.push(Vec::new());
         }
-        wall_info.push(model.light_atlas.map(std::sync::Arc::new).zip(model.wall_light));
+        let alt = model
+            .alt_wall_light
+            .zip(model.alt_light_atlas)
+            .map(|(d, a)| (d, std::sync::Arc::new(a)));
+        wall_info.push(
+            model
+                .light_atlas
+                .map(std::sync::Arc::new)
+                .zip(model.wall_light)
+                .map(|(atlas, data)| WallInfo {
+                    atlas,
+                    data,
+                    alt,
+                    start_alt: model.start_alt_light,
+                }),
+        );
         built.push(parts);
         built_walls.push(walls);
         wall_surfaces.push(model.surfaces);
@@ -578,23 +599,37 @@ pub fn setup_objects(
         }
         // Point lights (M1 7d): this copy's own light picture and haze
         // factors, so copies of one building are lit separately.
-        let own = (!built_walls[*i].is_empty()).then(|| wall_info[*i].clone()).flatten().map(|(atlas, data)| {
-            let image = images.add(atlas.image());
-            let factors = buffers.add(crate::building_light::factor_buffer(&vec![1.0; data.light.surfaces.len()]));
-            (atlas, data, image, factors)
+        let own = (!built_walls[*i].is_empty()).then(|| wall_info[*i].clone()).flatten().map(|info| {
+            let init_atlas = if info.start_alt {
+                info.alt.as_ref().map_or(&info.atlas, |(_, a)| a)
+            } else {
+                &info.atlas
+            };
+            let image = images.add(init_atlas.image());
+            let factors = buffers.add(crate::building_light::factor_buffer(&vec![1.0; info.data.light.surfaces.len()]));
+            (info, image, factors)
         });
-        let mut wall_lights = own.as_ref().map(|(atlas, data, image, factors)| {
+        let mut wall_lights = own.as_ref().map(|(info, image, factors)| {
             let collider = collider_keys.iter().position(|(n, at)| *n == p.name && *at == p.position);
             if collider.is_some() {
                 wall_lit.0 += 1;
             } else if !*unused {
                 wall_lit.1.push(p.name.clone());
             }
-            crate::wall_lights::WallLights::new(p.name.clone(), data.clone(), atlas.clone(), image.clone(), factors.clone(), collider)
+            crate::wall_lights::WallLights::new(
+                p.name.clone(),
+                info.data.clone(),
+                info.atlas.clone(),
+                info.alt.clone(),
+                info.start_alt,
+                image.clone(),
+                factors.clone(),
+                collider,
+            )
         });
         for (mesh, material) in &built_walls[*i] {
             let material = match (&own, building_materials.get(material).cloned()) {
-                (Some((_, _, image, factors)), Some(mut m)) => {
+                (Some((_, image, factors)), Some(mut m)) => {
                     m.light = image.clone();
                     m.factors = factors.clone();
                     building_materials.add(m)

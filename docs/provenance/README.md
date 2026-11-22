@@ -4292,6 +4292,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `conClickItem <objectName>` (exact 2 words -> `"0"` on usage/missing; picks up world `KQInventoryItem` bypassing reach/turn/`handsOff`/queue and synchronously dispatches empty-hand `ConnorAction do do` via `calls_out`, returning `"1"`); `cls` safe no-op returning `"0"` | `script-commands.md` rules 12c–12d (Batch 4); `MASK/Gnome/kq/{armorgnm,brnzplat,chnmlst,myarmor,platmail,weapngnm,emptyloc}.cs` | unit test `cls_and_con_click_item_follow_script_commands_rules_12c_and_12d`; headless Gnome `doors.log`/`items.log` (`conClickItem NoName55` picking up `INVITEM_BronzePlate` and running `brnzplat.cs` synchronously; `cls` -> `0`; **not yet checked live in play**) |
 
+## B4-2 2026-11-22: `useAlternateLightmap` — core `active.rs`; viewer `load.rs`, `wall_lights.rs`, `terrain_view.rs`, `world_build.rs`, `door_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `useAlternateLightmap <interiorName> <0|1>` (exact 3 words -> `"0"`, queues `Request::UseAlternateLightmap` + stores `WorldState::alt_lightmaps` for `KQInterior`, prints `useAlternateLightmap: Could not find object <name>` on missing, silently ignores non-interiors) | `script-commands.md` rule 12e, `object-lighting.md` rule 12 (Batch 4); `MASK/Gnome/kq/{fusebox.cs,gnome13.kq,gnome14.kq}` | unit test `use_alternate_lightmap_switches_interior_ignores_non_interior_and_returns_0`; Gnome `doors.log` (`fusebox.cs`, `gnome13`/`gnome14`, `missing`, `anvil`) |
+| `KQInterior` `althwLightmapName` & `usingAltLighting` parsing, alternate `.dil` layout compatibility validation, `WallLights::set_alternate` immediate GPU `Image` swap, and `KeptWorld`/`Arrival` persistence | `object-lighting.md` rule 12 (Batch 4); `MASK/{Gnome,temple4}/resource/*.dil` & `MASK/temple4/kq/temple.kq` | unit test `wall_lights::tests::set_alternate_swaps_atlas_and_writes_image`; Gnome `viewer.log` (`gnome13l.dil` `512x175` & `gnome14l.dil` `512x215` compatible, `normal`/`alternate` swaps; **not yet checked live by eye**) |
+
 
 
 

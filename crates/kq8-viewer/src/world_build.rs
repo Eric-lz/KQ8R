@@ -155,6 +155,8 @@ pub struct KeptWorld {
     pub states: Vec<kq8_core::active::KeptState>,
     /// River controls whose `rustedOne` switch is set (U-10).
     pub rusted_rivers: Vec<String>,
+    /// Per-interior `useAlternateLightmap` flags (`object-lighting.md` rule 12).
+    pub alt_lightmaps: std::collections::BTreeMap<String, bool>,
 }
 
 impl WorldChange {
@@ -619,6 +621,7 @@ pub fn world_change_step(world: &mut World) {
                 came_in: sim.active.world.came_in_files(),
                 states: sim.active.world.kept_states(),
                 rusted_rivers: sim.active.world.rusted_rivers(),
+                alt_lightmaps: sim.active.world.alt_lightmaps.clone(),
             });
             if let Some(k) = kept {
                 log.lock().unwrap().summary(format!(
@@ -704,6 +707,7 @@ pub fn world_change_step(world: &mut World) {
                 states: kept.states.iter().map(|s| (s.name.to_ascii_lowercase(), s.clone())).collect(),
                 kept_maps: j.other_maps.clone(),
                 rusted_rivers: kept.rusted_rivers.clone(),
+                alt_lightmaps: kept.alt_lightmaps.clone(),
             });
             let percent = Arc::new(AtomicU32::new(0));
             let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());

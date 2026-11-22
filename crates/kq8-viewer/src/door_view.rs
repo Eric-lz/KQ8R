@@ -1031,6 +1031,22 @@ pub fn spawn_doors(
     active.world.allow_shadows = objects.allow_shadows;
     active.world.allow_shadows_from_world = objects.allow_shadows_explicit.is_some();
     active.start();
+    for (name, alt) in &objects.arrival_alt_lightmaps {
+        if let Some(canonical) = active
+            .world
+            .buildings
+            .iter()
+            .find(|b| b.name.eq_ignore_ascii_case(name))
+            .map(|b| b.name.clone())
+        {
+            active.world.alt_lightmaps.insert(canonical.to_ascii_lowercase(), *alt);
+            active.world.requests.push(kq8_core::active::Request::UseAlternateLightmap {
+                name: canonical,
+                alt: *alt,
+                at: "arrival".into(),
+            });
+        }
+    }
     let mut sim = DoorSim { active, spawns: Vec::new(), char_spawns: Vec::new(), drawn, collider, attack_dist, pending: Vec::new(), world_clicks: Vec::new(), swing_clicks: Vec::new(), shot_clicks: Vec::new(), click_states: Default::default(), log, trap_log, connor_checked_at: None, item_log, talk_log, conversation_log, chest_drawn, chest_collider, object_drawn, object_collider, rope_log: Log::create("rope").ok(), rope_clicks: Vec::new(), rope_asked: None, rock_clicks: Vec::new() };
     for line in sim.active.take_log() {
         sim.log.detail(line);
@@ -1094,7 +1110,15 @@ pub fn trap_step(
     lookup: Option<Res<crate::terrain_view::GroundLookup>>,
     buildings: Option<Res<Buildings>>,
     order: Option<Res<crate::terrain_view::ColliderOrder>>,
-    (buttons, right_at, mut set_haze, mut ground_asks, mut shadow_world): (Res<ButtonInput<MouseButton>>, Res<RightAt>, ResMut<crate::object_light::SetHaze>, ResMut<crate::ground_anim_view::GroundAsks>, Option<ResMut<crate::shadow_view::ShadowWorld>>),
+    (buttons, right_at, mut set_haze, mut ground_asks, mut shadow_world, mut wall_lights, mut images): (
+        Res<ButtonInput<MouseButton>>,
+        Res<RightAt>,
+        ResMut<crate::object_light::SetHaze>,
+        ResMut<crate::ground_anim_view::GroundAsks>,
+        Option<ResMut<crate::shadow_view::ShadowWorld>>,
+        Query<&mut crate::wall_lights::WallLights>,
+        ResMut<Assets<Image>>,
+    ),
     shared: Res<Shared>,
 ) {
     let (mut colliders, mut view, mut anim) = (colliders, view, anim);
@@ -1773,6 +1797,19 @@ pub fn trap_step(
                     w.allow = allow;
                 }
                 format!("{at}: applied: allowShadows {} (world shadows {})", u8::from(allow), if allow { "on" } else { "off" })
+            }
+            Request::UseAlternateLightmap { name, alt, at } => {
+                let mut switched = Vec::new();
+                for mut wall in &mut wall_lights {
+                    if wall.name.eq_ignore_ascii_case(&name) {
+                        switched.push(wall.set_alternate(alt, &mut images));
+                    }
+                }
+                if switched.is_empty() {
+                    format!("{at}: useAlternateLightmap {name} {}: no WallLights entity found", u8::from(alt))
+                } else {
+                    format!("{at}: applied: useAlternateLightmap {name} {} ({})", u8::from(alt), switched.join(", "))
+                }
             }
         };
         let line = format!("update {}: {line}", sim.active.world.updates);

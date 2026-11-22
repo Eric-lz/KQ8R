@@ -110,6 +110,9 @@ pub struct Model {
     /// Buildings only: the light maps of all surfaces in one picture (M1
     /// 5c, `building_light`); `None` for models.
     pub light_atlas: Option<crate::building_light::LightAtlas>,
+    /// Buildings only (`object-lighting.md` rule 12): alternate `.dil`
+    /// light map swapped in by `useAlternateLightmap`.
+    pub alt_light_atlas: Option<crate::building_light::LightAtlas>,
     /// Buildings only: each surface's corners in model space (game units),
     /// for the walls' haze (M1 6f, object-lighting.md rule 29); empty for
     /// models.
@@ -120,6 +123,10 @@ pub struct Model {
     /// Buildings with a usable `.dil` only: what point lights on its
     /// surfaces need (M1 7d, rule 16).
     pub wall_light: Option<std::sync::Arc<crate::wall_lights::WallData>>,
+    /// Buildings with a valid alternate `.dil` only (`object-lighting.md` rule 12).
+    pub alt_wall_light: Option<std::sync::Arc<crate::wall_lights::WallData>>,
+    /// Whether this building starts on its alternate light map (`usingAltLighting=1`).
+    pub start_alt_light: bool,
     /// The ball stored in its `.kqs` file (radius, centre in its own
     /// space; `characters.md` rule 37 (2), Q135); `None` for buildings.
     pub ball: Option<(f32, [f32; 3])>,
@@ -277,7 +284,7 @@ pub fn load_model(
     if !lights.is_empty() {
         log.summary(format!("  carries {} light(s) in its shown frame (rule 26b)", lights.len()));
     }
-    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, surfaces: Vec::new(), lights, wall_light: None, ball: Some((shape.radius, shape.center)) })
+    Ok(Model { label, groups, min, max, frame_note, light_atlas: None, alt_light_atlas: None, surfaces: Vec::new(), lights, wall_light: None, alt_wall_light: None, start_alt_light: false, ball: Some((shape.radius, shape.center)) })
 }
 
 /// The movements M2 uses: step 2b (connor-movement.md "Which movement
@@ -1670,6 +1677,8 @@ pub struct Objects {
     pub aliases: Vec<(String, String)>,
     /// `Options.cs` `notStartingHelp <0|1|2>` (`interface.md` rule 57).
     pub not_starting_help: Option<u8>,
+    /// Restored per-interior `useAlternateLightmap` flags on return to a kept world (`object-lighting.md` rule 12).
+    pub arrival_alt_lightmaps: BTreeMap<String, bool>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -1980,6 +1989,8 @@ pub struct Arrival {
     pub kept_maps: BTreeMap<usize, (String, kq8_data::magic_map::MapKeys, String)>,
     /// River controls whose `rustedOne` switch is already set (U-10, rule 6f).
     pub rusted_rivers: Vec<String>,
+    /// Restored per-interior `useAlternateLightmap` flags (`object-lighting.md` rule 12).
+    pub alt_lightmaps: BTreeMap<String, bool>,
 }
 
 /// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
@@ -2055,6 +2066,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         gone_skipped: Vec::new(),
         kept_states: arrival.as_ref().map(|a| a.states.clone()).unwrap_or_default(),
         kept_applied: Vec::new(),
+        arrival_alt_lightmaps: arrival.as_ref().map(|a| a.alt_lightmaps.clone()).unwrap_or_default(),
         portal_movements,
         rusted_rivers: arrival.as_ref().map(|a| a.rusted_rivers.clone()).unwrap_or_default(),
         skip_con_start: arrival.is_some(),
@@ -2387,6 +2399,7 @@ struct Placer<'a> {
     /// A kept world's object states (K-2), and the names they were put on.
     kept_states: BTreeMap<String, kq8_core::active::KeptState>,
     kept_applied: Vec<String>,
+    arrival_alt_lightmaps: BTreeMap<String, bool>,
     /// Portals' own lists' movements for the Special state (M6 6e-7).
     portal_movements: Vec<(String, String)>,
     /// A world change (M6 6e-3): `conStart.cs` is not run.
@@ -2912,7 +2925,7 @@ impl Placer<'_> {
             let slot = match self.index_of.get(&model_key) {
                 Some(&slot) => slot,
                 None => {
-                    let s = self.load_shape(&shape_name, None, None);
+                    let s = self.load_shape(&shape_name, None, None, None, false);
                     self.index_of.insert(model_key, s);
                     s
                 }
@@ -3012,7 +3025,7 @@ impl Placer<'_> {
         let slot = match self.index_of.get(&key) {
             Some(slot) => *slot,
             None => {
-                let slot = self.load_shape(shape, None, None);
+                let slot = self.load_shape(shape, None, None, None, false);
                 self.index_of.insert(key.clone(), slot);
                 slot
             }
@@ -3974,14 +3987,28 @@ impl Placer<'_> {
         };
         let start = animation.as_ref().map(|c| (c.sequence.as_str(), c.start, c.repeat));
         let material_list = s.get("material").map(str::to_string);
+        let is_dig = shape.to_ascii_lowercase().ends_with(".dig");
+        let alt_dil = is_dig
+            .then(|| {
+                s.get("althwLightmapName")
+                    .map(|v| v.split(|c: char| c.is_whitespace() || c == '#').next().unwrap_or("").to_string())
+                    .filter(|v| !v.is_empty())
+            })
+            .flatten();
+        let using_alt = is_dig && s.number("usingAltLighting").and_then(Result::ok).is_some_and(|v| v != 0.0);
         let model_key = match &material_list {
             Some(m) => format!("{model_key}|{}", m.to_ascii_lowercase()),
+            None => model_key,
+        };
+        let model_key = match &alt_dil {
+            Some(d) => format!("{model_key}|alt={}|{}", d.to_ascii_lowercase(), u8::from(using_alt)),
+            None if using_alt => format!("{model_key}|alt=1"),
             None => model_key,
         };
         let slot = match self.index_of.get(&model_key) {
             Some(slot) => *slot,
             None => {
-                let slot = self.load_shape(&shape, material_list.as_deref(), start);
+                let slot = self.load_shape(&shape, material_list.as_deref(), start, alt_dil.as_deref(), using_alt);
                 self.index_of.insert(model_key, slot);
                 slot
             }
@@ -4682,7 +4709,7 @@ impl Placer<'_> {
             match self.index_of.get(&key) {
                 Some(slot) => *slot,
                 None => {
-                    let slot = self.load_shape(&shape, None, None);
+                    let slot = self.load_shape(&shape, None, None, None, false);
                     self.index_of.insert(key, slot);
                     if slot.is_none() {
                         self.log.summary(format!("emitter {label}[{}]: particle model {shape} could not be loaded", p.name));
@@ -5022,7 +5049,14 @@ impl Placer<'_> {
     }
 
     /// Loads a model or building once; `None` if it fails.
-    fn load_shape(&mut self, shape: &str, material_list: Option<&str>, start: StartAt) -> Option<usize> {
+    fn load_shape(
+        &mut self,
+        shape: &str,
+        material_list: Option<&str>,
+        start: StartAt,
+        alt_dil: Option<&str>,
+        using_alt: bool,
+    ) -> Option<usize> {
         // Per-model lines go to the file only.
         self.log.quiet = true;
         let r = if shape.to_ascii_lowercase().ends_with(".dig") {
@@ -5034,7 +5068,7 @@ impl Placer<'_> {
                 load_palette(world, Some(&name), game, log)
             });
             match palette {
-                Ok(pal) => load_building(game, world, shape, material_list.unwrap_or_default(), pal, log),
+                Ok(pal) => load_building(game, world, shape, material_list.unwrap_or_default(), pal, alt_dil, using_alt, log),
                 Err(e) => Err(e.clone()),
             }
         } else {
@@ -5159,7 +5193,7 @@ impl Placer<'_> {
             let slot = match self.index_of.get(&key) {
                 Some(slot) => *slot,
                 None => {
-                    let slot = self.load_shape(&t.shape, None, None);
+                    let slot = self.load_shape(&t.shape, None, None, None, false);
                     self.index_of.insert(key, slot);
                     slot
                 }
@@ -5506,6 +5540,7 @@ impl Placer<'_> {
             object_ouch_sounds: self.object_ouch_sounds,
             aliases: Vec::new(),
             not_starting_help: crate::talk_view::not_starting_help(self.game),
+            arrival_alt_lightmaps: self.arrival_alt_lightmaps,
         }
     }
 }
@@ -5788,6 +5823,8 @@ pub fn load_building(
     dig: &str,
     material_list: &str,
     palette: &[Rgb; 256],
+    alt_dil: Option<&str>,
+    using_alt: bool,
     log: &mut Log,
 ) -> Result<Model, String> {
     use kq8_data::building::Building;
@@ -5899,6 +5936,31 @@ pub fn load_building(
         log.summary(format!("  {not_drawn} triangles with kind-0 materials not drawn"));
     }
     // Point lights on its surfaces (M1 7d, rule 16).
+    let (alt_light_atlas, alt_wall_light) = match (alt_dil, &light) {
+        (Some(alt_name), Some(_)) => match building_light_maps_named(world, alt_name, &b, log) {
+            Some(al) => {
+                let alt_atlas = crate::building_light::LightAtlas::build(&al);
+                if alt_atlas.width == atlas.width && alt_atlas.height == atlas.height && alt_atlas.places == atlas.places {
+                    let (data, _) = crate::wall_lights::WallData::new(al, &b);
+                    log.summary(format!(
+                        "  alt light: {alt_name} compatible ({}x{}, {} surfaces)",
+                        alt_atlas.width,
+                        alt_atlas.height,
+                        data.light.surfaces.len()
+                    ));
+                    (Some(alt_atlas), Some(std::sync::Arc::new(data)))
+                } else {
+                    log.summary(format!(
+                        "  alt light: {alt_name} atlas layout differs ({}x{} vs {}x{}); ignoring",
+                        alt_atlas.width, alt_atlas.height, atlas.width, atlas.height
+                    ));
+                    (None, None)
+                }
+            }
+            None => (None, None),
+        },
+        _ => (None, None),
+    };
     let wall_light = light.map(|l| {
         let (data, agree) = crate::wall_lights::WallData::new(l, &b);
         log.summary(format!(
@@ -5915,28 +5977,39 @@ pub fn load_building(
         max: b.bounds_max,
         frame_note: "building".into(),
         light_atlas: Some(atlas),
+        alt_light_atlas,
         surfaces: (0..b.surfaces.len()).map(|i| b.surface_corners(i).map(|c| c.into_iter().map(|(p, _)| p).collect()).unwrap_or_default()).collect(),
         lights: Vec::new(),
         wall_light,
+        alt_wall_light,
+        start_alt_light: using_alt,
         ball: None,
     })
 }
 
 /// A building's light maps: `<shape>.dil` from the world's archives
-/// (object-lighting.md rule 12; no world switches the alternate maps on
-/// at the start). `None`, logged, if it is missing, unreadable, or does not
-/// match the `.dig` (build id, surface count): the building is then drawn
-/// full bright (note: edge cases).
+/// (object-lighting.md rule 12). `None`, logged, if it is missing, unreadable,
+/// or does not match the `.dig` (build id, surface count): the building is
+/// then drawn full bright (note: edge cases).
 fn building_light_maps(
     world: &World,
     dig: &str,
     b: &kq8_data::building::Building,
     log: &mut Log,
 ) -> Option<kq8_data::dil::BuildingLight> {
-    use kq8_data::lightmap::Channels;
     let base = dig.rsplit(['/', '\\']).next().unwrap_or(dig);
     let name = format!("{}.dil", base.rsplit_once('.').map_or(base, |(stem, _)| stem));
-    let (label, bytes) = match world.load(&name) {
+    building_light_maps_named(world, &name, b, log)
+}
+
+fn building_light_maps_named(
+    world: &World,
+    name: &str,
+    b: &kq8_data::building::Building,
+    log: &mut Log,
+) -> Option<kq8_data::dil::BuildingLight> {
+    use kq8_data::lightmap::Channels;
+    let (label, bytes) = match world.load(name) {
         None => {
             log.summary(format!("  light: {name} not in {}; drawn full bright", world.name));
             return None;
