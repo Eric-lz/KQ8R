@@ -944,18 +944,16 @@ other Swamp commands and liquid immunity not yet played by hand):
   `KQConner::addImmunity` / `Journey` liquid damage immunity masking (Swamp
   `0x100` vs Poison `0x40`) — still unit/log-verified only.
 - **Swamp gas-tile puzzle (`KQSwampTile`, Connor `Tile2` state, Clarity
-  highlights, and 6 shooting totems — checked live `2026-11-22`; `B3-F4`
-  impact sound pending ear check):** `Rtswdoor` (`hmhand`), puzzle cutscene
-  start, 10 × 7 `Tile2` movement/rock throws, safe tiles (`fiensafe.cs`),
-  rock throws onto unsafe tiles, tile flame damage on Connor, Clarity
-  highlighting the safe tiles (`B3-F2`), and all 6 side shooting towers
+  highlights, 6 shooting totems, and projectile impact/rock sounds —
+  checked live `2026-11-22`):** `Rtswdoor` (`hmhand`), puzzle cutscene start,
+  10 × 7 `Tile2` movement/rock throws, safe tiles (`fiensafe.cs`), rock
+  throws onto unsafe tiles, tile flame damage on Connor, Clarity
+  highlighting the safe tiles (`B3-F2`), all 6 side shooting towers
   (`totem.01`–`06` firing `PRfire2.kq` / `endfrbl.kqs`, hitting and
-  damaging Connor, `B3-F3`) all work (checked by eye `2026-11-22`); **fixed
-  in `B3-F4` (`Q201`, logs verified, pending ear check):** projectiles hitting
-  non-character targets (`KQInterior` buildings such as `fiengate1`,
-  `KQDoor`, `KQObject`) play the target's `ouchSound` (default `sword.aud`)
-  at its origin (`1.0 s` cooldown, group `0`), while thrown rocks
-  (`prrock.kq` `rock.aud`) play their own `ouchSound` on landing.
+  damaging Connor, `B3-F3`), and `B3-F4` (`Q201`: `KQObject`/`KQInterior`/
+  `KQDoor` `ouchSound` defaulting to `sword.aud` at target origin on
+  `fiengate1` wall impact and `prrock.kq`'s `rock.aud` on rock landings)
+  all work (checked by eye and ear `2026-11-22`).
 - **Mandragore (`KQMandragorTree` and `KQMandragorRoot` — checked live by eye
   `2026-11-22`):** shoulder-linked roots that follow tree turns, knock
   Connor back with `reactback`, sink temporarily when killed while freezing

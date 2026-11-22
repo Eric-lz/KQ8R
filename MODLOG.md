@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Batch 3: Record `B1-F1c` and `B3-F4` live ear/visual checks
+- **Changed:** `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md` (documentation-only update; no Rust code modified).
+- **Why:** Record the user's 2026-11-22 live check confirming both `B1-F1c` (`Q199` b: normal popup open `button1.aud` and sound group `1`) and `B3-F4` (`Q201`: Swamp totem fireballs playing wall-impact sound on `fiengate1` behind Connor and thrown rocks playing `rock.aud`) work as expected.
+- **Tested how:** Live user check in `kq8-viewer` (`2026-11-22`); no code or binary changed since commits `f0db378` (`B1-F1c`) and `501bf83` (`B3-F4`).
+- **Result:** All tested Batch 3 Swamp puzzle/Mandragore features and Batch 1 Help popup sounds confirmed working as expected; `Rtswdoor` first-person camera (`2b`) remains postponed, and `B3-1` commands/liquid immunity remain unit/log-verified only.
+- **Still broken:** `Rtswdoor` first-person camera (`2b`); `B3-1` commands/liquid immunity not yet checked live; Batch 4 (Gnome) ready to implement in a new session.
+- **Next:** Implement Batch 4 (Gnome) in the next Implementation Session (B) (and Study Session (A) covers Batch 5 Barren).
+
 ## 2026-11-22 Batch 3 fix B3-F4: Projectile impact and `KQObject` `ouchSound` rules (`Q201`)
 - **Changed:** `crates/kq8-data/src/characters.rs` (parsed `ouchSound=` on `ProjectileKeys`, tested for `prrock.kq`'s `rock.aud`), `crates/kq8-core/src/active.rs` (added `WorldState.{object_ouch_sounds, object_last_ouch}` and 3 unit tests for building/object/rock `ouchSound` rules and `1.0 s` cooldown), `crates/kq8-core/src/fight.rs` (added `RockFlight.ouch_sound`, `WorldState::play_object_ouch` with `1.0 s` per-target cooldown in group `0` `5,000 / 25,000`, unified `bolt_hits_non_character` for `Touched::Building` & `Touched::Object` defaulting to `sword.aud` and skipping on `weaponType == 4` or scripted `0`-damage/`0x4000`, wired `connor_hits_object` and `rock_step` landing `ouchSound`), `crates/kq8-viewer/src/load.rs` & `crates/kq8-viewer/src/door_view.rs` (recorded `ouchSound=` overrides from placed `.kq` files into `WorldState.object_ouch_sounds`), `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md`.
 - **Why:** Implement Study Session (A)'s answer to `Q201` (`ranged-weapons.md` rules 30 & 36, `sound.md` rule 41): `KQInterior` buildings (`Swamp/fiengate.kq` `[fiengate1]`), doors, and static/animated objects default `ouchSound` to `sword.aud` and play it as a placed one-shot at the target's origin on projectile impact (`weaponType` `0`–`3`) or hand hit, while thrown rocks (`weaponType == 4`) play their own `ouchSound` (`rock.aud`) at landing and skip the target's `ouchSound`.

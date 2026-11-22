@@ -1,13 +1,13 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-implementing Study Session (A)'s newly answered items **`B1-F1c`** (`Q199`
-part b: popup sounds in group `1` and `button1.aud` on normal help popup
-open) and **`B3-F4`** (`Q201`: projectile impact & `KQObject` `ouchSound`
-rules), following **Batch 4 (Gnome)** study completion. Read with
-with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest
-entries at the top). The short public summary is `README.md`; the detailed
-"what works" list is `docs/FEATURES.md`.
+recording the user's live checks confirming **`B1-F1c`** (`Q199` part b:
+popup sounds in group `1` and `button1.aud` on normal help popup open)
+and **`B3-F4`** (`Q201`: projectile wall/object impact `sword.aud` & thrown
+rock `rock.aud`) work as expected, with **Batch 4 (Gnome)** already studied
+and ready for the next session. Read with `AGENTS.md`, `docs/DESIGN.md`,
+`docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top). The short public
+summary is `README.md`; the detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
 
@@ -30,10 +30,9 @@ entries at the top). The short public summary is `README.md`; the detailed
     `BOWHIT.AUD` are unused (`FIREBALL.AUD` is Dead City scripts only,
     `hitdirt.aud` is `.anm` cues only). All 12 `5,000 / 25,000` placed
     one-shot sites in `Mask.exe` are now identified.
-  - **Next:** **`Q201`** implemented in **`B3-F4`** (unit-tested and Swamp
-    `fight.log`/`sound.log` verified; pending live ear check); next is
-    Batch 4 (Gnome) for Implementation Session (B) and Batch 5 (Barren) for
-    Study Session (A).
+  - **Next:** **`Q201`** implemented in **`B3-F4`** and confirmed live by ear
+    (`2026-11-22`); next is **Batch 4 (Gnome)** for Implementation Session (B)
+    and **Batch 5 (Barren)** for Study Session (A).
 
 - **2026-11-22 (A): Script Coverage Batch 4 (Gnome) + `Q199` (b) studied**
   (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not
@@ -54,10 +53,10 @@ entries at the top). The short public summary is `README.md`; the detailed
     open, Left/Right arrows, button/checkbox clicks, and Enter all play
     `button1.aud` in **sound group 1** (F1 Help Book open plays `intrface.aud`
     in **sound group 1**).
-  - **Next:** `Q199`b (`B1-F1c`) and `Q201` (`B3-F4`) are implemented
-    (unit-tested + Swamp log-verified; pending user ear checks); Batch 4
-    (Gnome) is next for Implementation Session (B) and Batch 5 (Barren) for
-    Study Session (A).
+  - **Next:** `Q199`b (`B1-F1c`) and `Q201` (`B3-F4`) are implemented and
+    confirmed working live (`2026-11-22`); **Batch 4 (Gnome)** is ready for
+    the next Implementation Session (B), and **Batch 5 (Barren)** for Study
+    Session (A).
 
 - **2026-11-22 (A): `KQCueEvent 500` object projectile launchers (`Q200`)
   studied** (traced in `Mask.exe` via Ghidra and checked against all 5
@@ -76,17 +75,15 @@ entries at the top). The short public summary is `README.md`; the detailed
     (launcher ignored), and `Die` running on contact, `maxDistance`, and
     floor hits (`PRfire2.kq` → `GAME/Kq/swmpfrbl.cs` → `endfrbl.kqs`).
   - **Next:** `KQCueEvent 500` (`B3-F3`) and `Q201` (`B3-F4`) both implemented
-    (unit tests and Swamp logs verified; `B3-F4` wall-impact `sword.aud`
-    pending ear check).
+    and confirmed working live in Swamp (`2026-11-22`).
 
 - **2026-11-22 (B): Script Coverage Batch 3 (Swamp) (`B3-1`..`B3-5` + `B3-F1`..`B3-F4`,
   `800` workspace unit tests; headless `--sound off` Swamp viewer logs;
   live user play checks 2026-11-22: `B3-4` Mandragores, safe Swamp tiles,
   rock throws onto unsafe tiles, tile flame damage, `B3-F2` Clarity tile
-  highlights, and `B3-F3` 6 shooting totems confirmed working by eye;
-  `B3-F4` (`Q201`) projectile wall/object `ouchSound` built & log-verified
-  pending ear check; `2b` first-person camera note; `B3-1` commands &
-  liquid immunity still unit/log-verified only):**
+  highlights, `B3-F3` 6 shooting totems, and `B3-F4` wall-impact & rock
+  sounds all confirmed working by eye/ear; `2b` first-person camera note;
+  `B3-1` commands & liquid immunity still unit/log-verified only):**
   - **Swamp script commands & liquid immunity (`B3-1`):** `KQConner::pay`
     (`INVITEM_` fallback, `unapply` + empty hand/ready-weapon when spent),
     `KQConner::setRelDamage` (`$CurRelDamage` / `$CurRelHealth`),
@@ -128,8 +125,7 @@ entries at the top). The short public summary is `README.md`; the detailed
     to `sword.aud` (`5,000 / 25,000`, group `0`, `1.0 s` cooldown at target
     origin on `weaponType` `0`–`3` and Connor hits), while thrown rocks
     (`prrock.kq` `rock.aud`) play their own `ouchSound` on landing and skip
-    the target's (`fight.log` / `sound.log` confirm `fiengate1` starts
-    `SWORD.AUD` at `(65536, 98304, 16320)` — pending ear check).
+    the target's — **confirmed working live (`2026-11-22`)**.
   - **Mandragore (`B3-4`, `KQMandragorTree` & `KQMandragorRoot` — confirmed
     working by eye in play 2026-11-22):** `0x4042` (`ProjImmune`) + `0`-damage
     `Special laugh`, `.kq` `alarmRadius` (`15,000`) override, immediate
@@ -147,11 +143,8 @@ entries at the top). The short public summary is `README.md`; the detailed
     missing command (only `beep`), `0` missing Connor states (`Tile2` is
     `built`), and `KQSwampTile` / `KQMandragorTree` / `KQMandragorRoot` all
     `named`.
-  - **Next:** User ear checks **`B3-F4`** (`sword.aud` when Swamp totem
-    fireballs hit `fiengate1` behind Connor) and **`B1-F1c`** (`button1.aud`
-    on normal popup open / group `1` speech-ducking independence);
-    Implementation Session (B) is ready for **Batch 4 (Gnome)** and Study
-    Session (A) for **Batch 5 (Barren)**.
+  - **Next:** Implementation Session (B) implements **Batch 4 (Gnome)** in
+    the next session; Study Session (A) is ready for **Batch 5 (Barren)**.
 
 - **2026-11-20/21 (B): `Q197`–`Q198` + Script Coverage Batch 1 + `B1-F1`/`B1-F1b`/`B1-F2` built**
   (DESIGN "Dead City polish (`Q197`, `Q198`) and Batch 1" and "Batch 1 follow-up fixes";
@@ -188,7 +181,7 @@ entries at the top). The short public summary is `README.md`; the detailed
     `B1-F1c` (`Q199` b) moves all popup sounds (`queue_help_sound`,
     `queue_popup_click`) into sound group `1` (`GROUP_MENU`, SFX slider,
     unaffected by speech ducking) and uses `button1.aud` when opening
-    normal/starting-help popups (unit-tested; pending ear check).
+    normal/starting-help popups (**confirmed working live `2026-11-22`**).
   - **Script coverage regenerated (`B1-8`):** `docs/SCRIPT-COVERAGE.md`
     updated (`37 -> 20` distinct missing commands, `0` stubs remaining
     across all worlds; `CastleD` now `0` missing, `Daventry` `2`,
