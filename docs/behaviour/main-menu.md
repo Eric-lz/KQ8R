@@ -124,11 +124,13 @@ back to the game. While it is open the game is paused.
 11. **Load, Save, Options** [traced]: open the Load screen, the Save
     screen or the Options screen. The theme **keeps playing** and the
     game stays paused; when those screens come back to the menu, rule 8
-    is not repeated (the theme does not restart). What those screens do
-    is for other notes.
-12. **Replay Intro** [traced]: plays the opening film (`W32opn_1`, in
-    the game folder), then shows the menu again with input blocked for
-    0.2 s.
+    is not repeated (the theme does not restart). For the full rules of
+    those screens and their sub-screens, see `submenus.md`.
+12. **Replay Intro** [traced]: fades out `theme.aud` over 1 s, plays the
+    opening film (`W32opn_1.dll`, a 640 × 480 15 fps Indeo 5 AVI in the
+    game folder; skippable with any key or mouse click; see `submenus.md`
+    section 8), then shows the menu again with input blocked for 0.2 s
+    and restarts `theme.aud` 0.2 s later.
 13. **Quit** [traced]: a Yes/No question, "Are you sure you want to exit
     the game?" (`500.MSG` 0 0 159), **No** highlighted. Yes ends the
     program at once (no save, no further question). No closes it.
@@ -160,9 +162,15 @@ back to the game. While it is open the game is paused.
 16. **Choosing a button**:
     - **mouse click** on a button picks that button at once;
     - **Enter**: pressing it shows the highlighted button pressed down
-      and moves the mouse pointer onto it (16 pixels below its middle);
-      **letting go** of Enter puts the pointer back where it was and
-      picks the button [traced];
+      and calls Win32 `SetCursorPos` to move the OS cursor onto it (16
+      pixels below its middle); **letting go** of Enter puts the OS
+      cursor back where it was and picks the button [traced]. Because
+      the game draws its own software pointer (`Cursgui.pba`) at
+      internal mouse coordinates that only update on mouse-move events —
+      and mouse-move events are ignored while the Enter key latch is
+      held — **the visible software pointer never jumps** in the
+      original game (confirmed by the user, 2026-11-23; do not move the
+      visible pointer on Enter);
     - **Escape**: in the difficulty popup it closes the popup (back to
       the menu, nothing starts); in the other popups it does the same
       as Back to Game when a game is running (the popup is dropped), and
@@ -320,10 +328,13 @@ picked, combat level set, pause on/off, theme start/fade) to a
 2. ~~Hidden or greyed?~~ Greyed / dithered (the user, 2026-10-21;
    rule 3).
 3. ~~Theme fade-in?~~ None: it starts at once (the user, 2026-10-21;
-   rule 8). Still open: what the theme does while the intro film plays
-   (`sound.md` open question 5); later.
-4. Whether the combat level chosen is kept in saved games (not traced;
-   the user is not sure either; for the Load/Save study).
+   rule 8). ~~What the theme does while the intro film plays:~~ answered
+   in `submenus.md` rule 27 (`Replay Intro` fades out `theme.aud` over
+   1 s, suspends the sound engine during MCI playback, and restarts
+   `theme.aud` 0.2 s after returning to the menu).
+4. ~~Whether the combat level chosen is kept in saved games:~~ **yes**,
+   `difficultyFactor` is saved in `GameState.kq` inside each
+   `save/save<N>.vol` archive (`submenus.md` rule 10.6).
 5. The death path: what happens during the couple of seconds of
    `handsOff` between Connor's death and the menu (the user saw only
    that it happens; `fighting.md` open question 5, rule 29).
