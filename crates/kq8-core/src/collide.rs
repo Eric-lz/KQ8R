@@ -482,6 +482,21 @@ impl CylinderCollider {
         }
     }
 
+    /// Builds a cylinder from an already-computed [`BallStack`].
+    pub fn from_stack(name: &str, position: [f32; 3], balls: &BallStack, collision_type: u32, collision_mask: u32) -> Self {
+        let r = balls.radius;
+        let bottom = balls.heights.first().map_or(0.0, |h| h - r);
+        let top = balls.heights.last().map_or(0.0, |h| h + r);
+        CylinderCollider {
+            name: name.to_string(),
+            position: [position[0], position[1], position[2] + bottom.trunc()],
+            collision_type,
+            collision_mask,
+            radius: r.trunc(),
+            height: (top - bottom).trunc(),
+        }
+    }
+
     /// Where a straight line from `from` to `to` first enters the
     /// cylinder (side, top or bottom); starting inside is not a hit (as
     /// [`BoxCollider::line_hit`]). For line tests through characters
@@ -614,6 +629,31 @@ impl CylinderCollider {
         }
         out
     }
+}
+
+/// Sweeps a moving ball-stack object (`mover_min..mover_max`, moving from
+/// `from` to `to`) against Connor's cylinder (`connor_pos`, `connor_balls`),
+/// returning the surface normal pointing from Connor toward the moving
+/// object (`connor-collision.md` rules 5-9, 18-19).
+///
+/// Returns `None` when the move is shorter than `CYLINDER_MIN_MOVE`, misses
+/// Connor, or starts already overlapping Connor (`CONNOR_TYPE` bit 4 is in
+/// `CREATURE_BITS`, so a rock passing over him only triggers once on entry).
+pub fn moving_object_hits_connor(
+    mover_min: [f32; 3],
+    mover_max: [f32; 3],
+    from: [f32; 3],
+    to: [f32; 3],
+    connor_pos: [f32; 3],
+    connor_balls: &BallStack,
+) -> Option<[f32; 3]> {
+    let mover = BallStack::from_box(mover_min, mover_max);
+    let (lo, hi) = mover.reach(from, to);
+    let connor = CylinderCollider::from_stack("Connor", connor_pos, connor_balls, CONNOR_TYPE, CONNOR_MASK);
+    if !connor.overlaps(mover.radius, lo, hi) {
+        return None;
+    }
+    connor.sweep(&mover, from, to).contact.map(|c| c.normal)
 }
 
 /// The axis-aligned world box round the 8 corners of the own-space box
@@ -1068,5 +1108,22 @@ mod tests {
         assert!(g.line_hit([2000.0, 900.0, 500.0], [-2000.0, 900.0, 500.0]).is_none(), "beside it");
         assert!(g.line_hit([0.0, 0.0, 500.0], [3000.0, 0.0, 500.0]).is_none(), "from inside");
         assert!(g.line_hit([2000.0, 0.0, 500.0], [1000.0, 0.0, 500.0]).is_none(), "short of it");
+    }
+
+    #[test]
+    fn rolling_rock_hits_standing_connor_once_on_entry_and_not_while_overlapping() {
+        let c = connor();
+        let (rmin, rmax) = ([-900.0, -900.0, 0.0], [900.0, 900.0, 1750.0]);
+        // Step 1: rock enters Connor's cylinder (reach = 200 + 900 = 1100) from -Y.
+        let hit = super::moving_object_hits_connor(rmin, rmax, [0.0, -1400.0, 0.0], [0.0, -1000.0, 0.0], [0.0; 3], &c);
+        assert_eq!(hit, Some([0.0, -1.0, 0.0]));
+        // Step 2: rock continues while already overlapping Connor -> no second hit.
+        assert!(super::moving_object_hits_connor(rmin, rmax, [0.0, -1000.0, 0.0], [0.0, -600.0, 0.0], [0.0; 3], &c).is_none());
+        // Step 3: return pass entering from +Y.
+        let hit = super::moving_object_hits_connor(rmin, rmax, [0.0, 1400.0, 0.0], [0.0, 1000.0, 0.0], [0.0; 3], &c);
+        assert_eq!(hit, Some([0.0, 1.0, 0.0]));
+        // Step 4: far away or passing above Connor's head -> no hit.
+        assert!(super::moving_object_hits_connor(rmin, rmax, [0.0, 5000.0, 0.0], [0.0, 4600.0, 0.0], [0.0; 3], &c).is_none());
+        assert!(super::moving_object_hits_connor(rmin, rmax, [0.0, -1400.0, 2300.0], [0.0, -1000.0, 2300.0], [0.0; 3], &c).is_none());
     }
 }

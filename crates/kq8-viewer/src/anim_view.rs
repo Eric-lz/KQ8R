@@ -794,8 +794,14 @@ pub fn spawn_animated(
 
 /// One update (15 per second), after `door_step` has run core's update:
 /// unused objects move their own loops; an object whose shown movement
-/// moves it takes its collider along (3r-4).
-pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectColliders>>, doors: Option<ResMut<DoorSim>>) {
+/// moves it takes its collider along (3r-4) and sweeps against Connor for
+/// `ConnorCollision` (`connor-collision.md` rules 5-9, 18-19, 21).
+pub fn anim_step(
+    sim: Option<ResMut<AnimSim>>,
+    colliders: Option<ResMut<ObjectColliders>>,
+    doors: Option<ResMut<DoorSim>>,
+    connor: Option<Res<crate::connor_view::ConnorSim>>,
+) {
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     sim.updates += 1;
@@ -827,16 +833,17 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
             }
         }
     }
-    let doors = doors.as_deref();
     let mut colliders = colliders;
+    let connor_target = connor.as_ref().map(|c| (c.mover.position, c.mover.balls.clone()));
+    let mut connor_touches: Vec<(String, [f32; 3], u32)> = Vec::new();
     for p in &mut sim.playing {
         if let Source::Own(player) = &mut p.source {
             // U-3 (object-lighting.md rule 37): not while frozen.
-            if !doors.is_some_and(|d| d.active.world.frozen.contains(&p.name.to_ascii_lowercase())) {
+            if !doors.as_deref().is_some_and(|d| d.active.world.frozen.contains(&p.name.to_ascii_lowercase())) {
                 player.advance(1.0 / kq8_core::UPDATES_PER_SECOND as f32);
             }
         }
-        let Some(player) = player(p, doors) else { continue };
+        let Some(player) = player(p, doors.as_deref()) else { continue };
         let (movement, frame) = (player.current, player.frame());
         // From the place core keeps (a `move` or `KQMoveEvent` changes it;
         // G-3), as the drawing does.
@@ -873,12 +880,32 @@ pub fn anim_step(sim: Option<ResMut<AnimSim>>, colliders: Option<ResMut<ObjectCo
         }
         let frame = frame.min(drawn.frames.saturating_sub(1));
         let (rotation, position) = combine(&pose_at_frame(&drawn.steps, frame), &base.rotation, base.position);
+        let old_pos = colliders.0[i].placement.position;
         colliders.0[i].placement = kq8_core::collide::Placement { rotation, position };
+        if let Some((cpos, ref cballs)) = connor_target {
+            let b = &colliders.0[i];
+            if b.kind.collision_mask & kq8_core::collide::CONNOR_TYPE != 0
+                && doors.as_deref().is_some_and(|d| d.active.world.con_collision.contains(&p.name.to_ascii_lowercase()))
+            {
+                if let Some(normal) = kq8_core::collide::moving_object_hits_connor(b.min, b.max, old_pos, position, cpos, cballs) {
+                    sim.log.detail(format!(
+                        "update {n} [{}] moved ({:.0}, {:.0}, {:.0}) -> ({:.0}, {:.0}, {:.0}) and hit Connor at ({:.0}, {:.0}, {:.0}), normal ({:.2}, {:.2}, {:.2}) (connor-collision.md rules 5-9, 18-19)",
+                        p.name, old_pos[0], old_pos[1], old_pos[2], position[0], position[1], position[2], cpos[0], cpos[1], cpos[2], normal[0], normal[1], normal[2]
+                    ));
+                    connor_touches.push((p.name.clone(), normal, b.kind.collision_mask));
+                }
+            }
+        }
         if n % 15 == 0 && n <= 150 {
             sim.log.detail(format!(
                 "update {n} [{}] frame {frame}: collider at ({:.0}, {:.0}, {:.0})",
                 p.name, position[0], position[1], position[2]
             ));
+        }
+    }
+    if let Some(d) = doors.as_mut() {
+        for (name, normal, mask) in connor_touches {
+            d.active.connor_touch(&name, normal, mask);
         }
     }
 }

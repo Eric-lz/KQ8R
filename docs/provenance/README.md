@@ -4348,7 +4348,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 
 | Behaviour implemented | Source | Verification |
 |---|---|---|
-| `Placer::item_models` (`extra_equipment_types`, `Placer::load_item_shape`) preloads all non-placeholder equipment `ItemType`s (`connor_inventory::places`) whose `.kqs` exists in the world or `GAME/Common` (`MASK/GAME/Common/Leathr.kqs` for `INVITEM_LeatherArmor`) before reading `body` transforms, matching the existing `LongWeapon` preload pattern | `items.md` rule 1 & rule 5 (`GAME/Kq/Invinfo.itl`, `GAME/Common/*.kqs`), `inventory.md` rules 3 & 8; observed `give leatherarmor` swap onto Gnome Armor Shop shelf | unit test `extra_equipment_types_filters_placeholders_non_equipment_and_loaded`; headless Gnome (`GAME/Common/leathr.kqs` loaded, `NoName74` swapped to `(147535, 43484, 12595)`, item entity spawned) |
+| `Placer::item_models` (`extra_equipment_types`, `Placer::load_item_shape`) preloads all non-placeholder equipment `ItemType`s (`connor_inventory::places`) whose `.kqs` exists in the world or `GAME/Common` (`MASK/GAME/Common/Leathr.kqs` for `INVITEM_LeatherArmor`) before reading `body` transforms, matching the existing `LongWeapon` preload pattern | `items.md` rule 1 & rule 5 (`GAME/Kq/Invinfo.itl`, `GAME/Common/*.kqs`), `inventory.md` rules 3 & 8; observed `give leatherarmor` swap onto Gnome Armor Shop shelf | unit test `extra_equipment_types_filters_placeholders_non_equipment_and_loaded`; headless Gnome (`GAME/Common/leathr.kqs` loaded, `NoName74` swapped to `(147535, 43484, 12595)`, item entity spawned); live user play check 2026-11-22 (`B4-F6` confirmed working) |
+
+## B4-F7 2026-11-22: Sweep moving animated objects against Connor (`ConnorCollision`) — core `collide.rs`; viewer `anim_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `CylinderCollider::from_stack` + `moving_object_hits_connor` sweep moving ball-stack colliders (`old_pos -> position`) against Connor's cylinder (`CONNOR_TYPE = 0x4` in `CREATURE_BITS`, so overlap starts don't re-trigger) and `anim_view::anim_step` dispatches `Active::connor_touch` when `con_collision` & `colliderMask` match | `connor-collision.md` rules 1–3, 5–10, 18–19, 21; `MASK/Gnome/kq/{rrock1,rrock2,rrock3}.kq`, `MASK/Gnome/kq/rollside.cs` | unit test `rolling_rock_hits_standing_connor_once_on_entry_and_not_while_overlapping`; headless Gnome (`--at 57500,106500,0 --lift 17500`: `rrock1` hits standing Connor on all 3 passes at updates 9, 36, 60 -> `reactback` + `KQAttackEvent`, health `220 -> 211 -> 201 -> 186`) |
+
 
 
 
