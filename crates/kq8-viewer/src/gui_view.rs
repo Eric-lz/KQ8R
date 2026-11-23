@@ -1630,10 +1630,12 @@ pub fn gui_step(
     }
     let first = gui.stats_events.is_none();
     gui.stats_events = Some(events);
-    // Dying states are M5: never dead yet.
+    // interface.md rule 21: health percent is 0 while Connor is dead (dying states).
+    let dead = sim.active.world.connor_dying
+        || connor.as_ref().is_some_and(|c| matches!(c.walker.mode, kq8_core::connor::Mode::Dying | kq8_core::connor::Mode::Dead));
     let red = kq8_core::potions::red_numbers(&sim.active.world.potions);
     let old_level = gui.meters.level;
-    let sent = gui.meters.send(&stats, false, red);
+    let sent = gui.meters.send(&stats, dead, red);
     let width = |name: &str| {
         gui.control(name).map_or(0, |c| (gui_draw::scaled(c.rect[2], gui.scale) - gui_draw::scaled(c.rect[0], gui.scale)).max(0) as u32)
     };

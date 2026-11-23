@@ -3,6 +3,16 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-23 M4 step 4f-F2: Drop Connor's health bar to 0 % on fall death and dying states (`interface.md` rule 21)
+- **Changed:** `crates/kq8-viewer/src/door_view.rs` (`trap_step` syncs `sim.active.world.connor_dying = true` and increments `connor_stats_events` when `connor.walker.mode` enters `Mode::Dying` or `Mode::Dead`), `crates/kq8-viewer/src/gui_view.rs` (`gui_step` passes `dead` instead of hardcoded `false` to `gui.meters.send(&stats, dead, red)`), `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/provenance/README.md`.
+- **Why:** Fix the fall-death health bar bug reported by the user: when Connor died from a high fall (or pressing `G`) and played `jumpdie`, his health bar kept showing his pre-fall HP instead of dropping to `0 %` on landing (`docs/behaviour/interface.md` rule 21: *"0 while Connor is dead (dying states) [traced]"*). `gui_step` previously passed a hardcoded `false` for `dead` to `gui.meters.send` (a leftover from M4 step 4c-2 before M5 dying states existed), and fall death in `connor_step` entered `Mode::Dying` without setting `connor_dying` or firing a stats event.
+- **Tested how:**
+  1. `cargo test --workspace` (`823` unit tests) and `cargo build --release -p kq8-viewer`.
+  2. Headless fall-death run: `target\release\kq8-viewer.exe --skip-menu --sound off --lift 5000 --frames 200`.
+- **Result:** All `823` workspace unit tests and the headless `--lift 5000` run pass (`RESULT: PASS`). In `connor.log` and `gui.log`, on the exact landing update (`update 12: state fall -> dead`, `mode dying`), `stats event #1` fires and redraws `IDCTL_METERS` with `health 0 % (bar 0 of 107 px)` (`4red.pbm stretched over 0 of 107 px, 4black.pbm over the rest`).
+- **Still broken / not tested:** Live visual check of the fall-death health bar by the user; `Load`, `Save`, `Options`, and `Replay Intro` await Study Session A on `Q203`–`Q205`.
+- **Next:** User checks the fall-death health bar live (`cargo play --skip-menu`, press `G`).
+
 ## 2026-11-23 M4 step 4f: Record live visual and ear check of the Main Menu (`4f-1`..`4f-3`, `4f-F1`)
 - **Changed:** `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md` (documentation only; no code changed).
 - **Why:** Record the user's live visual and ear check confirming that the Main Menu (`4f-1`..`4f-3` and `4f-F1`: startup menu, `theme.aud`, arrow navigation, difficulty popup `Enter` without pointer jump, Daventry loading screen with red progress meter, and starting a New game from inside a running or post-death game) works as expected.

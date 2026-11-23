@@ -1097,6 +1097,14 @@ inventory and menus.
     Logged `Q203`–`Q205` in `docs/behaviour/QUESTIONS.md` for Study
     Session A (`save-and-load.md`, `options-menu.md`, and `Replay Intro`
     AVI playback).
+  - **4f-F2, fall-death and dying health bar (`0 %`)** (**done**
+    2026-11-23; `door_view.rs`, `gui_view.rs`; `interface.md` rule 21,
+    `fighting.md` rule 29). When Connor enters `Mode::Dying` or
+    `Mode::Dead` from a fatal fall (`jumpdie` / `runJumpDie` /
+    `backJumpDie`), `trap_step` sets `connor_dying = true` and increments
+    `connor_stats_events`, and `gui_step` passes `dead` (instead of the M4
+    4c-2 placeholder `false`) to `gui.meters.send(&stats, dead, red)`, so
+    the health bar drops to `0 %` (`0 of 107 px`) on the landing update.
 
 ### M5 — Fight
 

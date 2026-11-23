@@ -1140,6 +1140,15 @@ pub fn trap_step(
     let portal = sim.active.world.connor_portal.is_some();
     sim.active.world.connor_state = Some(if portal { kq8_core::character::state_number::PORTAL } else { connor.state_number() });
     sim.active.world.connor_at = Some(connor.mover.position);
+    // interface.md rule 21 & fighting.md rule 29: when Connor enters a dying
+    // or dead state from a fall (`jumpdie` / `runJumpDie` / `backJumpDie`),
+    // sync `connor_dying` and fire a stats event so the health bar drops to 0 %
+    // immediately on landing.
+    let connor_dead_or_dying = matches!(connor.walker.mode, Mode::Dying | Mode::Dead);
+    if connor_dead_or_dying && !sim.active.world.connor_dying {
+        sim.active.world.connor_dying = true;
+        sim.active.world.connor_stats_events += 1;
+    }
     // U-7 (water.md "Liquid damage"): the square under him after his move.
     if let Some(s) = connor.mover.liquid.take() {
         sim.active.connor_liquid(s);
