@@ -10,8 +10,8 @@ Format: date and title, then Changed / Why / Tested how / Result / Still broken 
   1. `cargo test --workspace` (`823` unit tests) and `cargo build --release -p kq8-viewer`.
   2. Headless fall-death run: `target\release\kq8-viewer.exe --skip-menu --sound off --lift 5000 --frames 200`.
 - **Result:** All `823` workspace unit tests and the headless `--lift 5000` run pass (`RESULT: PASS`). In `connor.log` and `gui.log`, on the exact landing update (`update 12: state fall -> dead`, `mode dying`), `stats event #1` fires and redraws `IDCTL_METERS` with `health 0 % (bar 0 of 107 px)` (`4red.pbm stretched over 0 of 107 px, 4black.pbm over the rest`).
-- **Still broken / not tested:** Live visual check of the fall-death health bar by the user; `Load`, `Save`, `Options`, and `Replay Intro` await Study Session A on `Q203`–`Q205`.
-- **Next:** User checks the fall-death health bar live (`cargo play --skip-menu`, press `G`).
+- **Still broken / not tested:** Confirmed working live by the user (`2026-11-23`); `Load`, `Save`, `Options`, and `Replay Intro` await Study Session A on `Q203`–`Q205`.
+- **Next:** Run Study Session A on `Q202`–`Q205` (or Batch 5 Barren), then implement in Session B.
 
 ## 2026-11-23 M4 step 4f: Record live visual and ear check of the Main Menu (`4f-1`..`4f-3`, `4f-F1`)
 - **Changed:** `MODLOG.md`, `STATUS.md`, `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `docs/provenance/README.md` (documentation only; no code changed).
