@@ -506,12 +506,14 @@ fn haze_label_text(on: bool) -> String {
 }
 
 /// The on-screen line under the F7 line.
-pub fn setup_haze_label(mut commands: Commands, light: Res<ObjectLight>) {
+pub fn setup_haze_label(mut commands: Commands, light: Res<ObjectLight>, hud: Res<crate::terrain_view::DebugHudShown>) {
     commands.spawn((
         Text::new(haze_label_text(light.haze_on)),
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(Color::WHITE),
         Node { position_type: PositionType::Absolute, top: Val::Px(74.0), left: Val::Px(10.0), ..default() },
+        if hud.0 { Visibility::Inherited } else { Visibility::Hidden },
+        crate::terrain_view::DebugHudText,
         HazeLabel,
     ));
 }

@@ -1066,6 +1066,9 @@ ear by the user (`2026-11-23`):**
   Models keep their point lights either way. Checked by eye by the user
   (2026-10-17): the moving lights go, the baked ones stay, and all come
   back.
+- **F12:** shows or hides the on-screen debug text overlay (`H`, `U`,
+  `F7`/`F9`, `F8`, `F4`, `F3`, and the bottom-left camera coordinates;
+  hidden by default).
 - **Command console:** type script commands in the terminal that runs
   the game (`give SmCrossbow`, `move Connor 3 0 0 2000`, `where`,
   `help`); each runs at the next update as if a script ran it, and the

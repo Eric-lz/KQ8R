@@ -334,13 +334,15 @@ fn ai_label(off: bool) -> (String, Color) {
 }
 
 /// The on-screen line under the F8 line.
-pub fn setup_ai_label(mut commands: Commands, start: Res<AiOff>) {
+pub fn setup_ai_label(mut commands: Commands, start: Res<AiOff>, hud: Res<crate::terrain_view::DebugHudShown>) {
     let (text, color) = ai_label(start.0);
     commands.spawn((
         Text::new(text),
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(color),
         Node { position_type: PositionType::Absolute, top: Val::Px(96.0), left: Val::Px(10.0), ..default() },
+        if hud.0 { Visibility::Inherited } else { Visibility::Hidden },
+        crate::terrain_view::DebugHudText,
         AiLabel,
     ));
 }
@@ -383,13 +385,15 @@ fn god_label(on: bool) -> (String, Color) {
 }
 
 /// The on-screen line under the AI line.
-pub fn setup_god_label(mut commands: Commands, start: Res<GodStart>) {
+pub fn setup_god_label(mut commands: Commands, start: Res<GodStart>, hud: Res<crate::terrain_view::DebugHudShown>) {
     let (text, color) = god_label(start.0);
     commands.spawn((
         Text::new(text),
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(color),
         Node { position_type: PositionType::Absolute, top: Val::Px(118.0), left: Val::Px(10.0), ..default() },
+        if hud.0 { Visibility::Inherited } else { Visibility::Hidden },
+        crate::terrain_view::DebugHudText,
         GodLabel,
     ));
 }

@@ -1313,6 +1313,7 @@ pub fn gui_step(
     mut speech: ResMut<crate::talk_view::Speech>,
     mut menu: Option<ResMut<crate::menu_view::MenuView>>,
     mut sound: Option<ResMut<crate::sound_view::SoundSim>>,
+    mut debug_hud: Option<ResMut<crate::terrain_view::DebugHudShown>>,
     change: Res<crate::world_build::WorldChange>,
     shared: Res<Shared>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -1364,6 +1365,15 @@ pub fn gui_step(
             }
             "f4" => crate::door_view::flip_ai(&mut sim, &how),
             "f3" => crate::door_view::flip_god(&mut sim, &how),
+            "f12" => {
+                if let Some(hud) = debug_hud.as_mut() {
+                    hud.0 = !hud.0;
+                    shared.log.lock().unwrap().summary(format!(
+                        "update {updates}: {how}: on-screen debug text {}",
+                        if hud.0 { "shown" } else { "hidden" }
+                    ));
+                }
+            }
             // ranged-weapons.md rule 1 (M5 5f-3): Delete (Draw), Alt (Away).
             "delete" => sim.active.world.ask_weapon(kq8_core::weapons::Ask::Draw, &format!("update {updates}: {how} (Draw)")),
             "alt" => sim.active.world.ask_weapon(kq8_core::weapons::Ask::Away, &format!("update {updates}: {how} (Away)")),

@@ -158,6 +158,7 @@ Follows original game's default keybindings, plus extra debugging keys. Pressing
 | G / B | Test: lift Connor high / a little and let him fall |
 | F3 | Test: god mode on / off (Connor can't be hurt or die from a fall) |
 | F4 | Test: creatures' AI off / on (they don't notice or attack Connor) |
+| F12 | Show / hide on-screen debug text |
 
 Fighting (first version): click the hand-weapon slot in the bottom bar
 (or press Delete) to ready Connor's fists, then left-click a creature to

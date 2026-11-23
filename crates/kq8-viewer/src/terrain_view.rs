@@ -881,6 +881,17 @@ pub fn setup_objects(
 #[derive(Component)]
 pub struct ShownWithH;
 
+/// Marker on all on-screen debug text labels (`HLabel`, `FloorLabel`,
+/// `LightLabel`, `HazeLabel`, `AiLabel`, `GodLabel`, `CameraLabel`), hidden by
+/// default and toggled on/off with **F12** ([`toggle_debug_hud`]).
+#[derive(Component)]
+pub struct DebugHudText;
+
+/// Whether the on-screen debug text overlay ([`DebugHudText`]) is shown.
+/// Hidden (`false`) by default; toggled with **F12** (or `--key f12,N`).
+#[derive(Resource, Default)]
+pub struct DebugHudShown(pub bool);
+
 /// The small on-screen text that says whether H is on.
 #[derive(Component)]
 pub struct HLabel;
@@ -902,12 +913,15 @@ fn h_label_text(shown: bool) -> String {
     format!("Hidden objects: {} (H)", if shown { "SHOWN" } else { "hidden" })
 }
 
-pub fn setup_h_label(mut commands: Commands) {
+pub fn setup_h_label(mut commands: Commands, hud: Res<DebugHudShown>) {
+    let vis = if hud.0 { Visibility::Inherited } else { Visibility::Hidden };
     commands.spawn((
         Text::new(h_label_text(false)),
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(Color::WHITE),
         Node { position_type: PositionType::Absolute, top: Val::Px(8.0), left: Val::Px(10.0), ..default() },
+        vis,
+        DebugHudText,
         HLabel,
     ));
     commands.spawn((
@@ -915,6 +929,8 @@ pub fn setup_h_label(mut commands: Commands) {
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(Color::WHITE),
         Node { position_type: PositionType::Absolute, top: Val::Px(30.0), left: Val::Px(10.0), ..default() },
+        vis,
+        DebugHudText,
         FloorLabel,
     ));
     commands.spawn((
@@ -922,8 +938,34 @@ pub fn setup_h_label(mut commands: Commands) {
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(Color::WHITE),
         Node { position_type: PositionType::Absolute, bottom: Val::Px(8.0), left: Val::Px(10.0), ..default() },
+        vis,
+        DebugHudText,
         CameraLabel,
     ));
+}
+
+/// F12 (or `--key f12,N` via `hud.is_changed()`): shows or hides the on-screen
+/// debug text lines ([`DebugHudText`]).
+pub fn toggle_debug_hud(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut hud: ResMut<DebugHudShown>,
+    shared: Res<Shared>,
+    mut labels: Query<&mut Visibility, With<DebugHudText>>,
+) {
+    if keys.just_pressed(KeyCode::F12) {
+        hud.0 = !hud.0;
+        shared.log.lock().unwrap().summary(format!(
+            "key F12: on-screen debug text {} ({} lines)",
+            if hud.0 { "shown" } else { "hidden" },
+            labels.iter().count()
+        ));
+    }
+    let want = if hud.0 { Visibility::Inherited } else { Visibility::Hidden };
+    for mut v in &mut labels {
+        if *v != want {
+            *v = want;
+        }
+    }
 }
 
 /// The on-screen camera position (bottom left).

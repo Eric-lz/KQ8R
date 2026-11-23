@@ -225,12 +225,14 @@ fn label_text(mode: LightMode, dynamic: bool) -> String {
     format!("Light, ground and objects: {what} (F7); dynamic lighting {} (F9)", if dynamic { "on" } else { "off" })
 }
 
-pub fn setup_light_label(mut commands: Commands, light: Res<GroundLight>, shared: Res<Shared>) {
+pub fn setup_light_label(mut commands: Commands, light: Res<GroundLight>, hud: Res<crate::terrain_view::DebugHudShown>, shared: Res<Shared>) {
     commands.spawn((
         Text::new(label_text(light.mode, light.dynamic)),
         TextFont { font_size: FontSize::Px(16.0), ..default() },
         TextColor(Color::WHITE),
         Node { position_type: PositionType::Absolute, top: Val::Px(52.0), left: Val::Px(10.0), ..default() },
+        if hud.0 { Visibility::Inherited } else { Visibility::Hidden },
+        crate::terrain_view::DebugHudText,
         LightLabel,
     ));
     shared.log.lock().unwrap().summary(format!(
