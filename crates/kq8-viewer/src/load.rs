@@ -5084,12 +5084,26 @@ impl Placer<'_> {
         }
     }
 
+    fn load_item_shape(&mut self, shape: &str) -> Option<usize> {
+        let key = shape.to_ascii_lowercase();
+        match self.index_of.get(&key) {
+            Some(slot) => *slot,
+            None => {
+                let slot = self.load_shape(shape, None, None, None, false);
+                self.index_of.insert(key, slot);
+                slot
+            }
+        }
+    }
+
     /// Summary lines, then the result.
     /// Loads the model of every item type that can appear in this world:
     /// those the start-up scripts made, those the world's scripts make or
-    /// throw (`KQMonster::inventory`, `give`, `KQObject::tossItems`) and
-    /// those its chests hold (`invItemTypeName`). Returns `IDName` ->
-    /// model, and the lines for `items.log`.
+    /// throw (`KQMonster::inventory`, `give`, `KQObject::tossItems`), those
+    /// its chests hold (`invItemTypeName`), plus any remaining equipment models
+    /// present in this world or `GAME/Common` (so `give` or carried items
+    /// render when swapped or dropped). Returns `IDName` -> model, and the
+    /// lines for `items.log`.
     fn item_models(&mut self, script: &kq8_data::world_script::ScriptRun) -> (BTreeMap<String, usize>, Vec<String>) {
         let mut named: Vec<String> = self.items.objects.iter().map(|o| o.kind.clone()).collect();
         // U-10 (`objects.md` "River controls"): rusted items created when
@@ -5186,15 +5200,7 @@ impl Placer<'_> {
             if shapes.contains_key(&t.name) || failed.contains(&failure) {
                 continue;
             }
-            let key = t.shape.to_ascii_lowercase();
-            let slot = match self.index_of.get(&key) {
-                Some(slot) => *slot,
-                None => {
-                    let slot = self.load_shape(&t.shape, None, None, None, false);
-                    self.index_of.insert(key, slot);
-                    slot
-                }
-            };
+            let slot = self.load_item_shape(&t.shape);
             match slot {
                 Some(i) => {
                     shapes.insert(t.name.clone(), i);
@@ -5202,6 +5208,17 @@ impl Placer<'_> {
                 // Models are looked up in this world and `GAME/Common`
                 // only (as objects').
                 None => failed.push(failure),
+            }
+        }
+        // Preload any remaining equipment models that exist in this world or
+        // `GAME/Common` (same pattern as console-given ranged weapons above),
+        // so equipment given via console `give` or carried from another world
+        // renders when swapped onto a shop shelf or dropped in the world.
+        for (name, shape) in extra_equipment_types(&self.items.types.types, &shapes) {
+            if model_shape(self.game, self.world, &shape).is_ok() {
+                if let Some(i) = self.load_item_shape(&shape) {
+                    shapes.insert(name, i);
+                }
             }
         }
         // fighting.md rule 31a, anim-scripts.md rule 16 (C-1): each item
@@ -6065,6 +6082,28 @@ fn classify_markers(markers: &mut [Marker], scripts: &[(String, Vec<u8>)]) {
     }
 }
 
+/// Equipment item types not yet in `loaded`, excluding the three
+/// `PLACEHOLDERS` (`INVITEM_Fists`, `INVITEM_NoRanged`, `INVITEM_NoArmor`).
+/// Used so equipment given via console `give` or carried from another world
+/// still renders when swapped onto a shop shelf or dropped in the world.
+fn extra_equipment_types(
+    types: &[kq8_data::items::ItemType],
+    loaded: &BTreeMap<String, usize>,
+) -> Vec<(String, String)> {
+    types
+        .iter()
+        .filter(|t| {
+            !t.shape.is_empty()
+                && !loaded.contains_key(&t.name)
+                && !kq8_core::connor_inventory::places(&t.category).is_empty()
+                && !kq8_core::connor_inventory::PLACEHOLDERS
+                    .iter()
+                    .any(|p| p.eq_ignore_ascii_case(&t.name))
+        })
+        .map(|t| (t.name.clone(), t.shape.clone()))
+        .collect()
+}
+
 #[cfg(test)]
 mod marker_tests {
     use super::{classify_trap_script, MarkerKind};
@@ -6106,5 +6145,64 @@ mod marker_tests {
 
         let generic = "if test $2 == On\n  sendEvent 0 trip1 KQCueEvent 1 0\nendif";
         assert_eq!(classify_trap_script(Some("plate.cs"), Some(generic), false), MarkerKind::GenericTrap);
+    }
+}
+
+#[cfg(test)]
+mod item_tests {
+    use std::collections::BTreeMap;
+
+    use kq8_data::items::ItemType;
+
+    use super::extra_equipment_types;
+
+    fn item_type(name: &str, category: &str, shape: &str) -> ItemType {
+        ItemType {
+            key: String::new(),
+            class: "KQInventoryItemType".into(),
+            name: name.into(),
+            id: None,
+            category: category.into(),
+            land_sound: None,
+            pickup_sound: None,
+            shape: shape.into(),
+            radius: None,
+            translucency: None,
+            stats: [0; 5],
+            combine: false,
+            picture: String::new(),
+            message: String::new(),
+            mode: "NoModeChange".into(),
+            duration: 0.0,
+            use_sound: None,
+            cursor: None,
+            extra: None,
+        }
+    }
+
+    #[test]
+    fn extra_equipment_types_filters_placeholders_non_equipment_and_loaded() {
+        let types = vec![
+            item_type("INVITEM_LeatherArmor", "Armor", "leathr.kqs"),
+            item_type("INVITEM_BroadSword", "ShortWeapon", "bsword.kqs"),
+            item_type("INVITEM_ChainMailSuit", "UnderArmor", "chnml01.kqs"),
+            item_type("INVITEM_FullArmor", "FullArmor", "armor.kqs"),
+            item_type("INVITEM_NoArmor", "Armor", "firebow1.kqs"),
+            item_type("INVITEM_Fists", "ShortWeapon", "ax.kqs"),
+            item_type("INVITEM_NoRanged", "LongWeapon", "firebow1.kqs"),
+            item_type("INVITEM_Crystal", "HealthItem", "crystl.KQS"),
+            item_type("INVITEM_SilverCoins", "Money", "pouch.kqs"),
+            item_type("INVITEM_ShardFuse", "QuestItem", "shardfus.kqs"),
+            item_type("INVITEM_EmptyShape", "Armor", ""),
+        ];
+        let loaded = BTreeMap::from([("INVITEM_BroadSword".to_string(), 7)]);
+        assert_eq!(
+            extra_equipment_types(&types, &loaded),
+            vec![
+                ("INVITEM_LeatherArmor".to_string(), "leathr.kqs".to_string()),
+                ("INVITEM_ChainMailSuit".to_string(), "chnml01.kqs".to_string()),
+                ("INVITEM_FullArmor".to_string(), "armor.kqs".to_string()),
+            ]
+        );
     }
 }

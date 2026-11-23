@@ -2,22 +2,25 @@
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
 implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`) plus post-playtest fixes
-(`B4-F1`..`B4-F5`: boulder trap visits + `place_of` traps/items, `changeBmp`
+(`B4-F1`..`B4-F6`: boulder trap visits + `place_of` traps/items, `changeBmp`
 shared-`.kqs` material deduplication, `KQObject::collisionType` on characters,
 numeric `ID #` lookup in `ItemTypes::find`, `KQMonster::dropItem` equipment/
-rotation/`NewInvItem` + swap-angle preservation for Gnome's weapon/armor shops).
+rotation/`NewInvItem` + swap-angle preservation, and preloading available
+equipment item models for console `give` / shop swaps).
 Live play confirmed `B4-2` (`useAlternateLightmap`), `B4-F1` (boulder drop
-cutscene), `B4-F2` (Dragon idle texture), and `B4-F3` (Dragon melee hits) all
-work; **`B4-F4`/`B4-F5` Gnome weapon/armor shop live re-check pending**. Previously
-confirmed live: `B1-F1c` (`Q199`b) and `B3-F4` (`Q201`). Read with `AGENTS.md`,
-`docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries at the top).
-The short public summary is `README.md`; the detailed "what works" list is
-`docs/FEATURES.md`.
+cutscene), `B4-F2` (Dragon idle texture), `B4-F3` (Dragon melee hits), and
+`B4-F4`/`B4-F5` Weapons Gnome, Apothecary Gnome, and Armor Gnome shop logic all
+work; **`B4-F6` `give leatherarmor` shelf visibility live re-check pending**.
+Previously confirmed live: `B1-F1c` (`Q199`b) and `B3-F4` (`Q201`). Read with
+`AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries
+at the top). The short public summary is `README.md`; the detailed "what works"
+list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-22)
 
-- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F5`):**
-  - **Confirmed live (`B4-2`, `B4-F1`..`B4-F3`):** Tunnel alternate lighting (`useAlternateLightmap gnome13|gnome14`), boulder drop cutscene (`Bouldtrp`), Dragon idle brightness after `changeBmp Dragon normal`, and Dragon melee combat all confirmed working in live play.
+- **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F6`):**
+  - **Confirmed live (`B4-2`, `B4-F1`..`B4-F5`):** Tunnel alternate lighting (`useAlternateLightmap gnome13|gnome14`), boulder drop cutscene (`Bouldtrp`), Dragon idle brightness after `changeBmp Dragon normal`, Dragon melee combat, Weapons Gnome & Apothecary Gnome shops, and Armor Gnome shop swap/purchase logic (save `give leatherarmor` shelf visibility, fixed in `B4-F6`) all confirmed working in live play.
+  - **`B4-F6` (Preload available equipment models for console `give` / shop swaps):** `Placer::item_models` (`crates/kq8-viewer/src/load.rs`) now preloads all non-placeholder equipment `ItemType`s (`extra_equipment_types`) whose `.kqs` model exists in the current world or `GAME/Common` (`INVITEM_LeatherArmor` -> `Leathr.kqs`) before reading `body` transforms, so console-given or carried equipment swapped onto a shop shelf renders instead of remaining invisible.
   - **`B4-F5` (`KQMonster::dropItem` & swap angles for Gnome shops):** `drop_item_command` now sets `NewInvItem`, parses optional `rx ry rz` (`-1.1 0 2.4`), resolves `z == -1 / -2` via `resolve_world_position`, un-applies and moves single non-stacking equipment (`WarHammer`, armor) as the same object (`items.md` rule 9), clears hand/readied weapon/`take_ranged_item(NO_RANGED)`, and restores slot placeholders (`INVITEM_Fists`, `INVITEM_NoRanged`, `INVITEM_NoArmor`, stand-in matching `inventory.md` rule 23); `connor_inventory::receive` preserves world item `angles` when equipment swaps back onto a shelf.
   - **`B4-F4` (`Invinfo.itl` `ID #` & `place_of` items):** `ItemTypes::find` accepts numeric `ID #` strings (`1060`, `1150`, `2050`, ...) passed by `weapngnm.cs` / `armorgnm.cs` / `emptyloc.cs` to `KQMonster::checkInventory`, and `WorldState::place_of` resolves `Place::World` items for `getLoc` / `checkDistance` (`WarHammr.cs`, shop counter/shelf slot checks, `myweapon.cs` / `myarmor.cs` swap-back & purchase deletion).
   - **`B4-F1` + `B4-F1b` (`traps.md` rules 4–6):** `push_apply` sends each pushed object (`BoxCollider` `Visitor` via `Active::object_moved`) to traps so `boulder` (`colliderType = 257`) triggers `Bouldtrp`/`Bouldtp2` (`colliderMask = 1`), `place_of` resolves live traps for `checkDistance`, and `move_object` emits `Request::Move` + syncs `clickables` on translating `KQBoulder` moves.

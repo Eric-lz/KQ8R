@@ -4344,4 +4344,11 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Dropping Connor's only `ShortWeapon`, `LongWeapon`, or outer `Armor` (with no `FullArmor`/`GodArmor` carried) restores the matching slot placeholder (`INVITEM_Fists`, `INVITEM_NoRanged`, `INVITEM_NoArmor`) | **Stand-in** matching `inventory.md` rule 23 (so re-entering `Wpngnome`/`Armrgnome` keeps `1280`/`1310`/`2120` in `getConInventory`) | unit tests above (`INVITEM_NoArmor`, `INVITEM_Fists`) |
 | `connor_inventory::receive` preserves `Place::World` item `angles` when equipment swaps an old piece into the picked-up item's world spot | `inventory.md` rule 8 + observed `MASK/Gnome/kq/{worldvar,worldinv}.cs` (`$Gnome::Armory::rot = -1.1 0 2.4`) | unit test `swapping_with_world_equipment_preserves_item_angles` |
 
+## B4-F6 2026-11-22: Preload available equipment models for console `give` & shop swaps — viewer `load.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `Placer::item_models` (`extra_equipment_types`, `Placer::load_item_shape`) preloads all non-placeholder equipment `ItemType`s (`connor_inventory::places`) whose `.kqs` exists in the world or `GAME/Common` (`MASK/GAME/Common/Leathr.kqs` for `INVITEM_LeatherArmor`) before reading `body` transforms, matching the existing `LongWeapon` preload pattern | `items.md` rule 1 & rule 5 (`GAME/Kq/Invinfo.itl`, `GAME/Common/*.kqs`), `inventory.md` rules 3 & 8; observed `give leatherarmor` swap onto Gnome Armor Shop shelf | unit test `extra_equipment_types_filters_placeholders_non_equipment_and_loaded`; headless Gnome (`GAME/Common/leathr.kqs` loaded, `NoName74` swapped to `(147535, 43484, 12595)`, item entity spawned) |
+
+
 
