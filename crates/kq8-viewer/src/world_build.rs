@@ -643,7 +643,7 @@ pub fn world_change_step(world: &mut World) {
                 }
                 let shared_log = world.resource::<Shared>().log.clone();
                 crate::loading_screen::open(world, &request.world, &shared_log);
-                world.resource_mut::<WorldChange>().step = Step::Down { request, frames: 0, from, journey: None };
+                world.resource_mut::<WorldChange>().step = Step::Down { request, frames: FREE_FRAMES, from, journey: None };
                 return;
             }
             let before = Counts::of(world);
@@ -782,9 +782,16 @@ pub fn world_change_step(world: &mut World) {
             };
             let percent = Arc::new(AtomicU32::new(0));
             let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());
+            // Use a dedicated log instance for the background reading thread so it
+            // never holds the main thread's `shared.log` mutex during the ~2 s read
+            // (which blocked `fit_screen` and froze the loading screen on a grey frame!).
             let read = std::thread::Builder::new().name("world read".into()).spawn(move || {
-                let mut log = shared_log.lock().unwrap();
-                GameDir::open(&opts.game).map_err(|e| e.to_string()).and_then(|game| read_world(&game, &name, &opts, arrival, Some(thread_percent), &mut log))
+                let mut thread_log = Log::create("viewer").map_err(|e| e.to_string())?;
+                let res = GameDir::open(&opts.game)
+                    .map_err(|e| e.to_string())
+                    .and_then(|game| read_world(&game, &name, &opts, arrival, Some(thread_percent), &mut thread_log));
+                let _ = shared_log;
+                res
             });
             let read = match read {
                 Ok(handle) => handle,
@@ -1046,7 +1053,6 @@ per_world!(
     talk_view::Speech,
     gui_view::GuiCover,
     gui_view::MapDrag,
-    gui_view::ScreenFrame,
     gui_view::BarActions,
     gui_view::CaptionPlace,
     object_light::HazeCheck,

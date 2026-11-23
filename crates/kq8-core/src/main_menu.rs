@@ -60,8 +60,6 @@ pub const POPUP_BTN_HEIGHT: i32 = 36;
 pub const POPUP_TWO_BTN_X: [i32; 2] = [188, 361];
 pub const POPUP_THREE_BTN_X: [i32; 3] = [158, 274, 392];
 pub const POPUP_WRAP_CHARS: usize = 38;
-/// Rule 16: Enter moves the pointer 16 px below the button's middle.
-pub const ENTER_POINTER_OFFSET_Y: i32 = 16;
 
 /// Saved-game thumbnail size (`main-menu.md` rules 7.3, 22).
 pub const THUMBNAIL_WIDTH: u32 = 160;
@@ -397,15 +395,6 @@ impl MenuPopup {
             })
             .collect()
     }
-
-    /// Target pointer position when Enter presses the highlighted button
-    /// (`main-menu.md` rule 16: button's middle, 16 px lower).
-    pub fn enter_pointer_pos(&self) -> Option<[f32; 2]> {
-        let r = self.button_rects().get(self.highlight).copied()?;
-        let mx = 0.5 * (r[0] + r[2]) as f32;
-        let my = 0.5 * (r[1] + r[3]) as f32 + ENTER_POINTER_OFFSET_Y as f32;
-        Some([mx, my])
-    }
 }
 
 /// Actions emitted by [`MainMenuState`] for the viewer (`menu_view.rs`).
@@ -420,8 +409,6 @@ pub enum MenuAction {
     ReplayIntro,
     Quit,
     DeleteCorruptSave { file: String },
-    MovePointer([f32; 2]),
-    RestorePointer([f32; 2]),
     Note(String),
 }
 
@@ -436,7 +423,6 @@ pub struct MainMenuState {
     pub selected: MenuItem,
     pub popup: Option<MenuPopup>,
     pub input_block_remaining: f64,
-    pub pointer_saved: Option<[f32; 2]>,
 }
 
 impl MainMenuState {
@@ -451,7 +437,6 @@ impl MainMenuState {
             selected: MenuItem::New,
             popup: None,
             input_block_remaining: INPUT_BLOCK_SECONDS,
-            pointer_saved: None,
         };
         let mut actions = s.apply_show(scan, texts, "startup");
         actions.insert(0, MenuAction::Note("main menu opens at program start (rule 6): no game running, New chosen, Save & Back to Game off".into()));
@@ -469,7 +454,6 @@ impl MainMenuState {
             selected: MenuItem::BackToGame,
             popup: None,
             input_block_remaining: 0.0,
-            pointer_saved: None,
         }
     }
 
@@ -478,7 +462,6 @@ impl MainMenuState {
     pub fn open_from_gameplay(&mut self, scan: SaveScan, texts: &MenuTexts, how: &str) -> Vec<MenuAction> {
         self.open = true;
         self.connor_died = false;
-        self.pointer_saved = None;
         let mut actions = vec![MenuAction::Note(format!(
             "main menu opens via {how} (rules 7-8): panels hidden, game paused, 160x120 thumbnail recorded, death mark cleared"
         ))];
@@ -490,7 +473,6 @@ impl MainMenuState {
     pub fn open_on_death(&mut self, scan: SaveScan, texts: &MenuTexts) -> Vec<MenuAction> {
         self.open = true;
         self.connor_died = true;
-        self.pointer_saved = None;
         let mut actions = vec![MenuAction::Note(
             "main menu opens after Connor's death (rule 25): death mark set, Save & Back to Game off, New chosen".into(),
         )];
@@ -599,22 +581,19 @@ impl MainMenuState {
         ]
     }
 
-    /// Enter key going down (`main-menu.md` rules 16, 19).
-    pub fn press_enter(&mut self, pointer_now: Option<[f32; 2]>, texts: &MenuTexts) -> Vec<MenuAction> {
+    /// Enter key going down (`main-menu.md` rules 16, 19; user check 2026-11-23:
+    /// pressing Enter on a popup presses the highlighted button without moving
+    /// the mouse pointer).
+    pub fn press_enter(&mut self, texts: &MenuTexts) -> Vec<MenuAction> {
         if !self.open || self.input_blocked() {
             return Vec::new();
         }
         if let Some(popup) = self.popup.as_mut() {
             popup.pressed = Some(popup.highlight);
-            let mut actions = Vec::new();
-            if let Some(target) = popup.enter_pointer_pos() {
-                if let Some(orig) = pointer_now {
-                    self.pointer_saved = Some(orig);
-                }
-                actions.push(MenuAction::MovePointer(target));
-            }
-            actions.push(MenuAction::Note(format!("popup Enter pressed on button {} (rule 16)", popup.highlight)));
-            return actions;
+            return vec![MenuAction::Note(format!(
+                "popup Enter pressed on button {} (rule 16)",
+                popup.highlight
+            ))];
         }
         let item = self.selected;
         if !self.is_enabled(item) {
@@ -634,12 +613,7 @@ impl MainMenuState {
         let Some(pressed) = popup.pressed.take() else {
             return Vec::new();
         };
-        let mut actions = Vec::new();
-        if let Some(orig) = self.pointer_saved.take() {
-            actions.push(MenuAction::RestorePointer(orig));
-        }
-        actions.extend(self.pick_popup_button(pressed, "Enter released", texts));
-        actions
+        self.pick_popup_button(pressed, "Enter released", texts)
     }
 
     /// Escape key pressed on the menu (`main-menu.md` rules 9, 16, Edge cases).
@@ -775,7 +749,6 @@ impl MainMenuState {
                 self.open = false;
                 self.has_started_or_loaded = true;
                 self.connor_died = false;
-                self.pointer_saved = None;
                 actions.push(MenuAction::Note(format!(
                     "Difficulty {label} ({how}): combat level {level_num} ({factor}); fading theme & starting Daventry (rules 10, 24)"
                 )));
@@ -792,7 +765,6 @@ impl MainMenuState {
         }
         self.open = false;
         self.popup = None;
-        self.pointer_saved = None;
         vec![
             MenuAction::FadeTheme,
             MenuAction::ResumeGame,
@@ -883,7 +855,7 @@ mod tests {
         assert!(!esc.iter().any(|a| matches!(a, MenuAction::ResumeGame)));
 
         // Enter on New opens Difficulty with Normal (1) highlighted.
-        let act = m.press_enter(None, &texts);
+        let act = m.press_enter(&texts);
         assert!(act.iter().any(|a| matches!(a, MenuAction::PlayMenuSound { file: SELECT_SOUND, .. })));
         let p = m.popup.as_ref().unwrap();
         assert_eq!((&p.kind, p.highlight), (&MenuPopupKind::Difficulty, 1));
@@ -907,11 +879,11 @@ mod tests {
         m.move_popup_highlight(1);
         assert_eq!(m.popup.as_ref().unwrap().highlight, 2);
 
-        // Enter moves pointer onto Hard (+16 px below middle) and release restores + starts Daventry.
-        let press = m.press_enter(Some([100.0, 100.0]), &texts);
-        assert_eq!(press[0], MenuAction::MovePointer([436.0, 284.0]));
+        // Enter presses Hard without moving the pointer and release starts Daventry.
+        let press = m.press_enter(&texts);
+        assert_eq!(m.popup.as_ref().unwrap().pressed, Some(2));
+        assert!(!press.iter().any(|a| matches!(a, MenuAction::StartNewGame { .. })));
         let rel = m.release_enter(&texts);
-        assert_eq!(rel[0], MenuAction::RestorePointer([100.0, 100.0]));
         assert!(rel.contains(&MenuAction::FadeTheme));
         assert!(rel.contains(&MenuAction::StartNewGame { combat_level_number: 3, factor: 1.5 }));
         assert!(!m.open && m.game_running());

@@ -134,6 +134,18 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
     };
     // The world's camera is gone: the panels need one of their own.
     world.spawn((Camera2d, Persistent, LoadingScreen));
+    let [fl, ft, fw, fh] = world
+        .get_resource::<crate::gui_view::ScreenFrame>()
+        .map(|f| f.0)
+        .filter(|f| f[2] > 0.0 && f[3] > 0.0)
+        .unwrap_or_else(|| {
+            let (ww, wh) = world
+                .query::<&Window>()
+                .iter(world)
+                .next()
+                .map_or((1280.0, 720.0), |w| (w.width(), w.height()));
+            kq8_core::panels::screen_frame([ww, wh])
+        });
     // The whole window black; in its middle a 4:3 box that holds the
     // 640 x 480 layout.
     let root = world
@@ -144,7 +156,14 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
             LoadingScreen,
         ))
         .id();
-    let four_three = Node { height: Val::Percent(100.0), max_width: Val::Percent(100.0), aspect_ratio: Some(4.0 / 3.0), ..default() };
+    let four_three = Node {
+        position_type: PositionType::Absolute,
+        left: Val::Px(fl),
+        top: Val::Px(ft),
+        width: Val::Px(fw),
+        height: Val::Px(fh),
+        ..default()
+    };
     let mut screen = world.spawn((four_three, Persistent, LoadingScreen, LoadingBox, ChildOf(root)));
     screen.with_children(|p| {
         // `Stretch`: the picture fills its place whatever its own size
@@ -172,8 +191,22 @@ pub fn open(world: &mut World, to: &str, log: &Arc<Mutex<Log>>) {
 }
 
 /// The meter at `percent` of its 630 pixels (rule 24), the black over the
-/// rest of the slot (rule 23, Q152).
+/// rest of the slot (rule 23, Q152); also keeps [`LoadingBox`] matched to
+/// [`ScreenFrame`] if the window is resized while loading.
 pub fn set_meter(world: &mut World, percent: u32) {
+    if let Some([fl, ft, fw, fh]) = world
+        .get_resource::<crate::gui_view::ScreenFrame>()
+        .map(|f| f.0)
+        .filter(|f| f[2] > 0.0 && f[3] > 0.0)
+    {
+        let mut q = world.query_filtered::<&mut Node, With<LoadingBox>>();
+        for mut node in q.iter_mut(world) {
+            node.left = Val::Px(fl);
+            node.top = Val::Px(ft);
+            node.width = Val::Px(fw);
+            node.height = Val::Px(fh);
+        }
+    }
     let filled = filled_pixels(percent) as f32;
     let mut q = world.query_filtered::<&mut Node, With<LoadingMeter>>();
     for mut node in q.iter_mut(world) {

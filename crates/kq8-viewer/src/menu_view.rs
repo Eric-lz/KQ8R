@@ -519,7 +519,7 @@ pub fn menu_step(
     time: Res<Time<Real>>,
     mut keys: ResMut<ButtonInput<KeyCode>>,
     buttons: Res<ButtonInput<MouseButton>>,
-    mut window: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
+    window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     frame: Res<ScreenFrame>,
     mut key_at: Option<ResMut<KeyAt>>,
     mut root_vis: Query<&mut Visibility, With<MenuRoot>>,
@@ -614,12 +614,6 @@ pub fn menu_step(
             (p.y - ft) * (480.0 / fh.max(1.0)),
         ]
     };
-    let to_window = |p: [f32; 2]| -> Vec2 {
-        Vec2::new(
-            fl + p[0] * (fw / 640.0),
-            ft + p[1] * (fh / 480.0),
-        )
-    };
     let cursor_layout = window.single().ok().and_then(|w| w.cursor_position()).map(to_layout);
 
     let mut actions = std::mem::take(&mut menu.pending_actions);
@@ -645,14 +639,14 @@ pub fn menu_step(
                 "left" => actions.extend(menu.state.move_popup_highlight(-1)),
                 "right" => actions.extend(menu.state.move_popup_highlight(1)),
                 "escape" | "close" => actions.extend(menu.state.press_escape()),
-                "enter_down" => actions.extend(menu.state.press_enter(cursor_layout.or(Some([320.0, 240.0])), &texts)),
+                "enter_down" => actions.extend(menu.state.press_enter(&texts)),
                 "enter_up" => actions.extend(menu.state.release_enter(&texts)),
                 "enter" => {
                     if menu.state.popup.is_some() {
-                        actions.extend(menu.state.press_enter(cursor_layout.or(Some([320.0, 240.0])), &texts));
+                        actions.extend(menu.state.press_enter(&texts));
                         actions.extend(menu.state.release_enter(&texts));
                     } else {
-                        actions.extend(menu.state.press_enter(cursor_layout, &texts));
+                        actions.extend(menu.state.press_enter(&texts));
                     }
                 }
                 click if click.starts_with("click:") => {
@@ -695,7 +689,7 @@ pub fn menu_step(
         }
         let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
         if keys.any_just_pressed(enter) {
-            actions.extend(menu.state.press_enter(cursor_layout, &texts));
+            actions.extend(menu.state.press_enter(&texts));
         }
         if keys.any_just_released(enter) {
             actions.extend(menu.state.release_enter(&texts));
@@ -776,20 +770,6 @@ pub fn menu_step(
                     &shared,
                     format!("corrupt save {file}: user chose Yes; file in read-only game install MASK/ left untouched on disk and skipped for this session (AGENTS.md rule 4)"),
                 );
-            }
-            MenuAction::MovePointer(target) => {
-                let win_pos = to_window(target);
-                menu.note(format!("pointer moved onto popup button at layout ({:.1}, {:.1}) -> window ({:.1}, {:.1}) (rule 16)", target[0], target[1], win_pos.x, win_pos.y));
-                if let Ok(mut w) = window.single_mut() {
-                    w.set_cursor_position(Some(win_pos));
-                }
-            }
-            MenuAction::RestorePointer(orig) => {
-                let win_pos = to_window(orig);
-                menu.note(format!("pointer restored to layout ({:.1}, {:.1}) -> window ({:.1}, {:.1}) (rule 16)", orig[0], orig[1], win_pos.x, win_pos.y));
-                if let Ok(mut w) = window.single_mut() {
-                    w.set_cursor_position(Some(win_pos));
-                }
             }
             MenuAction::Note(line) => {
                 menu.note(line);

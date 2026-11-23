@@ -1080,6 +1080,23 @@ inventory and menus.
     sub-screens without restarting `theme.aud`; Connor's `Mode::Dead`
     waits 2.0 s (`handsOff`) then opens the menu with `Save` and `Back to
     Game` off.
+  - **4f-F1, popup Enter pointer, loading screen draw, and in-game New
+    game crash fix** (**done** 2026-11-23; `main_menu.rs`, `menu_view.rs`,
+    `loading_screen.rs`, `world_build.rs`). After the user's first live
+    check of `4f`: (1) pressing Enter on a popup presses the highlighted
+    button without moving the mouse pointer (checked by the user in the
+    original); (2) the background world-reading thread opens its own
+    `Log::create("viewer")` handle instead of holding the main thread's
+    `shared.log` mutex for ~2 s (which blocked `fit_screen` and froze the
+    loading screen on a grey frame), and `LoadingBox` uses explicit
+    `ScreenFrame` pixel coordinates (`960 × 720` in `1280 × 720`) so
+    `Daventry.pbm` and the red meter draw smoothly (`~316` frames over
+    `1.8 s`, `0 % → 100 %`); (3) removed `ScreenFrame` from `per_world!`
+    so `take_down` does not strip the persistent window `ScreenFrame`
+    resource when starting a New game from an active or post-death world.
+    Logged `Q203`–`Q205` in `docs/behaviour/QUESTIONS.md` for Study
+    Session A (`save-and-load.md`, `options-menu.md`, and `Replay Intro`
+    AVI playback).
 
 ### M5 — Fight
 
