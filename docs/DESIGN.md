@@ -1056,8 +1056,8 @@ inventory and menus.
     check omitted ("Do not reproduce" 2), `SoundSystem::set_game_paused`
     pausing/resuming groups 0, 2, 3, and 5 while keeping groups 1 (menu
     SFX) and 4 (`theme.aud`, 1.0/s fade-out) playing.
-  - **4f-2, menu drawing, dithering, and theme audio** (pending;
-    `kq8-core` `gui_draw.rs`, `kq8-viewer` `menu_view.rs`,
+  - **4f-2, menu drawing, dithering, and theme audio** (**done**
+    2026-11-22; `kq8-core` `gui_draw.rs`, `kq8-viewer` `menu_view.rs`,
     `sound_view.rs`). Dithered text (`(x + 2 * y) % 4 == 0`, matching
     `potions.md` rule 29) for disabled menu items; `Mainmenu.gui` in
     `Menus.ppl` drawn in the centred 4:3 screen frame (`main18.pbm`,

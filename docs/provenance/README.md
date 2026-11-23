@@ -4366,6 +4366,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Popups (`NewConfirm` 158, `CorruptSave` 157, `QuitConfirm` 159, `Difficulty` 120; disk check omitted per "Do not reproduce" 2): >38-char 2-line split at middle space; 2 buttons (`x 188, 361`) / 3 buttons (`x 158, 274, 392`) at `y 250`, `88×36`; Left/Right non-wrapping with `click.aud` even at edge; Enter press moves pointer to `(mid_x, mid_y + 16)` and release restores & picks; Escape closes `Difficulty` to menu or resumes game from Yes/No when running; combat levels `0.66 / 1.0 / 1.5` (`1 / 2 / 3`) | `main-menu.md` rules 10, 13–16, 24, "Edge cases", "Do not reproduce" 2 | unit test `new_game_difficulty_popup_and_gameplay_resume` |
 | `SoundSystem::set_game_paused` pauses/resumes playing sounds in groups 0, 2, 3, and 5 (keeping their place and waiting fades) while leaving groups 1 (menu SFX) and 4 (`Start::menu_theme`, `MENU_THEME_FADE_RATE = 1.0`) playing and stepping fades | `sound.md` rules 50 & 54; `main-menu.md` rules 7.2, 8, 9 | unit test `sound::tests::game_pause_pauses_groups_0_2_3_5_and_keeps_1_and_4_playing_and_fading` |
 
+## M4 4f-2 2026-11-22: Main menu drawing, dithered items, popups, and theme music — core `gui_draw.rs`; viewer `menu_view.rs`, `sound_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `Piece::TextDithered` / `Canvas::text_dithered` draws disabled menu items on a 1-in-4 diagonal grid (`(x + 2*y) % 4 == 0`), matching the Invisibility potion's dither on Connor | `main-menu.md` rule 3 (checked by user in original 2026-10-21), `potions.md` rule 29, `objects.md` "Dithered objects" rule 3 | unit test `gui_draw::tests::dithered_text_keeps_one_in_four_pixels_on_diagonal_grid` |
+| `MenuView` loads `Mainmenu.gui`, `Menus.ppl`, `500.MSG`, `starttxt.txt`, `main18.pbm`, `45-line.pbm`, `Mskcur.pba` (animated at 10 fps real time), `gm_win2.pbm`, `g_ybtn.pba`, `g_yhibtn.pba`, `Cursgui.pba`, and fonts `27.pft`, `45.pft`, `consoleg.pft`, drawing the 640×480 menu in the centred 4:3 screen frame and logging to `menu.log` | `main-menu.md` rules 1–5, 14–16, "Data used"; `interface.md` rule 26a (`Q108` d, `Q171` c) | headless viewer runs in `4f-3` (`menu.log`, `viewer.log`) |
+| `SoundSim` (`set_game_paused`, `play_menu_sound`, `start_menu_theme`, `fade_menu_theme`) plays group-1 menu SFX and group-4 `theme.aud` (with 1.0/s fade-out) even while gameplay sounds are paused or no 3D camera is active yet | `main-menu.md` rules 7.2, 8, 9; `sound.md` rules 50 & 54 | headless viewer runs in `4f-3` (`sound.log`, `menu.log`) |
+
+
 
 
 

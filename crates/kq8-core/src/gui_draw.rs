@@ -62,6 +62,10 @@ pub enum Piece<'a> {
     Lower { rect: [i32; 4], pic: Pic<'a>, rows: u32 },
     /// A text in a font with a justification.
     Text { rect: [i32; 4], font: &'a Font, justification: u32, text: String },
+    /// A dithered text (`main-menu.md` rule 3: disabled menu items are
+    /// drawn greyed / dithered like Connor's Invisibility potion,
+    /// `potions.md` rule 29: 1 kept pixel in 4 on a diagonal grid).
+    TextDithered { rect: [i32; 4], font: &'a Font, justification: u32, text: String },
     /// A rectangle of one colour (4c-8: the black behind the meters'
     /// bars, the user's check).
     Fill { rect: [i32; 4], rgb: [u8; 3] },
@@ -262,6 +266,26 @@ impl Canvas {
             x += (g.width as f32 * font.h_scale + font.char_spacing as f32).round() as i32;
         }
     }
+
+    /// Draws `text` in `font` dithered on a 1-in-4 diagonal grid (`(x + 2*y) % 4 == 0`,
+    /// `main-menu.md` rule 3, `potions.md` rule 29).
+    pub fn text_dithered(&mut self, rect: [i32; 4], font: &Font, justification: u32, text: &str, scale: f32, palette: &[Rgb; 256]) {
+        let (mut x, y) = text_origin(rect, justification, text_width(font, text), font.char_height, scale);
+        for c in text.chars() {
+            let Some(g) = font.glyph(code(c)) else { continue };
+            if let Some(px) = font.glyph_pixels(g) {
+                for gy in 0..g.height as i32 {
+                    for gx in 0..g.width as i32 {
+                        let (sx, sy) = (x + gx, y + gy);
+                        if (sx.rem_euclid(4) + 2 * sy.rem_euclid(4)) % 4 == 0 {
+                            self.put(sx, sy, px[(gy * g.width as i32 + gx) as usize], true, palette);
+                        }
+                    }
+                }
+            }
+            x += (g.width as f32 * font.h_scale + font.char_spacing as f32).round() as i32;
+        }
+    }
 }
 
 /// The screen pixels a panel at layout point `origin`, `size` layout
@@ -285,6 +309,7 @@ pub fn draw(origin: [i32; 2], size: [i32; 2], scale: f32, pieces: &[Piece], pale
             Piece::Bar { rect, pic, black, shown } => c.bar(at(rect), *pic, *black, *shown, scale, palette),
             Piece::Lower { rect, pic, rows } => c.picture_lower(at(rect), *pic, *rows, scale, palette),
             Piece::Text { rect, font, justification, text } => c.text(at(rect), font, *justification, text, scale, palette),
+            Piece::TextDithered { rect, font, justification, text } => c.text_dithered(at(rect), font, *justification, text, scale, palette),
             Piece::Fill { rect, rgb } => c.fill(at(rect), *rgb, scale),
             Piece::Map { rect, pixels, view, arrow } => c.map(at(rect), pixels, *view, *arrow, scale, palette),
         }
@@ -418,5 +443,21 @@ mod tests {
         assert_eq!(c.at(29, 2), [200, 150, 50, 255]);
         assert_eq!(c.at(9, 1), [0, 0, 0, 0]);
         assert_eq!(c.at(30, 1), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn dithered_text_keeps_one_in_four_pixels_on_diagonal_grid() {
+        let f = crate::caption::tests::font();
+        let mut pal = [[0u8; 3]; 256];
+        pal[7] = [200, 150, 50];
+        let solid = draw([0, 0], [40, 4], 1.0, &[Piece::Text { rect: [0, 0, 40, 4], font: &f, justification: 0x11, text: "ab".into() }], &pal);
+        let dither = draw([0, 0], [40, 4], 1.0, &[Piece::TextDithered { rect: [0, 0, 40, 4], font: &f, justification: 0x11, text: "ab".into() }], &pal);
+        let solid_lit = (0..40).flat_map(|x| (0..4).map(move |y| (x, y))).filter(|&(x, y)| solid.at(x, y)[3] == 255).count();
+        let dither_lit = (0..40).flat_map(|x| (0..4).map(move |y| (x, y))).filter(|&(x, y)| dither.at(x, y)[3] == 255).count();
+        assert_eq!(solid_lit, 40);
+        assert_eq!(dither_lit, 10, "exactly 1 in 4 pixels drawn on the diagonal grid");
+        assert_eq!(dither.at(0, 0)[3], 255);
+        assert_eq!(dither.at(1, 0)[3], 0);
+        assert_eq!(dither.at(2, 1)[3], 255);
     }
 }

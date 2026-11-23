@@ -43,9 +43,45 @@ pub struct SoundSim {
     voices: HashMap<u64, u64>,
     /// Handle-based looping sounds from core (`KQWeepBolt::suckSound`, U-11).
     loops: HashMap<u64, u64>,
+    /// Main menu one-shot sounds queued in group 1 (`main-menu.md` rules 15, 18, 19).
+    menu_starts: Vec<Start>,
+    /// Main menu theme music (`theme.aud`, group 4; `main-menu.md` rules 8, 9).
+    menu_theme: Option<u64>,
+    want_menu_theme: bool,
 }
 
 impl SoundSim {
+    /// Pauses or resumes world sound groups 0, 2, 3, and 5 (`sound.md` rule 54,
+    /// `main-menu.md` rules 7.2, 8, 9).
+    pub fn set_game_paused(&mut self, paused: bool) {
+        self.system.set_game_paused(paused);
+    }
+
+    /// Queues a menu sound effect (`click.aud`, `intrface.aud`) in group 1.
+    pub fn play_menu_sound(&mut self, file: &str, why: String) {
+        self.menu_starts.push(Start::menu_one_shot(file, why));
+    }
+
+    /// Starts `theme.aud` in group 4 at full loudness with no fade-in (`main-menu.md` rule 8).
+    pub fn start_menu_theme(&mut self) {
+        if let Some(id) = self.menu_theme.take() {
+            if self.system.is_playing(id) {
+                self.system.stop(id, "restarting menu theme");
+            }
+        }
+        self.want_menu_theme = true;
+    }
+
+    /// Fades `theme.aud` out over 1 s at 1.0 / s (`main-menu.md` rule 9).
+    pub fn fade_menu_theme(&mut self) {
+        self.want_menu_theme = false;
+        if let Some(id) = self.menu_theme {
+            if self.system.is_playing(id) {
+                self.system.fade(id, 0.0, kq8_core::sound::MENU_THEME_FADE_RATE);
+            }
+        }
+    }
+
     /// A sound object prepared for a script's `loadKQ` comes into the
     /// world (M3 3k-4): it plays as any other from now on.
     pub fn wake(&mut self, name: &str) -> bool {
@@ -99,7 +135,22 @@ impl SoundSim {
             Some(m) => log.summary(format!("sound: music object {} with [{}] (rule 57)", m.object, m.names().join(", "))),
             None => log.summary("sound: no music object; KQMusic requests will be ignored (rule 57f)"),
         }
-        Some(SoundSim { system: SoundSystem::new(groups), audibles, music, output, cache: HashMap::new(), game: game.clone(), world: world.to_string(), log, frames: 0, voices: HashMap::new(), loops: HashMap::new() })
+        Some(SoundSim {
+            system: SoundSystem::new(groups),
+            audibles,
+            music,
+            output,
+            cache: HashMap::new(),
+            game: game.clone(),
+            world: world.to_string(),
+            log,
+            frames: 0,
+            voices: HashMap::new(),
+            loops: HashMap::new(),
+            menu_starts: Vec::new(),
+            menu_theme: None,
+            want_menu_theme: false,
+        })
     }
 }
 
@@ -151,111 +202,137 @@ pub fn sound_step(
     let Some(mut sim) = sim else { return };
     let sim = &mut *sim;
     sim.frames += 1;
-    let Ok(cam) = camera.single() else { return };
-    let view = View {
-        position: to_game(cam.translation),
-        right: direction_to_game(*cam.right()),
-        forward: direction_to_game(*cam.forward()),
+    let view = match camera.single() {
+        Ok(cam) => View {
+            position: to_game(cam.translation),
+            right: direction_to_game(*cam.right()),
+            forward: direction_to_game(*cam.forward()),
+        },
+        Err(_) => View {
+            position: [0.0; 3],
+            right: [1.0, 0.0, 0.0],
+            forward: [0.0, 1.0, 0.0],
+        },
     };
     // Rule 28: distance from Connor; no Connor in this world: the camera.
     let mut connor = connor;
     let listener = connor.as_ref().map_or(view.position, |c| c.mover.position);
     let ears = Ears { listener, view };
-    let mut doors = doors;
-    let mut starts = doors.as_mut().map(|d| std::mem::take(&mut d.active.world.sounds)).unwrap_or_default();
-    // Connor's own cues: footsteps and playsound (M3 3h-4).
-    starts.extend(connor.as_mut().map(|c| std::mem::take(&mut c.sounds)).unwrap_or_default());
     let mut decoded: HashMap<String, Arc<Sound>> = HashMap::new();
     let (game, world) = (&sim.game, sim.world.as_str());
-    for s in &starts {
+
+    // Menu sounds (group 1) and menu theme (group 4) play even while the game is paused.
+    for s in std::mem::take(&mut sim.menu_starts) {
         let file = load(&mut sim.cache, game, world, &s.name);
         if let Ok((snd, _)) = &file {
             decoded.insert(s.name.clone(), snd.clone());
         }
-        sim.system.start(s, found(&file), &ears);
+        sim.system.start(&s, found(&file), &ears);
     }
-    if let Some(d) = doors.as_deref_mut() {
-        for order in std::mem::take(&mut d.active.world.loop_sounds) {
-            match order {
-                kq8_core::sound::LoopOrder::Start { id, start } => {
-                    let file = load(&mut sim.cache, game, world, &start.name);
-                    if let Ok((snd, _)) = &file {
-                        decoded.insert(start.name.clone(), snd.clone());
-                    }
-                    if let Some(sid) = sim.system.start(&start, found(&file), &ears) {
-                        sim.loops.insert(id, sid);
-                    }
-                }
-                kq8_core::sound::LoopOrder::Stop { id, why } => {
-                    if let Some(sid) = sim.loops.remove(&id) {
-                        sim.system.stop(sid, &why);
-                    }
-                }
-            }
+    if std::mem::take(&mut sim.want_menu_theme) {
+        let s = Start::menu_theme(kq8_core::main_menu::THEME_MUSIC, "main menu shown (main-menu.md rule 8)".into());
+        let file = load(&mut sim.cache, game, world, &s.name);
+        if let Ok((snd, _)) = &file {
+            decoded.insert(s.name.clone(), snd.clone());
         }
+        sim.menu_theme = sim.system.start(&s, found(&file), &ears);
     }
-    // Speech (M4 4a-3, talking.md rules 10-11, 15): the voices, then the
-    // ducking of groups 0, 2, 5 while a line plays.
-    if let Some(mut speech) = speech {
-        use crate::talk_view::VoiceOrder;
-        for order in std::mem::take(&mut speech.voices) {
-            match order {
-                VoiceOrder::Start { line, path, at, why } => {
-                    let file = load(&mut sim.cache, game, world, &path);
-                    if let Ok((snd, _)) = &file {
-                        decoded.insert(path.clone(), snd.clone());
-                    }
-                    if let Some(id) = sim.system.start(&Start::speech(&path, at, why), found(&file), &ears) {
-                        sim.voices.insert(line, id);
-                    }
-                }
-                VoiceOrder::Stop { line } => {
-                    if let Some(id) = sim.voices.remove(&line) {
-                        sim.system.stop(id, &format!("line #{line} cut short (clearSpeak or a press, talking.md rules 15-16)"));
-                    }
-                }
-            }
-        }
-        sim.system.set_ducking(speech.ducking);
-        let system = &sim.system;
-        sim.voices.retain(|_, id| system.is_playing(*id));
-    }
-    // Sound objects (M3 3h-3): on while near or far (rules 46-47), stopped
-    // by deleteObject (rule 48).
-    let visible = light.map_or(kq8_data::haze::NO_TERRAIN_VISIBLE_DISTANCE, |l| l.haze.visible);
-    for a in &mut sim.audibles {
-        let deleted = doors.as_ref().is_some_and(|d| d.active.world.is_deleted(&a.name));
-        let (cache, decoded) = (&mut sim.cache, &mut decoded);
-        a.update(&mut sim.system, &ears, visible, deleted, &mut |name| {
-            let file = load(cache, game, world, name);
+
+    if !sim.system.is_game_paused() {
+        let mut doors = doors;
+        let mut starts = doors.as_mut().map(|d| std::mem::take(&mut d.active.world.sounds)).unwrap_or_default();
+        // Connor's own cues: footsteps and playsound (M3 3h-4).
+        starts.extend(connor.as_mut().map(|c| std::mem::take(&mut c.sounds)).unwrap_or_default());
+        for s in &starts {
+            let file = load(&mut sim.cache, game, world, &s.name);
             if let Ok((snd, _)) = &file {
-                decoded.insert(name.to_string(), snd.clone());
+                decoded.insert(s.name.clone(), snd.clone());
             }
-            found(&file)
-        });
-    }
-    // World music (M3 3h-5): the tune on the first frame (rule 57b), then
-    // the scripts' requests now due (rule 57f).
-    let requests = doors.as_mut().map(|d| std::mem::take(&mut d.active.world.music)).unwrap_or_default();
-    let mut music_lines = Vec::new();
-    if let Some(m) = &mut sim.music {
-        let (cache, decoded, system) = (&mut sim.cache, &mut decoded, &mut sim.system);
-        let mut file = |name: &str| {
-            let file = load(cache, game, world, name);
-            if let Ok((snd, _)) = &file {
-                decoded.insert(name.to_string(), snd.clone());
-            }
-            found(&file)
-        };
-        m.enter(system, &ears, &mut file);
-        for r in &requests {
-            music_lines.push(m.apply(r, system, &ears, &mut file));
+            sim.system.start(s, found(&file), &ears);
         }
-    } else {
-        music_lines.extend(requests.iter().map(|r| format!("{}: no music object in this world; ignored (rule 57f)", r.describe())));
-    }
-    for line in music_lines {
-        sim.system.log.push(format!("music: {line}"));
+        if let Some(d) = doors.as_deref_mut() {
+            for order in std::mem::take(&mut d.active.world.loop_sounds) {
+                match order {
+                    kq8_core::sound::LoopOrder::Start { id, start } => {
+                        let file = load(&mut sim.cache, game, world, &start.name);
+                        if let Ok((snd, _)) = &file {
+                            decoded.insert(start.name.clone(), snd.clone());
+                        }
+                        if let Some(sid) = sim.system.start(&start, found(&file), &ears) {
+                            sim.loops.insert(id, sid);
+                        }
+                    }
+                    kq8_core::sound::LoopOrder::Stop { id, why } => {
+                        if let Some(sid) = sim.loops.remove(&id) {
+                            sim.system.stop(sid, &why);
+                        }
+                    }
+                }
+            }
+        }
+        // Speech (M4 4a-3, talking.md rules 10-11, 15): the voices, then the
+        // ducking of groups 0, 2, 5 while a line plays.
+        if let Some(mut speech) = speech {
+            use crate::talk_view::VoiceOrder;
+            for order in std::mem::take(&mut speech.voices) {
+                match order {
+                    VoiceOrder::Start { line, path, at, why } => {
+                        let file = load(&mut sim.cache, game, world, &path);
+                        if let Ok((snd, _)) = &file {
+                            decoded.insert(path.clone(), snd.clone());
+                        }
+                        if let Some(id) = sim.system.start(&Start::speech(&path, at, why), found(&file), &ears) {
+                            sim.voices.insert(line, id);
+                        }
+                    }
+                    VoiceOrder::Stop { line } => {
+                        if let Some(id) = sim.voices.remove(&line) {
+                            sim.system.stop(id, &format!("line #{line} cut short (clearSpeak or a press, talking.md rules 15-16)"));
+                        }
+                    }
+                }
+            }
+            sim.system.set_ducking(speech.ducking);
+            let system = &sim.system;
+            sim.voices.retain(|_, id| system.is_playing(*id));
+        }
+        // Sound objects (M3 3h-3): on while near or far (rules 46-47), stopped
+        // by deleteObject (rule 48).
+        let visible = light.map_or(kq8_data::haze::NO_TERRAIN_VISIBLE_DISTANCE, |l| l.haze.visible);
+        for a in &mut sim.audibles {
+            let deleted = doors.as_ref().is_some_and(|d| d.active.world.is_deleted(&a.name));
+            let (cache, decoded) = (&mut sim.cache, &mut decoded);
+            a.update(&mut sim.system, &ears, visible, deleted, &mut |name| {
+                let file = load(cache, game, world, name);
+                if let Ok((snd, _)) = &file {
+                    decoded.insert(name.to_string(), snd.clone());
+                }
+                found(&file)
+            });
+        }
+        // World music (M3 3h-5): the tune on the first frame (rule 57b), then
+        // the scripts' requests now due (rule 57f).
+        let requests = doors.as_mut().map(|d| std::mem::take(&mut d.active.world.music)).unwrap_or_default();
+        let mut music_lines = Vec::new();
+        if let Some(m) = &mut sim.music {
+            let (cache, decoded, system) = (&mut sim.cache, &mut decoded, &mut sim.system);
+            let mut file = |name: &str| {
+                let file = load(cache, game, world, name);
+                if let Ok((snd, _)) = &file {
+                    decoded.insert(name.to_string(), snd.clone());
+                }
+                found(&file)
+            };
+            m.enter(system, &ears, &mut file);
+            for r in &requests {
+                music_lines.push(m.apply(r, system, &ears, &mut file));
+            }
+        } else {
+            music_lines.extend(requests.iter().map(|r| format!("{}: no music object in this world; ignored (rule 57f)", r.describe())));
+        }
+        for line in music_lines {
+            sim.system.log.push(format!("music: {line}"));
+        }
     }
     sim.system.update(time.delta_secs_f64(), &ears);
     let orders = std::mem::take(&mut sim.system.orders);
