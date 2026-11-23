@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 Q202: Log pressure plate `Off` on thrown-rock pickup for Study Session A
+- **Changed:** `docs/behaviour/QUESTIONS.md` (added `Q202`), `STATUS.md`, `MODLOG.md` (docs only; no code changed).
+- **Why:** The user confirmed `B4-F7` (Gnome rolling boulders) works live, and checked in the original game that pressure plates (`triptrp1` in Gnome, `triptrp2`–`5` in Dead City) **do** come back up when Connor picks up a thrown rock—contradicting `Q186` (d) (`traps.md` rule 8a, `ranged-weapons.md` 8d). Logged `Q202` asking Study Session A to trace projectile deletion (`Die` -> `rockHit.cs` -> `KQMonster::dropItem`) and item pickup (`KQInventoryItem` removal) vs `KQTrap` visitor lists.
+- **Tested how:** Documentation edit only (checked diffs against `traps.md` and `ranged-weapons.md`).
+- **Result:** `Q202` ready for Study Session A.
+- **Still broken / not tested:** Implementation waits on Study Session A's answer to `Q202`.
+- **Next:** Run Study Session A on `Q202`, then implement the fix in Session B.
+
 ## 2026-11-22 Batch 4 fix B4-F7: Sweep moving animated objects against Connor for `ConnorCollision` (Gnome rolling boulders)
 - **Changed:** `crates/kq8-core/src/collide.rs` (`CylinderCollider::from_stack`, `moving_object_hits_connor`, unit test `rolling_rock_hits_standing_connor_once_on_entry_and_not_while_overlapping`), `crates/kq8-viewer/src/anim_view.rs` (`anim_step`), `STATUS.md`, `MODLOG.md`, `docs/provenance/README.md`.
 - **Why:** Fix the Gnome bug where the three rolling boulders (`rrock1`–`rrock3`, `KQAnimObject`, `collisionShape=1`, `colliderMask=4`, `conCollisionAction=1`, `rollside.cs`) passed straight through Connor unless Connor's own move happened to meet the boulder's surface (`connor_mover.rs` only swept Connor's moves, whereas `anim_step` moved animated object colliders without sweeping them against Connor; `connor-collision.md` rules 1–3, 5–10, 18–19, 21). `moving_object_hits_connor` sweeps the moving ball stack (`old_pos -> position`) against Connor's `CylinderCollider` (`CONNOR_TYPE = 0x4`, in `CREATURE_BITS`, so starting already inside Connor is not a hit and each pass fires `ConnorCollision` once on entry), and `anim_step` passes hits to `Active::connor_touch`.
