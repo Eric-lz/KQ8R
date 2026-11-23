@@ -34,6 +34,7 @@ pub mod inventory;
 pub mod item;
 pub mod journey;
 pub mod magic_map;
+pub mod main_menu;
 pub mod mandragore;
 pub mod meters;
 pub mod music;

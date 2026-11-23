@@ -35,12 +35,17 @@ pub const GROUPS: usize = 6;
 /// World sound effects (rule 50).
 pub const GROUP_EFFECTS: usize = 0;
 /// Menu / popup screen sound effects (`interface.md` rules 55–56, Q199 b):
-/// controlled by SFX volume, unaffected by speech ducking.
+/// controlled by SFX volume, unaffected by speech ducking or game pause.
 pub const GROUP_MENU: usize = 1;
+/// Menu theme music (`main-menu.md` rules 8–9, `sound.md` rule 50):
+/// controlled by music volume, unaffected by speech ducking or game pause.
+pub const GROUP_MENU_MUSIC: usize = 4;
 /// World music, `KQMusic` (rules 50, 57a).
 pub const GROUP_WORLD_MUSIC: usize = 5;
 /// Speech (rules 50, 58).
 pub const GROUP_SPEECH: usize = 3;
+/// Groups paused when the game pauses (`sound.md` rule 54: effects, group 2, speech, world music).
+pub const PAUSED_GROUPS: [usize; 4] = [GROUP_EFFECTS, 2, GROUP_SPEECH, GROUP_WORLD_MUSIC];
 /// The groups speech turns down (rule 53).
 pub const DUCKED_GROUPS: [usize; 3] = [0, 2, 5];
 /// Their factor while a line plays (rule 53).
@@ -50,6 +55,8 @@ pub const SPEECH_MIN: f32 = 2_000.0;
 pub const SPEECH_MAX: f32 = 30_000.0;
 /// The music's fade rate, loudness per second (rules 33, 57).
 pub const MUSIC_FADE_RATE: f32 = 0.75;
+/// Menu theme fade-out rate when returning to gameplay (`main-menu.md` rule 9).
+pub const MENU_THEME_FADE_RATE: f32 = 1.0;
 /// Min and max of every placed one-shot: cues, hurt sounds, item landing
 /// (rules 35, 41, 42).
 pub const ONE_SHOT_MIN: f32 = 5_000.0;
@@ -222,6 +229,11 @@ impl Start {
         Start { name: name.to_string(), placed: None, looping: false, group: GROUP_MENU, why }
     }
 
+    /// A plain looping theme in group 4 (`main-menu.md` rule 8, `sound.md` rule 50).
+    pub fn menu_theme(name: &str, why: String) -> Self {
+        Start { name: name.to_string(), placed: None, looping: true, group: GROUP_MENU_MUSIC, why }
+    }
+
     /// A line of speech in group 3 (rule 58): Connor's plain (`at`
     /// `None`), anyone else's placed at the speaker, 2,000 / 30,000.
     pub fn speech(name: &str, at: Option<[f32; 3]>, why: String) -> Self {
@@ -293,6 +305,14 @@ struct Playing {
     fade: Option<(f32, f32)>,
 }
 
+fn is_paused_group(group: usize) -> bool {
+    PAUSED_GROUPS.contains(&group)
+}
+
+fn sound_paused(p: &Playing, game_paused: bool) -> bool {
+    p.paused || (game_paused && is_paused_group(p.group))
+}
+
 /// The playing sounds and the rules that drive them.
 #[derive(Debug, Clone)]
 pub struct SoundSystem {
@@ -303,6 +323,7 @@ pub struct SoundSystem {
     /// Real seconds since the start.
     clock: f64,
     since_housekeeping: f64,
+    game_paused: bool,
     failed: BTreeSet<String>,
     /// Lines for `sound.log`, taken by the caller.
     pub log: Vec<String>,
@@ -335,10 +356,36 @@ impl SoundSystem {
             next_id: 0,
             clock: 0.0,
             since_housekeeping: 0.0,
+            game_paused: false,
             failed: BTreeSet::new(),
             log: Vec::new(),
             orders: Vec::new(),
         }
+    }
+
+    /// `sound.md` rule 54: when the game pauses, groups 0, 2, 3 and 5 pause
+    /// (keeping their places) and resume afterwards; groups 1 and 4 keep playing.
+    pub fn set_game_paused(&mut self, paused: bool) {
+        if self.game_paused == paused {
+            return;
+        }
+        self.game_paused = paused;
+        let mut changed = 0usize;
+        for p in &self.playing {
+            if is_paused_group(p.group) && !p.paused {
+                self.orders.push(if paused { Order::Pause { id: p.id } } else { Order::Resume { id: p.id } });
+                changed += 1;
+            }
+        }
+        if paused {
+            self.note(format!("game paused: {changed} sound(s) in groups 0, 2, 3, 5 paused; groups 1, 4 keep playing (sound.md rule 54)"));
+        } else {
+            self.note(format!("game resumed: {changed} sound(s) resumed (sound.md rule 54)"));
+        }
+    }
+
+    pub fn is_game_paused(&self) -> bool {
+        self.game_paused
     }
 
     fn note(&mut self, line: impl AsRef<str>) {
@@ -347,12 +394,12 @@ impl SoundSystem {
 
     /// Sounds in the playing list (rule 27: not paused).
     pub fn playing_count(&self) -> usize {
-        self.playing.iter().filter(|p| !p.paused).count()
+        self.playing.iter().filter(|p| !sound_paused(p, self.game_paused)).count()
     }
 
     /// Ids of the sounds in the playing list, oldest first.
     pub fn playing_ids(&self) -> Vec<u64> {
-        self.playing.iter().filter(|p| !p.paused).map(|p| p.id).collect()
+        self.playing.iter().filter(|p| !sound_paused(p, self.game_paused)).map(|p| p.id).collect()
     }
 
     /// Final loudness and balance of a sound: own × group, at most 1
@@ -385,11 +432,12 @@ impl SoundSystem {
         };
         // Rule 26: more than the limit already playing: one goes first.
         if self.playing_count() > self.mix_limit {
+            let game_paused = self.game_paused;
             let victim = self
                 .playing
                 .iter()
                 .enumerate()
-                .filter(|(_, p)| !p.looping && !p.paused)
+                .filter(|(_, p)| !p.looping && !sound_paused(p, game_paused))
                 .min_by_key(|(n, p)| (p.group, *n))
                 .map(|(n, _)| n);
             if let Some(n) = victim {
@@ -444,9 +492,14 @@ impl SoundSystem {
         if beyond {
             if s.looping {
                 self.note(format!("#{id} {}: started beyond max: plays on silently until Connor comes in range (rule 30)", s.name));
+                if self.game_paused && is_paused_group(s.group) {
+                    self.orders.push(Order::Pause { id });
+                }
             } else {
                 self.stop_at(self.playing.len() - 1, "beyond max at its start");
             }
+        } else if self.game_paused && is_paused_group(s.group) {
+            self.orders.push(Order::Pause { id });
         }
         Some(id)
     }
@@ -513,15 +566,19 @@ impl SoundSystem {
     /// One housekeeping step of every fade (rules 33, 57g): paused sounds
     /// wait; one that reaches 0 stops.
     fn step_fades(&mut self) {
+        let game_paused = self.game_paused;
         let mut n = 0;
         while n < self.playing.len() {
             let p = &mut self.playing[n];
-            let Some((target, rate)) = p.fade.filter(|_| !p.paused) else {
+            let Some((target, rate)) = p.fade.filter(|_| !sound_paused(p, game_paused)) else {
                 n += 1;
                 continue;
             };
             let step = rate * HOUSEKEEPING as f32;
             p.level = if p.level < target { (p.level + step).min(target) } else { (p.level - step).max(target) };
+            if (p.level - target).abs() < 1e-5 {
+                p.level = target;
+            }
             let (id, name, level) = (p.id, p.name.clone(), p.level);
             self.note(format!("#{id} {name}: fade step, level {level:.2}"));
             let p = &mut self.playing[n];
@@ -541,8 +598,9 @@ impl SoundSystem {
     /// One frame: `dt` real seconds passed. Moves the clock, does the
     /// housekeeping steps due, and redoes every placed sound (rule 32).
     pub fn update(&mut self, dt: f64, ears: &Ears) {
+        let game_paused = self.game_paused;
         self.clock += dt;
-        for p in self.playing.iter_mut().filter(|p| !p.paused) {
+        for p in self.playing.iter_mut().filter(|p| !sound_paused(p, game_paused)) {
             p.played += dt;
         }
         self.since_housekeeping += dt;
@@ -550,13 +608,17 @@ impl SoundSystem {
             self.since_housekeeping -= HOUSEKEEPING;
             self.step_fades();
             // Rule 20: finished one-shots leave the list.
-            while let Some(n) = self.playing.iter().position(|p| !p.looping && p.played >= p.seconds) {
+            while let Some(n) = self.playing.iter().position(|p| !p.looping && !sound_paused(p, game_paused) && p.played >= p.seconds) {
                 self.stop_at(n, "finished");
             }
         }
         let mut n = 0;
         while n < self.playing.len() {
             let p = self.playing[n].clone();
+            if self.game_paused && is_paused_group(p.group) {
+                n += 1;
+                continue;
+            }
             let (d, _own, loud, pan) = self.mix_values(p.group, p.placed.as_ref(), p.level, ears);
             let beyond = p.placed.is_some_and(|pl| d > pl.max);
             if beyond && !p.looping {
@@ -1162,5 +1224,39 @@ mod tests {
             Order::Start { id: 1, name: "door4.aud".into(), looping: false, gains: [0.1, 0.1] }
         );
         assert!(s.log.iter().any(|l| l.contains("start #0 button1.aud") && l.contains("group 1")));
+    }
+
+    #[test]
+    fn game_pause_pauses_groups_0_2_3_5_and_keeps_1_and_4_playing_and_fading() {
+        let mut s = SoundSystem::default();
+        let fx = s.start(&Start::plain_one_shot("door4.aud", "fx".into()), found(0.5), &ears()).unwrap();
+        let speech = s.start(&Start::speech("A0RS0000.021", None, "speech".into()), found(0.5), &ears()).unwrap();
+        let world_music = s.start(&Start { name: "forest.aud".into(), placed: None, looping: true, group: GROUP_WORLD_MUSIC, why: "music".into() }, found(10.0), &ears()).unwrap();
+        let menu_fx = s.start(&Start::menu_one_shot("click.aud", "menu click".into()), found(0.3), &ears()).unwrap();
+        let theme = s.start(&Start::menu_theme("theme.aud", "menu theme".into()), found(10.0), &ears()).unwrap();
+        s.orders.clear();
+
+        s.set_game_paused(true);
+        assert!(s.is_game_paused());
+        assert_eq!(s.orders, vec![Order::Pause { id: fx }, Order::Pause { id: speech }, Order::Pause { id: world_music }]);
+        assert_eq!(s.playing_ids(), vec![menu_fx, theme]);
+
+        // While paused, world sounds keep their place and wait, while group 1 & 4 step and fade.
+        s.fade(theme, 0.0, MENU_THEME_FADE_RATE);
+        for _ in 0..2 {
+            s.update(HOUSEKEEPING, &ears());
+        }
+        assert!(s.is_playing(fx) && s.is_playing(speech) && s.is_playing(world_music));
+        assert!(!s.is_playing(menu_fx), "menu one-shot finished while game paused");
+        assert!(close(s.level(theme).unwrap(), 0.6), "menu theme faded in 2 x 0.2s steps while game paused: {:?}", s.level(theme));
+
+        s.orders.clear();
+        s.set_game_paused(false);
+        assert_eq!(s.orders, vec![Order::Resume { id: fx }, Order::Resume { id: speech }, Order::Resume { id: world_music }]);
+        for _ in 0..3 {
+            s.update(HOUSEKEEPING, &ears());
+        }
+        assert!(!s.is_playing(fx) && !s.is_playing(speech), "paused world one-shots finish after resume");
+        assert!(!s.is_playing(theme), "theme finishes fading out after resume");
     }
 }

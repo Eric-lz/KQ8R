@@ -1032,6 +1032,53 @@ inventory and menus.
     Uglybeast`, case "there"), read in `conversation.log`, `talk.log`,
     `doors.log`, `camera.log`, `gui.log`.
 
+- **4f — the main menu** (planned 2026-11-22). From
+  `docs/behaviour/main-menu.md` (A, 2026-10-21, checked by the user in
+  the original), `sound.md` rules 50 & 54, `world-change.md` rules 10 &
+  21, and `interface.md` rules 12, 14, 20a & 26a. Starts at launch
+  unless `--skip-menu` / `--no-menu` (or any explicit world/test option
+  without `--menu`) launches straight into the world; opens from
+  gameplay on Escape or the top bar's mask button (`IDCTL_INVBAR_MASK`,
+  except during `handsOff`), and 2.0 s after Connor dies (`Mode::Dead`).
+  One step and one commit at a time; every menu event logs to
+  `kq8-artifacts/logs/menu.log`.
+  - **4f-1, core rules and sound pause** (**done** 2026-11-22; `kq8-core`
+    `main_menu.rs`, `sound.rs`). Seven menu items (`New`, `Load`, `Save`,
+    `Options`, `Replay Intro`, `Quit`, `Back to Game`), enabled rules
+    (`game_running`, save-folder scan via `Pvol::parse` / `savedGameName`,
+    corrupt-save question), title lines from `starttxt.txt`, 0.2 s
+    real-time input block, list wrapping (Up/Down skipping disabled,
+    `click.aud`, Enter on key-down with `intrface.aud`, click without
+    hover), four popups (`NewConfirm`, `CorruptSave`, `QuitConfirm`,
+    `Difficulty`, >38-char 2-line split, Left/Right non-wrapping highlight
+    with `click.aud`, Enter press-pointer-move/release-pick, Escape rules,
+    Up/Down blocked under open popup per "Do not reproduce" 5), disk-space
+    check omitted ("Do not reproduce" 2), `SoundSystem::set_game_paused`
+    pausing/resuming groups 0, 2, 3, and 5 while keeping groups 1 (menu
+    SFX) and 4 (`theme.aud`, 1.0/s fade-out) playing.
+  - **4f-2, menu drawing, dithering, and theme audio** (pending;
+    `kq8-core` `gui_draw.rs`, `kq8-viewer` `menu_view.rs`,
+    `sound_view.rs`). Dithered text (`(x + 2 * y) % 4 == 0`, matching
+    `potions.md` rule 29) for disabled menu items; `Mainmenu.gui` in
+    `Menus.ppl` drawn in the centred 4:3 screen frame (`main18.pbm`,
+    `45.pft` title + `45-line.pbm`, `27.pft` items, animated `Mskcur.pba`
+    at 10 fps, `Cursgui.pba` pointer, `gm_win2.pbm` + `consoleg.pft` +
+    `g_ybtn.pba`/`g_yhibtn.pba` popups); standalone/world menu sound &
+    `theme.aud` playback and 1 s fade-out.
+  - **4f-3, launch option, gameplay pause, New game, and death**
+    (pending; `main.rs`, `world_build.rs`, `gui_view.rs`,
+    `terrain_view.rs`, `connor_view.rs`). `--skip-menu` / `--no-menu`
+    (implied by `--world` / test flags unless `--menu` is given); Escape
+    and `IDCTL_INVBAR_MASK` pause the game clock, hide gameplay panels,
+    record the 160 × 120 thumbnail request in memory ("Do not reproduce"
+    3), and open the menu; `New` clears kept worlds (`cur`), skips
+    `conStart.cs` (`$Testing` false), applies chosen combat level (1/2/3
+    → 0.66/1.0/1.5), and starts Daventry with `BeginNow`; `Load` /
+    `Save` / `Options` / `Replay Intro` logged cleanly as unbuilt
+    sub-screens without restarting `theme.aud`; Connor's `Mode::Dead`
+    waits 2.0 s (`handsOff`) then opens the menu with `Save` and `Back to
+    Game` off.
+
 ### M5 — Fight
 
 **You will see:** monsters that move, attack and die; Connor's health and

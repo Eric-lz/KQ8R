@@ -4356,6 +4356,17 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `CylinderCollider::from_stack` + `moving_object_hits_connor` sweep moving ball-stack colliders (`old_pos -> position`) against Connor's cylinder (`CONNOR_TYPE = 0x4` in `CREATURE_BITS`, so overlap starts don't re-trigger) and `anim_view::anim_step` dispatches `Active::connor_touch` when `con_collision` & `colliderMask` match | `connor-collision.md` rules 1–3, 5–10, 18–19, 21; `MASK/Gnome/kq/{rrock1,rrock2,rrock3}.kq`, `MASK/Gnome/kq/rollside.cs` | unit test `rolling_rock_hits_standing_connor_once_on_entry_and_not_while_overlapping`; headless Gnome (`--at 57500,106500,0 --lift 17500`: `rrock1` hits standing Connor on all 3 passes at updates 9, 36, 60 -> `reactback` + `KQAttackEvent`, health `220 -> 211 -> 201 -> 186`) |
 
+## M4 4f-1 2026-11-22: Main menu core state & rules and game-pause sound rules — core `main_menu.rs`, `sound.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Seven menu items (`New`, `Load`, `Save`, `Options`, `Replay Intro`, `Quit`, `Back to Game`), control IDs (`9, 10, 11, 14, 500, 12, 502`), `500.MSG` cases (`13, 10, 24, 19, 22, 20, 2`), 640×480 row rectangles (`64..624`, height `40` at `125, 165, 205, 245, 285, 345, 405`), mask cursor rect (`16..56`, centred on item), title lines 1–2 from `starttxt.txt` | `main-menu.md` rules 1, 2, 4, 5, "Data used"; `MASK/GAME/Kq/Mainmenu.kq`, `MASK/GAME/Resource/Mainmenu.gui`, `MASK/starttxt.txt` | unit tests `title_and_popup_text_splitting`, `startup_list_wrapping_skips_disabled_items` |
+| Item availability (`game_running = has_started_or_loaded && !connor_died`; `Load` enabled iff `has_saves && !corrupt_save_pending`; `Save` & `BackToGame` enabled iff `game_running`), save-folder scan (`Pvol::parse` + `savedGameName` read-only check), corrupt-save Yes/No popup (`500.MSG` 157, click on Yes works like Enter) | `main-menu.md` rules 3, 6, 8, 23, 25, "Do not reproduce" 1 & 3 | unit test `corrupt_save_scan_and_death_state` |
+| 0.2 s real-time input block on menu show and after `Replay Intro`; Up/Down wrap around skipping disabled items (`click.aud`); Enter on key-down (`intrface.aud`); click picks enabled item without hover moving cursor; Up/Down blocked while popup open | `main-menu.md` rules 8, 12, 17–21, "Do not reproduce" 5 | unit tests `startup_list_wrapping_skips_disabled_items`, `new_game_difficulty_popup_and_gameplay_resume` |
+| Popups (`NewConfirm` 158, `CorruptSave` 157, `QuitConfirm` 159, `Difficulty` 120; disk check omitted per "Do not reproduce" 2): >38-char 2-line split at middle space; 2 buttons (`x 188, 361`) / 3 buttons (`x 158, 274, 392`) at `y 250`, `88×36`; Left/Right non-wrapping with `click.aud` even at edge; Enter press moves pointer to `(mid_x, mid_y + 16)` and release restores & picks; Escape closes `Difficulty` to menu or resumes game from Yes/No when running; combat levels `0.66 / 1.0 / 1.5` (`1 / 2 / 3`) | `main-menu.md` rules 10, 13–16, 24, "Edge cases", "Do not reproduce" 2 | unit test `new_game_difficulty_popup_and_gameplay_resume` |
+| `SoundSystem::set_game_paused` pauses/resumes playing sounds in groups 0, 2, 3, and 5 (keeping their place and waiting fades) while leaving groups 1 (menu SFX) and 4 (`Start::menu_theme`, `MENU_THEME_FADE_RATE = 1.0`) playing and stepping fades | `sound.md` rules 50 & 54; `main-menu.md` rules 7.2, 8, 9 | unit test `sound::tests::game_pause_pauses_groups_0_2_3_5_and_keeps_1_and_4_playing_and_fading` |
+
+
 
 
 

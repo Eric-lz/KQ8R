@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-22 M4 step 4f-1: Main menu core state & rules and game-pause sound rules
+- **Changed:** `docs/DESIGN.md` (added **4f — the main menu** plan under M4), `crates/kq8-core/src/lib.rs`, `crates/kq8-core/src/main_menu.rs` (new: `MenuItem`, `parse_title_lines`, `split_popup_text`, `scan_save_entries` / `scan_save_folder`, `MenuTexts`, `MenuPopupKind`, `MenuPopup`, `MenuAction`, `MainMenuState`, and 4 unit tests), `crates/kq8-core/src/sound.rs` (`GROUP_MENU_MUSIC`, `PAUSED_GROUPS`, `MENU_THEME_FADE_RATE`, `Start::menu_theme`, `SoundSystem::set_game_paused`, `is_game_paused`, unit test `game_pause_pauses_groups_0_2_3_5_and_keeps_1_and_4_playing_and_fading`), `MODLOG.md`, `docs/provenance/README.md`.
+- **Why:** Implement Step `4f-1` of the Main Menu plan from `docs/behaviour/main-menu.md` rules 1–25 and `docs/behaviour/sound.md` rules 50 & 54.
+- **Tested how:** `cargo test -p kq8-core` (`main_menu::tests::*` and `sound::tests::game_pause_pauses_groups_0_2_3_5_and_keeps_1_and_4_playing_and_fading`).
+- **Result:** All `kq8-core` unit tests pass (`635` passed, including the 5 new main menu and sound pause tests).
+- **Still broken / not tested:** Menu drawing, dithering, and viewer integration (`4f-2`, `4f-3`) come next.
+- **Next:** Implement Step `4f-2` (dithered text in `gui_draw.rs`, `menu_view.rs`, and menu theme/sound handling in `sound_view.rs`).
+
 ## 2026-11-22 Q202: Log pressure plate `Off` on thrown-rock pickup for Study Session A
 - **Changed:** `docs/behaviour/QUESTIONS.md` (added `Q202`), `STATUS.md`, `MODLOG.md` (docs only; no code changed).
 - **Why:** The user confirmed `B4-F7` (Gnome rolling boulders) works live, and checked in the original game that pressure plates (`triptrp1` in Gnome, `triptrp2`–`5` in Dead City) **do** come back up when Connor picks up a thrown rock—contradicting `Q186` (d) (`traps.md` rule 8a, `ranged-weapons.md` 8d). Logged `Q202` asking Study Session A to trace projectile deletion (`Die` -> `rockHit.cs` -> `KQMonster::dropItem`) and item pickup (`KQInventoryItem` removal) vs `KQTrap` visitor lists.
