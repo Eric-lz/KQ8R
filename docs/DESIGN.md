@@ -1033,7 +1033,7 @@ inventory and menus.
     `doors.log`, `camera.log`, `gui.log`.
 
 - **4f — the main menu** (planned 2026-11-22; **done** 2026-11-23, steps
-  4f-1 to 4f-3; **not yet checked by eye/ear in play**). From
+  4f-1 to 4f-3 and 4f-F1; **checked by eye and ear by the user 2026-11-23**). From
   `docs/behaviour/main-menu.md` (A, 2026-10-21, checked by the user in
   the original), `sound.md` rules 50 & 54, `world-change.md` rules 10 &
   21, and `interface.md` rules 12, 14, 20a & 26a. Starts at launch

@@ -1004,6 +1004,33 @@ viewer logs (**not yet checked live by eye in Gnome**):
   step in `Push` state while staying frozen at rest, turns toward its push
   direction `+ 0.1 s` later (`KQMoveEvent`), and keeps its collider synced.
 
+## The main menu (milestone M4, step 4f, 2026-11-23; done)
+
+From `docs/behaviour/main-menu.md` (A, 2026-10-21). **Checked live by eye and
+ear by the user (`2026-11-23`):**
+
+- **Startup and `--skip-menu`:** `cargo play` opens the Main Menu at launch with
+  `theme.aud` playing and `New` selected (`Save` and `Back to Game` dithered,
+  `Load` enabled when valid saves exist in `MASK/save/`); `cargo play --skip-menu`
+  (or `--no-menu`, `--world`, or gameplay test flags without `--menu`) skips the
+  startup menu and launches straight into the world.
+- **Navigation and popups:** `Up`/`Down` wrap around enabled items (`click.aud`),
+  `Enter` or clicking picks an enabled item (`intrface.aud`), and popups
+  (`NewConfirm`, `CorruptSave`, `QuitConfirm`, `Difficulty`) split lines over 38
+  characters, move the button highlight with `Left`/`Right` (`click.aud`), press
+  and pick with `Enter` without moving the mouse pointer, and close or return to
+  gameplay on `Escape`.
+- **In-game pause, New game, and death:** pressing `Escape` or clicking the top
+  bar's mask button pauses the world clock and gameplay sounds (`0, 2, 3, 5`),
+  hides the bars, saves the 160 × 120 thumbnail in memory, starts `theme.aud`,
+  and opens the menu with `Back to Game` selected; choosing `New` ->
+  `Easy`/`Normal`/`Hard` fades `theme.aud` over 1 s, shows the Daventry loading
+  screen with the red progress meter, sets the chosen combat level (`0.66` /
+  `1.0` / `1.5`), and starts Daventry's opening scene (`stngrl.cs`); when Connor
+  dies, the menu opens after 2.0 s (`handsOff`) with `New` selected and `Save` /
+  `Back to Game` disabled. (`Load`, `Save`, `Options`, and `Replay Intro` await
+  Study Session A on `Q203`–`Q205`.)
+
 ## Viewer helpers (not in the original)
 
 - **H:** shows things the game hides or never uses: triggers and
