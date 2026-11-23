@@ -492,7 +492,7 @@ pub fn bar_click(w: &mut WorldState, name: &str, left: bool, hands_off: bool, ho
     match t.category.as_str() {
         "QuestItem" | "Money" | "Rock" | "Rope" => hold(w, name, &t, &head),
         "MaskPiece" => {
-            w.item_note(format!("{head}: the mask button opens the main menu (interface.md rule 41); no menu yet"));
+            w.item_note(format!("{head}: the mask button opens the main menu (interface.md rule 41, main-menu.md rule 7)"));
             BarResult::Menu
         }
         _ => {

@@ -59,7 +59,10 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
   away ends the talk with a goodbye. Characters stand on the ground
   and on building floors, and cast shadows on the ground and on buildings.
   Connor can't walk through characters: he slides round them. Help
-  popups and the F1 help book work (checked by eye and ear).
+  popups and the F1 help book work (checked by eye and ear). The main
+  menu works at startup, on Escape or the mask button, and after Connor
+  dies, with `--skip-menu` to launch straight into the world (checked in
+  unit tests and logs only).
 - **M5 – So far.** Daventry's creatures move on their own as in the original: they wander, fidget, notice Connor, chase him up to striking distance and give up; zombies rise from the ground. They fight: they swing at Connor, he can punch back, they flinch, die, drop items (weapons lie where they fall) and leave bodies; the bow spriggans shoot (first version, checked in the logs only). Health items and the four potions work, with their timer icons (checked in the logs only).
 - **M6 – So far.** The Rope and Hook: Connor climbs up and down at rope places (checked by eye). Azriel's Hammer: thrown, hits one thing, flies back and is caught (checked in the logs only). The magic map: fog, arrow, zoom and pan, the mini-map, other worlds' maps and the teleporter button (checked in the logs only). Moving between worlds: walking exits and teleporters ask "load a new region?", show the loading screen and arrive with Connor's things; a world you come back to keeps its map, its story progress and what was taken from it (loading screen checked by eye, the rest in the logs only). Many script commands and scene details added from the study session's answers: the roof-jump choice and kill, the ravens' caw, the experience sound, the bell that calls the Lady of the Lake, the Shadow's foggy home, walking speeds as traced (checked in the logs only). Dead City's death-hall stone puzzle and Death's scene run (the hall checked by the user, the rest in the logs only). Dead City's spirit zones, river traps and the blood drain work (logs only). Dead City's tower skeleton, scales puzzle, rock throwing onto the plates and the River of Death's poison are built (logs only). Dead City's river-dipping boxes and weeper draining bolts work. Camera shake and world shadow toggles work (checked by eye); shared script commands and proximity haze zones are built (checked by eye). Swamp's Mandragore fights and gas-tile puzzle work (checked by eye and ear); Swamp's script commands and liquid immunity are built (checked in unit tests and logs only). Gnome's shop click helper, alternate building lighting, and rolling boulder work (checked in unit tests and logs only).
 
@@ -68,9 +71,6 @@ So far everything is built and tested (mostly) in the first world, **Daventry**.
 - **M5 – Fighting:** check the fight and the potions by eye against the original; Connor's controls and weapons (the click-to-swing is a stand-in for now).
 
 ### Later
-
-- **The main menu** (postponed: the viewer starts straight in Daventry,
-  which keeps testing quick).
 
 - **M5 – Fighting.** Connor's other weapons and bows, game over.
 - **M6 – The whole game.** Saving and loading (with worlds kept in full),
@@ -105,9 +105,15 @@ Open a terminal in this folder and run:
 cargo play
 ```
 
-This opens Daventry's ground with its objects and lets you walk Connor arund.
+This opens the main menu (pick **New** and a difficulty to start in
+Daventry with its opening scene). To skip the menu and jump straight into
+Daventry, add `--skip-menu`:
 
-To spawn Connor in a different world, e.g. in the Swamp, run:
+```sh
+cargo play --skip-menu
+```
+
+To spawn Connor directly in a specific world, e.g. in the Swamp, run:
 
 ```sh
 cargo play --world swamp

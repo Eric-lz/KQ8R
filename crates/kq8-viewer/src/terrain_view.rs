@@ -1145,12 +1145,8 @@ pub fn fly_input(
     motion: Res<AccumulatedMouseMotion>,
     time: Res<Time>,
     mut camera: Single<&mut Transform, With<Camera3d>>,
-    mut commands: Commands,
     choice: Res<crate::game_camera::CameraChoice>,
 ) {
-    if keys.just_pressed(KeyCode::Escape) {
-        commands.write_message(AppExit::Success);
-    }
     // The game camera (M2 step 2f) drives the view; F switches back here.
     if choice.game {
         return;

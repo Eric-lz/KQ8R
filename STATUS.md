@@ -1,27 +1,23 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-11-22 after
-implementing **Batch 4 (Gnome)** (`B4-1`..`B4-4`) plus post-playtest fixes
-(`B4-F1`..`B4-F7`: boulder trap visits + `place_of` traps/items, `changeBmp`
-shared-`.kqs` material deduplication, `KQObject::collisionType` on characters,
-numeric `ID #` lookup in `ItemTypes::find`, `KQMonster::dropItem` equipment/
-rotation/`NewInvItem` + swap-angle preservation, preloading available equipment
-item models for console `give` / shop swaps, and sweeping moving animated
-objects against Connor for `ConnorCollision` on Gnome's rolling boulders
-`rrock1`–`rrock3`).
-Live play confirmed `B4-2` (`useAlternateLightmap`), `B4-F1` (boulder drop
-cutscene), `B4-F2` (Dragon idle texture), `B4-F3` (Dragon melee hits),
-`B4-F4`–`B4-F6` (Weapons, Apothecary, and Armor Gnome shops including
-`give leatherarmor`), and `B4-F7` (Gnome rolling boulders `rrock1`–`rrock3`)
-all work; **`Q202` (pressure plates popping back up when picking up a thrown
-rock, user-checked in the original) logged in `docs/behaviour/QUESTIONS.md` for
-Study Session A**. Previously confirmed live: `B1-F1c` (`Q199`b) and `B3-F4`
-(`Q201`). Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`,
-`MODLOG.md` (newest entries at the top). The short public summary is
-`README.md`; the detailed "what works" list is `docs/FEATURES.md`.
+Hand-over in case the chat is lost. Brought up to date 2026-11-23 after
+implementing **M4 step 4f — the Main Menu** (`4f-1`..`4f-3`, from
+`docs/behaviour/main-menu.md`, including `--skip-menu` / `--no-menu` to launch
+straight into the game), following **Batch 4 (Gnome)** (`B4-1`..`B4-4` and
+`B4-F1`..`B4-F7`).
+**`Q202` (pressure plates popping back up when picking up a thrown rock,
+user-checked in the original) remains open in `docs/behaviour/QUESTIONS.md` for
+Study Session A** (no new questions were needed for the Main Menu). Read with
+`AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md` (newest entries
+at the top). The short public summary is `README.md`; the detailed "what works"
+list is `docs/FEATURES.md`.
 
-## Where we are (2026-11-22)
+## Where we are (2026-11-23)
 
+- **2026-11-23 (B): M4 step 4f — The Main Menu (`4f-1`..`4f-3`):**
+  - **Core state & sound pause (`4f-1`, `kq8-core` `main_menu.rs`, `sound.rs`):** 7 menu items (`New`, `Load`, `Save`, `Options`, `Replay Intro`, `Quit`, `Back to Game`), enabled rules (`game_running`, save-folder scan via `Pvol::parse` / `savedGameName` read-only check, corrupt-save Yes/No popup), title lines 1–2 from `starttxt.txt`, 0.2 s real-time input block on menu show and after `Replay Intro`, list wrapping (`Up`/`Down` skipping disabled items with `click.aud`, `Enter` on key-down with `intrface.aud`, mouse click without hover moving the mask cursor, `Up`/`Down` blocked while a popup is open), 4 popups (`NewConfirm`, `CorruptSave`, `QuitConfirm`, `Difficulty`, >38-char 2-line split at middle space, non-wrapping `Left`/`Right` with `click.aud` even at edge, `Enter` press moving pointer to `(mid_x, mid_y + 16)` and release picking, `Escape` rules), and `SoundSystem::set_game_paused` pausing/resuming groups `0, 2, 3, 5` while keeping groups `1` (menu SFX) and `4` (`theme.aud`, `1.0/s` fade-out) playing.
+  - **Drawing, dithering & theme audio (`4f-2`, `kq8-core` `gui_draw.rs`, `kq8-viewer` `menu_view.rs`, `sound_view.rs`):** 1-in-4 diagonal dithered text (`(x + 2 * y) % 4 == 0`, matching `potions.md` rule 29) for disabled menu items; `Mainmenu.gui` in `Menus.ppl` drawn at 640 × 480 in the centred 4:3 screen frame (`main18.pbm`, `45.pft` title + `45-line.pbm`, `27.pft` items, `Mskcur.pba` animated at 10 fps real time, `Cursgui.pba` pointer, `gm_win2.pbm` + `consoleg.pft` + `g_ybtn.pba`/`g_yhibtn.pba` popups); `menu.log` instrumentation.
+  - **Launch options, gameplay pause, New game & death (`4f-3`, `main.rs`, `world_build.rs`, `gui_view.rs`, `terrain_view.rs`, `connor_inventory.rs`):** starts on the Main Menu by default unless `--skip-menu` / `--no-menu` (or `--world` / gameplay test flags without `--menu`) launches straight into the world; `Escape` (including `Escape` on the Portal Yes/No popup per `world-change.md` rule 26) and the top bar's mask button (`IDCTL_INVBAR_MASK`) pause the world clock & sounds, hide gameplay panels, record the 160 × 120 thumbnail in memory, start `theme.aud`, and open the menu with `Back to Game` selected; choosing `New` -> `Easy`/`Normal`/`Hard` clears kept worlds, fades `theme.aud` over 1 s, skips `conStart.cs`, sets combat level `1`/`2`/`3` (`0.66`/`1.0`/`1.5`), and runs `world.cs Daventry Begin` (`stngrl.cs` opening cutscene); Connor's death (`Mode::Dead`) waits 2.0 s in `handsOff` and opens the menu with `New` selected and `Save`/`Back to Game` disabled. Verified across `823` workspace unit tests and 3 headless runs (**live visual/ear check by the user pending**).
 - **2026-11-22 (B): Script Coverage Batch 4 (Gnome) fixes (`B4-F1`..`B4-F7`) + `Q202`:**
   - **Confirmed live (`B4-2`, `B4-F1`..`B4-F7`):** Tunnel alternate lighting (`useAlternateLightmap gnome13|gnome14`), boulder drop cutscene (`Bouldtrp`), Dragon idle brightness after `changeBmp Dragon normal`, Dragon melee combat, Weapons/Apothecary/Armor Gnome shops (including `give leatherarmor` shelf visibility), and Gnome rolling boulders (`rrock1`–`rrock3`) all confirmed working in live play.
   - **Open study question (`Q202`):** User checked the original and confirmed pressure plates come back up when picking up a thrown rock; logged `Q202` in `docs/behaviour/QUESTIONS.md` (`traps.md` rule 8a / `ranged-weapons.md` 8d follow-up to `Q186` d).

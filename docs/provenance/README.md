@@ -4374,6 +4374,16 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `MenuView` loads `Mainmenu.gui`, `Menus.ppl`, `500.MSG`, `starttxt.txt`, `main18.pbm`, `45-line.pbm`, `Mskcur.pba` (animated at 10 fps real time), `gm_win2.pbm`, `g_ybtn.pba`, `g_yhibtn.pba`, `Cursgui.pba`, and fonts `27.pft`, `45.pft`, `consoleg.pft`, drawing the 640×480 menu in the centred 4:3 screen frame and logging to `menu.log` | `main-menu.md` rules 1–5, 14–16, "Data used"; `interface.md` rule 26a (`Q108` d, `Q171` c) | headless viewer runs in `4f-3` (`menu.log`, `viewer.log`) |
 | `SoundSim` (`set_game_paused`, `play_menu_sound`, `start_menu_theme`, `fade_menu_theme`) plays group-1 menu SFX and group-4 `theme.aud` (with 1.0/s fade-out) even while gameplay sounds are paused or no 3D camera is active yet | `main-menu.md` rules 7.2, 8, 9; `sound.md` rules 50 & 54 | headless viewer runs in `4f-3` (`sound.log`, `menu.log`) |
 
+## M4 4f-3 2026-11-23: Main menu launch options (`--skip-menu`), gameplay pause, New game, and death — core `connor_inventory.rs`; viewer `main.rs`, `world_build.rs`, `gui_view.rs`, `terrain_view.rs`, `menu_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Startup Main Menu by default (`cargo play`), skipped when `--skip-menu` / `--no-menu` (or `--world` / gameplay test options without `--menu`) is passed | `main-menu.md` rule 6; **our launch option** (user request 2026-11-22 & agent-memory "Main menu postponed") | headless runs: startup menu (`menu.log` `startup shown (New selected)`) vs `--skip-menu` (`startup skipped (--skip-menu / direct world launch)`) |
+| Opening from gameplay via Escape, top-bar mask button (`IDCTL_INVBAR_MASK`, `BarResult::Menu`), or Escape on the Portal Yes/No popup (outside `handsOff`): pauses game clock (`playing`/`running`), pauses sound groups `0, 2, 3, 5`, hides gameplay panels, records 160×120 thumbnail in memory (`SavedThumbnail`, never writing `current.bin` to `MASK/`), starts `theme.aud` in group 4, and selects `Back to Game` | `main-menu.md` rules 7, 8, 22, "Do not reproduce" 3; `interface.md` rule 41; `world-change.md` rule 26; `sound.md` rule 54 | headless run (`menu.log`, `sound.log`: `2 sound(s) in groups 0, 2, 3, 5 paused`, `160x120 thumbnail saved in memory`, `theme.aud` started, `chosen=BackToGame`, `NewConfirm` -> Escape resumes gameplay and fades `theme.aud` `1.0 -> 0.0` over `1.0 s`) |
+| Starting a New game from the Difficulty popup (`Easy`/`Normal`/`Hard` -> combat level `1`/`2`/`3` = `0.66`/`1.0`/`1.5`): clears kept worlds (`cur`), fades `theme.aud` over 1 s, skips `conStart.cs` (`$Testing` false), applies combat level before characters enter, and runs `world.cs Daventry Begin` (`BeginNow("Daventry")`) | `main-menu.md` rules 10, 24; `world-change.md` rules 9, 10, 21; `fighting.md` rule 3 | headless run (`menu.log`, `viewer.log`, `sound.log`: `Difficulty Normal -> combat level 2 (1)`, `== new game: Daventry ==`, `update 0: world.cs Daventry Begin: run`, `stngrl.cs` opening cutscene plays) |
+| Connor death (`Mode::Dead`) waits 2.0 s in `handsOff` then opens the Main Menu with `Save` and `Back to Game` disabled and `New` selected | `main-menu.md` rule 25 | headless `--lift 5000` run (`connor.log` `update 23: animation mode dying -> dead` at `t = 1.675 s`, `menu.log` opens at `t = 3.669 s` with `Save & Back to Game off, New chosen`) |
+
+
 
 
 

@@ -1311,17 +1311,28 @@ pub fn gui_step(
     mut key_at: ResMut<KeyAt>,
     mut actions: ResMut<BarActions>,
     mut speech: ResMut<crate::talk_view::Speech>,
+    mut menu: Option<ResMut<crate::menu_view::MenuView>>,
+    mut sound: Option<ResMut<crate::sound_view::SoundSim>>,
+    change: Res<crate::world_build::WorldChange>,
     shared: Res<Shared>,
     keys: Res<ButtonInput<KeyCode>>,
 ) {
     let (Some(mut gui), Some(mut sim)) = (gui, sim) else { return };
     let gui = &mut *gui;
     let updates = sim.active.world.updates;
-    // Test keys (`--key NAME,N`); `popup:`, `help:`, and `f1` are the popup step's
-    // (M6 6e-6 / Batch 1 B1-7).
+    // Test keys (`--key NAME,N`); `popup:`, `help:`, `f1`, `menu:`, and `escape`
+    // are the popup or menu step's (M6 6e-6 / Batch 1 B1-7 / M4 4f-3).
     let (due, later): (Vec<_>, Vec<_>) = std::mem::take(&mut key_at.0)
         .into_iter()
-        .partition(|(name, n)| updates >= *n && !name.starts_with("popup:") && !name.starts_with("help:") && !name.eq_ignore_ascii_case("f1"));
+        .partition(|(name, n)| {
+            let lower = name.to_ascii_lowercase();
+            updates >= *n
+                && !lower.starts_with("popup:")
+                && !lower.starts_with("help:")
+                && !lower.starts_with("menu:")
+                && lower != "f1"
+                && lower != "escape"
+        });
     key_at.0 = later;
     for (name, _) in due {
         let how = format!("test --key {name} before update {updates}");
@@ -1408,7 +1419,13 @@ pub fn gui_step(
                 }
             },
             BarAction::Item { item, left, how } => {
-                kq8_core::connor_inventory::bar_click(w, &item, left, gui.hands_off, &how);
+                if kq8_core::connor_inventory::bar_click(w, &item, left, gui.hands_off, &how)
+                    == kq8_core::connor_inventory::BarResult::Menu
+                {
+                    if let Some(m) = menu.as_mut() {
+                        m.open_from_gameplay(&change.current, &how, sound.as_deref_mut(), &shared);
+                    }
+                }
             }
         }
     }
@@ -2032,6 +2049,7 @@ pub fn gui_draw(
 /// STAND-IN (Q110): the click point is the picture's top-left corner.
 pub fn pointer_draw(
     gui: Option<ResMut<Gui>>,
+    menu: Option<Res<crate::menu_view::MenuView>>,
     window: Query<(Entity, &Window), With<bevy::window::PrimaryWindow>>,
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
@@ -2039,6 +2057,10 @@ pub fn pointer_draw(
     frame: Res<ScreenFrame>,
 ) {
     use bevy::window::{CursorIcon, CustomCursor, CustomCursorImage};
+    if menu.is_some_and(|m| m.state.open) {
+        *shown = None;
+        return;
+    }
     let Some(mut gui) = gui else { return };
     let Ok((entity, _)) = window.single() else { return };
     let step = ((frame.0[3] / gui.screen[1] as f32).round() as u32).max(1);
@@ -2241,6 +2263,9 @@ pub fn popup_step(
     window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     frame: Res<ScreenFrame>,
     mut key_at: ResMut<KeyAt>,
+    mut menu: Option<ResMut<crate::menu_view::MenuView>>,
+    mut sound: Option<ResMut<crate::sound_view::SoundSim>>,
+    change: Res<crate::world_build::WorldChange>,
     shared: Res<Shared>,
 ) {
     let (Some(mut gui), Some(mut sim)) = (gui, sim) else { return };
@@ -2312,6 +2337,7 @@ pub fn popup_step(
                 *p_pressed = None;
             }
         }
+        let mut open_menu_after_no = false;
         for (what, how) in pressed {
             let Some(PopupShown { kind: PopupKind::Portal { yes, no, highlight, .. }, .. }) = gui.popup.as_mut() else { break };
             let answer = match what {
@@ -2336,7 +2362,8 @@ pub fn popup_step(
                     None
                 }
                 "escape" => {
-                    gui.note("popup: Escape: No, and the main menu (not built yet: not opened) (rule 26)");
+                    gui.note("popup: Escape: No, and opens the main menu (world-change.md rule 26)");
+                    open_menu_after_no = true;
                     Some(false)
                 }
                 _ => None,
@@ -2350,6 +2377,16 @@ pub fn popup_step(
                 drop(log);
                 gui.popup = None;
                 gui.panels.set(kq8_core::panels::Group::Popup, false, "answered");
+                if open_menu_after_no {
+                    if let Some(m) = menu.as_mut() {
+                        m.open_from_gameplay(
+                            &change.current,
+                            "Escape on Portal Yes/No popup (world-change.md rule 26)",
+                            sound.as_deref_mut(),
+                            &shared,
+                        );
+                    }
+                }
                 break;
             }
         }

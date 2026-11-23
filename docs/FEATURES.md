@@ -568,8 +568,34 @@ miss, roll, flinch, death, drop and shot is in
   world with it offers it: if the object takes it (its accept list, as in
   the original) the hand empties, otherwise "This will not work." and it
   stays on the pointer. The scroll can't be taken: Connor reads it out.
-  Escape still quits (the original opens its main menu, which pauses the
-  game; there is no menu yet). Checked by the user 2026-10-18.
+  Escape and the top bar's mask button open the main menu, which pauses
+  the game (4f, below). Checked by the user 2026-10-18.
+- **The main menu (milestone M4, step 4f, 2026-11-23):** from
+  `docs/behaviour/main-menu.md` (`Mainmenu.gui` in `Menus.ppl`, 640 × 480
+  centred in the 4:3 screen frame, logged to `kq8-artifacts/logs/menu.log`;
+  checked in unit tests and headless logs, **not yet checked by eye/ear in
+  live play**). Opens at launch (unless `--skip-menu` / `--no-menu` or a
+  `--world` / test option launches straight into a world), from gameplay
+  on **Escape** (including Escape on a portal's Yes/No popup) or the top
+  bar's mask button (outside `handsOff`), and 2 s after Connor dies.
+  Shows the stone background (`main18.pbm`), the two title lines from
+  `starttxt.txt` (`45.pft`) and separator (`45-line.pbm`), the seven items
+  (`New`, `Load`, `Save`, `Options`, `Replay Intro`, `Quit`, `Back to Game`
+  in `27.pft`, disabled ones dithered on a 1-in-4 diagonal grid), the
+  spinning mask cursor (`Mskcur.pba` at 10 fps), and the menu pointer
+  (`Cursgui.pba`). Opening from play hides the gameplay panels, records a
+  160 × 120 thumbnail in memory, pauses the game clock and world sound
+  groups (0, 2, 3, 5), and plays `theme.aud` (group 4); returning to play
+  or starting a New game fades `theme.aud` out over 1 s. **Up/Down** wrap
+  around enabled items (`click.aud`), **Enter** (on key-down) or a click
+  picks the item (`intrface.aud`), and popups (`New` confirmation when a
+  game is running, corrupt-save question on `MASK/save/*.vol` scan, `Quit`
+  confirmation, and `Easy`/`Normal`/`Hard` difficulty setting combat level
+  0.66 / 1.0 / 1.5) use `gm_win2.pbm` with `g_ybtn.pba`/`g_yhibtn.pba`.
+  Starting a `New` game clears kept worlds, skips `conStart.cs`, and runs
+  `world.cs Daventry Begin` (playing Daventry's opening scene). (`Load`,
+  `Save`, `Options` and `Replay Intro` sub-screens are not built yet and
+  stay on the menu when clicked.)
 - **A 4:3 screen in a wide window (4c-6):** the panels and the caption
   stay in the original's 4:3 shape, centred in the window; the world
   fills the whole window around them.
@@ -1045,9 +1071,13 @@ repeated and checked in the logs. They do not change the game's rules.
 
 ### Showing things
 
-- `--world <name>`: which world to load (default `Daventry`). The names
-  are listed in [README.md](../README.md); `--world` with no name prints
-  them.
+- `--skip-menu`, `--no-menu`: skip the startup Main Menu and launch
+  straight into the world (`--world` and gameplay test options also imply
+  `--skip-menu`; pass `--menu` to start on the Main Menu even with other
+  options).
+- `--world <name>`: which world to load (default `Daventry`; implies
+  `--skip-menu`). The names are listed in [README.md](../README.md);
+  `--world` with no name prints them.
 - `--model <file>`: show one model on its own, e.g. `--model smlchest.KQS`
   (default: no model, so the ground opens). Add `--palette <file>` to
   colour it with another palette; that option works only with `--model`.
@@ -1117,7 +1147,9 @@ repeated and checked in the logs. They do not change the game's rules.
   or click a control of the bars or the map (`left:IDCTL_INVBAR_GOLD`,
   `right:IDCTL_HEALTHBAR_1`, `left:IDCTL_MAPWIN_RIGHT`, names as in
   `Gplayscr.gui`); `mappan:DX:DY` / `mapzoom:DX` drag the magic map by so
-  many layout pixels. Can be given more than once.
+  many layout pixels; `menu:open`, `menu:up`, `menu:down`, `menu:left`,
+  `menu:right`, `menu:enter`, `menu:escape`, and `menu:click:<item>` drive
+  the Main Menu. Can be given more than once.
 - `--kept-maps SAVE`: other worlds' maps from an original saved game
   (`MASK/save/save18.vol`, read only), marked visited, for the map's page
   arrows.

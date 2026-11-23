@@ -69,6 +69,7 @@ mod load;
 mod loading_screen;
 mod log;
 mod memory;
+mod menu_view;
 mod object_light;
 mod portal_view;
 mod potion_view;
@@ -116,6 +117,13 @@ struct Args {
     /// `--model NAME`: show this model alone instead of the ground.
     model: Option<String>,
     world: String,
+    /// True if `--world` was explicitly given on the command line.
+    world_explicit: bool,
+    /// `--skip-menu` / `--no-menu`: launch straight into the world instead of
+    /// starting on the Main Menu (M4 4f-3).
+    skip_menu: bool,
+    /// `--menu`: start on the Main Menu even when other options are passed.
+    menu: bool,
     palette: Option<String>,
     game: PathBuf,
     frames: Option<u64>,
@@ -199,6 +207,9 @@ fn parse_args() -> Result<Args, String> {
     let mut a = Args {
         model: None,
         world: "Daventry".into(),
+        world_explicit: false,
+        skip_menu: false,
+        menu: false,
         palette: None,
         game: std::env::var_os("KQ8_GAME_DIR").map(PathBuf::from).unwrap_or_else(|| "MASK".into()),
         frames: None,
@@ -235,7 +246,12 @@ fn parse_args() -> Result<Args, String> {
     while let Some(arg) = it.next() {
         let mut value = || it.next().ok_or(format!("{arg} needs a value"));
         match arg.as_str() {
-            "--world" => a.world = value()?,
+            "--world" => {
+                a.world = value()?;
+                a.world_explicit = true;
+            }
+            "--skip-menu" | "--no-menu" => a.skip_menu = true,
+            "--menu" => a.menu = true,
             "--palette" => a.palette = Some(value()?),
             "--game" => a.game = value()?.into(),
             // The ground is the default now; kept so older commands still run.
@@ -385,6 +401,42 @@ fn parse_args() -> Result<Args, String> {
     Ok(a)
 }
 
+impl Args {
+    /// True when the program should skip the startup Main Menu and load the
+    /// world directly: `--skip-menu` / `--no-menu`, or when `--world` or any
+    /// gameplay/test option is given without `--menu` (unless `--key` is used
+    /// solely with `menu:...` commands to test the startup Main Menu).
+    fn should_skip_menu(&self) -> bool {
+        if self.menu {
+            return false;
+        }
+        if self.skip_menu || self.world_explicit {
+            return true;
+        }
+        let non_menu_key = self.key.iter().any(|(k, _)| !k.to_ascii_lowercase().starts_with("menu:"));
+        self.lift.is_some()
+            || !self.hold.is_empty()
+            || !self.jump.is_empty()
+            || self.turn.is_some()
+            || self.at.is_some()
+            || !self.click.is_empty()
+            || !self.aim.is_empty()
+            || !self.swing.is_empty()
+            || self.combat_level.is_some()
+            || self.no_ai
+            || self.god
+            || self.special.is_some()
+            || !self.command.is_empty()
+            || !self.console.is_empty()
+            || self.begin
+            || self.check_pack
+            || self.right.is_some()
+            || self.item.is_some()
+            || self.kept_maps.is_some()
+            || non_menu_key
+    }
+}
+
 /// Shared with `main` so the final numbers can be written after the
 /// window closes.
 #[derive(Resource, Clone)]
@@ -433,7 +485,9 @@ Usage:
   cargo play --world <world> [OPTIONS]  loads a specific world. 
 
 Showing things:
-  --world <name>             world to load (default Daventry; no name: list the worlds)
+  --skip-menu, --no-menu     skip the Main Menu and launch straight into the world
+  --menu                     start on the Main Menu even when other options are passed
+  --world <name>             world to load (default Daventry; implies --skip-menu; no name: list the worlds)
   --at X,Y,H                 start Connor at X, Y facing heading H (radians)
   --renderer auto|vulkan|dx12  graphics API (default auto)
   --game <folder>            where the game is (default MASK; or KQ8_GAME_DIR)
@@ -532,7 +586,7 @@ fn main() -> ExitCode {
     #[allow(clippy::large_enum_variant)]
     enum Scene {
         Model(Model, Option<object_light::ObjectLight>),
-        Ground(WorldRead),
+        Ground(Option<WorldRead>),
     }
     // How any world is built (M6 6e-1).
     let opts = world_build::Options {
@@ -544,11 +598,15 @@ fn main() -> ExitCode {
         kept_maps: args.kept_maps.clone(),
         check_pack: args.check_pack,
     };
+    let skip_menu = args.should_skip_menu();
     let loaded = GameDir::open(&args.game)
         .map_err(|e| format!("{e} (pass --game <folder> or set KQ8_GAME_DIR)"))
         .and_then(|game| match &args.model {
-            // The world is read the way every world is (6e-1).
-            None => Ok(Scene::Ground(world_build::read_world(&game, &args.world, &opts, None, None, &mut log)?)),
+            // With `--skip-menu` (or test options), the world is read at
+            // startup (6e-1); otherwise we start on the Main Menu (M4 4f-3)
+            // and load Daventry when `New` is chosen.
+            None if skip_menu => Ok(Scene::Ground(Some(world_build::read_world(&game, &args.world, &opts, None, None, &mut log)?))),
+            None => Ok(Scene::Ground(None)),
             Some(name) => {
                 let world = World::open(&game, &args.world)?;
                 log.summary(format!("world: {}", world.name));
@@ -577,7 +635,8 @@ fn main() -> ExitCode {
     let shared = Shared { log: Arc::new(Mutex::new(log)), stats: Arc::new(Mutex::new(Stats::default())) };
     let title = match &scene {
         Scene::Model(m, _) => format!("KQ8 viewer - {}", m.label),
-        Scene::Ground(..) => format!("KQ8 viewer - {} ground", args.world),
+        Scene::Ground(Some(_)) => format!("KQ8 viewer - {} ground", args.world),
+        Scene::Ground(None) => "King's Quest: Mask of Eternity".into(),
     };
     let mut app = App::new();
     app.add_plugins(
@@ -594,7 +653,13 @@ fn main() -> ExitCode {
     .insert_resource(shared.clone())
     .insert_resource(match &mut scene {
         Scene::Model(_, light) => light.take().expect("the model's light is put in once"),
-        Scene::Ground(read) => world_build::object_light(read, &opts),
+        Scene::Ground(Some(read)) => world_build::object_light(read, &opts),
+        Scene::Ground(None) => object_light::ObjectLight::new(
+            kq8_data::lights::Lights::default(),
+            opts.light,
+            kq8_data::haze::Haze::new(10000.0, 20000.0, [0.18, 0.2, 0.24]),
+            opts.haze,
+        ),
     });
     object_light::add(&mut app);
     building_light::add(&mut app);
@@ -610,15 +675,32 @@ fn main() -> ExitCode {
                 .add_systems(Startup, (setup, object_light::report_lights).chain())
                 .add_systems(Update, (orbit_input, place_camera, frame_stats).chain());
         }
-        Scene::Ground(read) => {
+        Scene::Ground(maybe_read) => {
             // The world's resources and start-up systems (6e-1): put in
-            // and run by `world_build::build_pending` at Startup.
+            // and run by `world_build::build_pending` at Startup (or later
+            // when a New game is started from the Main Menu, M4 4f-3).
             world_build::add(&mut app);
             world_build::remember_options(app.world_mut(), &opts);
-            if args.begin {
+            if args.begin && maybe_read.is_some() {
                 app.insert_resource(world_build::BeginNow(args.world.clone()));
             }
-            app.world_mut().resource_mut::<world_build::PendingWorld>().0 = Some((read, opts));
+            if let Ok(game_dir) = GameDir::open(&opts.game) {
+                let menu_res = menu_view::MenuView::load(
+                    &game_dir,
+                    skip_menu,
+                    &mut shared.log.lock().unwrap(),
+                );
+                app.insert_resource(menu_res);
+                if maybe_read.is_none() {
+                    if let Some(snd) = sound_view::SoundSim::new(&game_dir, "Daventry", opts.sound, Vec::new(), None) {
+                        app.insert_resource(snd);
+                    }
+                }
+            }
+            app.init_resource::<gui_view::ScreenFrame>();
+            if let Some(read) = maybe_read {
+                app.world_mut().resource_mut::<world_build::PendingWorld>().0 = Some((read, opts));
+            }
             app.insert_resource(Settings { frame_limit: args.frames, started, last_report: Instant::now(), radius: 0.0 })
                 .insert_resource(connor_view::StartLift(args.lift))
                 .insert_resource(connor_view::HoldIntent(args.hold))
@@ -646,7 +728,7 @@ fn main() -> ExitCode {
                 // Doors first, so a door's box is where it is drawn when
                 // Connor moves (M3 step 3a).
                 .add_systems(FixedUpdate, (console::console_step, draw_distance::apply_collider_switches, door_view::door_step, connor_view::late_set_step, door_view::character_gravity, connor_view::connor_step, connor_view::push_apply, rope_view::rope_step, door_view::trap_step, talk_view::talk_step, door_view::apply_loads, copies_view::spawn_copies, game_camera::camera_step, effects_view::effects_step, anim_view::anim_step).chain().run_if(world_build::running))
-                .add_systems(Startup, world_build::build_pending)
+                .add_systems(Startup, (menu_view::setup_menu, world_build::build_pending).chain())
                 .add_systems(world_build::BuildWorld, (terrain_view::setup_ground, terrain_view::setup_objects, terrain_view::setup_h_label, ground_anim_view::setup_ground_anim, light_view::setup_light_label, object_light::report_lights, ground_haze::report_ground_haze).chain())
                 .add_systems(Update, (game_camera::camera_input, terrain_view::fly_input, connor_view::connor_keys, door_view::door_click_input, connor_view::connor_draw, door_view::door_draw, door_view::hide_deleted, (item_view::item_draw, item_view::corpse_draw, item_view::bolt_draw), effects_view::effects_draw, ground_anim_view::ground_anim_step, ground_anim_view::ground_anim_draw, (anim_view::anim_draw, terrain_view::static_bmp_swap_step), potion_view::dither_step, connor_view::unlit_step, game_camera::camera_draw, (terrain_view::toggle_markers, terrain_view::toggle_floor, door_view::toggle_ai, door_view::toggle_god), light_view::toggle_light, light_view::report_light, terrain_view::update_camera_label, terrain_view::report_camera).chain().run_if(world_build::running))
                 .add_systems(Update, frame_stats.after(terrain_view::report_camera))
@@ -674,9 +756,12 @@ fn main() -> ExitCode {
                 .add_systems(FixedUpdate, (potion_view::orbit_step, potion_view::look_step, potion_view::translucent_step).after(gui_view::gui_step).run_if(world_build::running))
                 // Characters' shadows (M4 4d-7b-2), with this frame's poses.
                 .add_systems(PostUpdate, (anim_view::shadow_draw, shadow_view::object_shadow_draw).after(bevy::transform::TransformSystems::Propagate).run_if(world_build::running))
-                .add_systems(Update, (gui_view::fit_screen, gui_view::gui_layout_log, gui_view::popup_step, gui_view::gui_draw, gui_view::pointer_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain().run_if(world_build::playing))
-                // Sound effects (M3 3h-2), once the camera is placed.
-                .add_systems(Update, sound_view::sound_step.after(game_camera::camera_draw).run_if(world_build::playing))
+                .add_systems(Update, gui_view::fit_screen)
+                .add_systems(Update, (menu_view::menu_camera_step, menu_view::menu_step, menu_view::menu_pointer_draw).chain().after(gui_view::fit_screen))
+                .add_systems(Update, gui_view::pointer_draw.after(menu_view::menu_pointer_draw))
+                .add_systems(Update, (gui_view::gui_layout_log, gui_view::popup_step, gui_view::gui_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain().after(menu_view::menu_step).run_if(world_build::playing))
+                // Sound effects (M3 3h-2) and menu theme / SFX (M4 4f-3).
+                .add_systems(Update, sound_view::sound_step.after(menu_view::menu_step).after(game_camera::camera_draw))
                 .add_systems(Update, (object_light::toggle_haze, object_light::apply_set_haze, object_light::sync_background, object_light::report_haze, draw_distance::update_activity, scene_lights::gather_lights, smooth_view::write_joins, light_view::toggle_dynamic, light_view::paint_ground, wall_lights::light_walls).chain().after(game_camera::camera_draw).run_if(world_build::running));
         }
     }

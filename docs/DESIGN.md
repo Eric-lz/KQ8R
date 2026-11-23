@@ -1032,7 +1032,8 @@ inventory and menus.
     Uglybeast`, case "there"), read in `conversation.log`, `talk.log`,
     `doors.log`, `camera.log`, `gui.log`.
 
-- **4f — the main menu** (planned 2026-11-22). From
+- **4f — the main menu** (planned 2026-11-22; **done** 2026-11-23, steps
+  4f-1 to 4f-3; **not yet checked by eye/ear in play**). From
   `docs/behaviour/main-menu.md` (A, 2026-10-21, checked by the user in
   the original), `sound.md` rules 50 & 54, `world-change.md` rules 10 &
   21, and `interface.md` rules 12, 14, 20a & 26a. Starts at launch
@@ -1066,14 +1067,15 @@ inventory and menus.
     `g_ybtn.pba`/`g_yhibtn.pba` popups); standalone/world menu sound &
     `theme.aud` playback and 1 s fade-out.
   - **4f-3, launch option, gameplay pause, New game, and death**
-    (pending; `main.rs`, `world_build.rs`, `gui_view.rs`,
-    `terrain_view.rs`, `connor_view.rs`). `--skip-menu` / `--no-menu`
+    (**done** 2026-11-23; `main.rs`, `world_build.rs`, `gui_view.rs`,
+    `terrain_view.rs`, `connor_inventory.rs`). `--skip-menu` / `--no-menu`
     (implied by `--world` / test flags unless `--menu` is given); Escape
-    and `IDCTL_INVBAR_MASK` pause the game clock, hide gameplay panels,
-    record the 160 × 120 thumbnail request in memory ("Do not reproduce"
-    3), and open the menu; `New` clears kept worlds (`cur`), skips
-    `conStart.cs` (`$Testing` false), applies chosen combat level (1/2/3
-    → 0.66/1.0/1.5), and starts Daventry with `BeginNow`; `Load` /
+    (including Escape on the Portal Yes/No popup per `world-change.md`
+    rule 26) and `IDCTL_INVBAR_MASK` pause the game clock, hide gameplay
+    panels, record the 160 × 120 thumbnail request in memory ("Do not
+    reproduce" 3), and open the menu; `New` clears kept worlds (`cur`),
+    skips `conStart.cs` (`$Testing` false), applies chosen combat level
+    (1/2/3 → 0.66/1.0/1.5), and starts Daventry with `BeginNow`; `Load` /
     `Save` / `Options` / `Replay Intro` logged cleanly as unbuilt
     sub-screens without restarting `theme.aud`; Connor's `Mode::Dead`
     waits 2.0 s (`handsOff`) then opens the menu with `Save` and `Back to

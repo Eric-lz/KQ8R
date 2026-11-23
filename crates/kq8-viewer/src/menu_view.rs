@@ -47,6 +47,7 @@ pub struct MenuCamera;
 
 /// In-memory 160 × 120 thumbnail saved when Escape / the mask button opens
 /// the menu from gameplay (`main-menu.md` rules 7.3, 22, "Do not reproduce" 3).
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct SavedThumbnail {
     pub width: u32,
@@ -538,13 +539,14 @@ pub fn menu_step(
         menu.death_timer = None;
         menu.death_handled = false;
     } else if !menu.state.open && !menu.death_handled {
-        let rem = menu.death_timer.get_or_insert_with(|| {
+        if menu.death_timer.is_none() {
             if let Some(s) = sim.as_mut() {
                 s.active.world.connor_hands_off = true;
             }
             menu.note("Connor entered Mode::Dead: waiting 2.0 s in handsOff before opening main menu (main-menu.md rule 25)");
-            main_menu::DEATH_HANDS_OFF_SECONDS
-        });
+            menu.death_timer = Some(main_menu::DEATH_HANDS_OFF_SECONDS);
+        }
+        let rem = menu.death_timer.as_mut().unwrap();
         *rem -= dt;
         if *rem <= 0.0 {
             menu.death_timer = None;
@@ -814,7 +816,7 @@ pub fn menu_step(
         );
         picture.sampler = ImageSampler::nearest();
         if let Ok(node) = canvas_node.single() {
-            if let Some(slot) = images.get_mut(&node.image) {
+            if let Some(mut slot) = images.get_mut(&node.image) {
                 *slot = picture;
             }
         }

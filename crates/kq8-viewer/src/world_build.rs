@@ -138,6 +138,9 @@ pub struct WorldChange {
     options: Option<Options>,
     /// Kept worlds, first stage (6e-8): by lower-case world name.
     kept: std::collections::BTreeMap<String, KeptWorld>,
+    /// Combat level chosen on the Main Menu's difficulty popup when starting a
+    /// New game (`main-menu.md` rules 10, 24; `world-change.md` rules 10, 21).
+    pub new_game_combat_level: Option<i64>,
 }
 
 /// What is kept of a world Connor left (6e-8, `world-change.md` rules
@@ -164,19 +167,49 @@ impl WorldChange {
     pub fn game(&self) -> Option<&PathBuf> {
         self.options.as_ref().map(|o| &o.game)
     }
+
+    /// True when a world is loaded and in the `Playing` step.
+    pub fn is_playing(&self) -> bool {
+        matches!(self.step, Step::Playing) && !self.current.is_empty()
+    }
+
+    /// Starts a fresh New game in Daventry from the Main Menu (`main-menu.md`
+    /// rules 10, 24; `world-change.md` rules 10, 21): clears every kept world,
+    /// records the chosen combat level (`1`/`2`/`3`), and asks for `Daventry`.
+    pub fn start_new_game(&mut self, combat_level: i64) {
+        self.kept.clear();
+        self.new_game_combat_level = Some(combat_level);
+        self.asked = Some(Request {
+            world: "Daventry".into(),
+            at: None,
+            why: format!("New game from main menu (combat level {combat_level})"),
+            portal: None,
+        });
+    }
 }
 
-/// The run condition of the game's systems: a world is in (6e-2).
-pub fn playing(change: Res<WorldChange>) -> bool {
+/// The run condition of the game's systems: a world is in (6e-2) and the
+/// Main Menu is not open (`main-menu.md` rule 7).
+pub fn playing(change: Res<WorldChange>, menu: Option<Res<crate::menu_view::MenuView>>) -> bool {
     matches!(change.step, Step::Playing)
+        && !change.current.is_empty()
+        && !menu.is_some_and(|m| m.state.open)
 }
 
 /// The run condition of the game's updates and of the drawing that
-/// follows them (M6 6e-6): a world is in and the Portal state's question
+/// follows them (M6 6e-6): a world is in, the Main Menu is not open
+/// (`main-menu.md` rule 7), and the Portal state's question or Help popup
 /// is not open (`world-change.md` rule 26: the game pauses; the panels
 /// and the sounds go on).
-pub fn running(change: Res<WorldChange>, sim: Option<Res<crate::door_view::DoorSim>>) -> bool {
-    matches!(change.step, Step::Playing) && !sim.is_some_and(|s| s.active.world.portal_asking() || s.active.world.help_open())
+pub fn running(
+    change: Res<WorldChange>,
+    sim: Option<Res<crate::door_view::DoorSim>>,
+    menu: Option<Res<crate::menu_view::MenuView>>,
+) -> bool {
+    matches!(change.step, Step::Playing)
+        && !change.current.is_empty()
+        && !menu.is_some_and(|m| m.state.open)
+        && !sim.is_some_and(|s| s.active.world.portal_asking() || s.active.world.help_open())
 }
 
 /// For systems that keep values from frame to frame (`Local`): true the
@@ -600,29 +633,47 @@ pub fn world_change_step(world: &mut World) {
         Step::Playing => {
             let Some(request) = world.resource_mut::<WorldChange>().asked.take() else { return };
             let from = world.resource::<WorldChange>().current.clone();
+            let is_new_game = world.resource::<WorldChange>().new_game_combat_level.is_some();
+            if is_new_game && from.is_empty() {
+                let marker = format!("== new game: {} ({}) ==", request.world, request.why);
+                Log::mark_all(&marker, &["viewer", "console"]);
+                log.lock().unwrap().summary(&marker);
+                if let Ok(mut wl) = Log::create("world") {
+                    wl.detail(&marker);
+                }
+                let shared_log = world.resource::<Shared>().log.clone();
+                crate::loading_screen::open(world, &request.world, &shared_log);
+                world.resource_mut::<WorldChange>().step = Step::Down { request, frames: 0, from, journey: None };
+                return;
+            }
             let before = Counts::of(world);
             // The journey (6e-3, world-change.md rules 17-19), before the
-            // world's resources go.
-            let journey = world.get_resource::<crate::door_view::DoorSim>().map(|sim| {
-                let w = &sim.active.world;
-                let mut j = Journey::take(w, &sim.active.scripts.vars, &from);
-                // Rule 16: the world's map kept as it is now.
-                if let Some(m) = &w.map {
-                    if let Some(i) = m.index {
-                        j.other_maps.insert(i, (m.file.clone(), m.saved_keys(), format!("kept when Connor left {from}")));
+            // world's resources go. A fresh New game from the Main Menu
+            // (`world-change.md` rule 10) carries no journey and keeps no old world.
+            let journey = (!is_new_game).then(|| {
+                world.get_resource::<crate::door_view::DoorSim>().map(|sim| {
+                    let w = &sim.active.world;
+                    let mut j = Journey::take(w, &sim.active.scripts.vars, &from);
+                    // Rule 16: the world's map kept as it is now.
+                    if let Some(m) = &w.map {
+                        if let Some(i) = m.index {
+                            j.other_maps.insert(i, (m.file.clone(), m.saved_keys(), format!("kept when Connor left {from}")));
+                        }
                     }
-                }
-                (Box::new(j), connor_summary(w))
-            });
+                    (Box::new(j), connor_summary(w))
+                })
+            }).flatten();
             // Rules 12-13 (6e-8): the world's variables and what left it.
-            let kept = world.get_resource::<crate::door_view::DoorSim>().map(|sim| KeptWorld {
-                vars: sim.active.scripts.vars.iter().filter(|(n, _)| kq8_core::journey::belongs_to_world(n, &from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
-                gone: sim.active.world.gone_names().into_iter().collect(),
-                came_in: sim.active.world.came_in_files(),
-                states: sim.active.world.kept_states(),
-                rusted_rivers: sim.active.world.rusted_rivers(),
-                alt_lightmaps: sim.active.world.alt_lightmaps.clone(),
-            });
+            let kept = (!is_new_game).then(|| {
+                world.get_resource::<crate::door_view::DoorSim>().map(|sim| KeptWorld {
+                    vars: sim.active.scripts.vars.iter().filter(|(n, _)| kq8_core::journey::belongs_to_world(n, &from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
+                    gone: sim.active.world.gone_names().into_iter().collect(),
+                    came_in: sim.active.world.came_in_files(),
+                    states: sim.active.world.kept_states(),
+                    rusted_rivers: sim.active.world.rusted_rivers(),
+                    alt_lightmaps: sim.active.world.alt_lightmaps.clone(),
+                })
+            }).flatten();
             if let Some(k) = kept {
                 log.lock().unwrap().summary(format!(
                     "world change: {from} kept: {} variables (rule 13), {} objects gone (rule 12), {} loaded while playing {:?} (rule 12), {} object states (K-2): {}; its map (rule 16)",
@@ -669,6 +720,7 @@ pub fn world_change_step(world: &mut World) {
                         }
                         wl.detail(format!("Connor leaving {from}: {connor}"));
                     }
+                    None if is_new_game => wl.detail("new game from main menu: no journey carried"),
                     None => wl.detail("no rules running in the old world: no journey"),
                 }
             }
@@ -681,9 +733,11 @@ pub fn world_change_step(world: &mut World) {
             world.resource_mut::<WorldChange>().step = Step::Down { request, frames: frames - 1, from, journey };
         }
         Step::Down { request, from, journey, .. } => {
-            let after = Counts::of(world);
-            log.lock().unwrap().summary(format!("world change: {FREE_FRAMES} frames after taking {from} down: {}; {}", after.line(), crate::memory::line()));
-            list_unmarked(world, &mut log.lock().unwrap());
+            if !from.is_empty() {
+                let after = Counts::of(world);
+                log.lock().unwrap().summary(format!("world change: {FREE_FRAMES} frames after taking {from} down: {}; {}", after.line(), crate::memory::line()));
+                list_unmarked(world, &mut log.lock().unwrap());
+            }
             let Some(opts) = world.resource::<WorldChange>().options.clone() else {
                 log.lock().unwrap().summary("world change: no launch options kept; nothing built");
                 return;
@@ -697,18 +751,35 @@ pub fn world_change_step(world: &mut World) {
                 let n = std::mem::take(&mut world.resource_mut::<WorldChange>().kept).len();
                 log.lock().unwrap().summary(format!("world change: to Temple 1: {n} kept worlds dropped, the maps kept (world-change.md rule 8.1)"));
             }
+            let is_new_game = world.resource::<WorldChange>().new_game_combat_level.is_some();
             let kept = world.resource::<WorldChange>().kept.get(&request.world.to_ascii_lowercase()).cloned().unwrap_or_default();
-            let arrival = journey.as_ref().map(|j| load::Arrival {
-                no_name_from: j.next_no_name,
-                exit_movement,
-                kept_vars: kept.vars.clone(),
-                gone: kept.gone.clone(),
-                came_in: kept.came_in.clone(),
-                states: kept.states.iter().map(|s| (s.name.to_ascii_lowercase(), s.clone())).collect(),
-                kept_maps: j.other_maps.clone(),
-                rusted_rivers: kept.rusted_rivers.clone(),
-                alt_lightmaps: kept.alt_lightmaps.clone(),
-            });
+            let arrival = if is_new_game {
+                // `world-change.md` rules 10, 21: in normal play from the Main Menu,
+                // `$Testing` is false so `conStart.cs` does not run.
+                Some(load::Arrival {
+                    no_name_from: 1,
+                    exit_movement: None,
+                    kept_vars: Vec::new(),
+                    gone: Default::default(),
+                    came_in: Vec::new(),
+                    states: Default::default(),
+                    kept_maps: Default::default(),
+                    rusted_rivers: Vec::new(),
+                    alt_lightmaps: Default::default(),
+                })
+            } else {
+                journey.as_ref().map(|j| load::Arrival {
+                    no_name_from: j.next_no_name,
+                    exit_movement,
+                    kept_vars: kept.vars.clone(),
+                    gone: kept.gone.clone(),
+                    came_in: kept.came_in.clone(),
+                    states: kept.states.iter().map(|s| (s.name.to_ascii_lowercase(), s.clone())).collect(),
+                    kept_maps: j.other_maps.clone(),
+                    rusted_rivers: kept.rusted_rivers.clone(),
+                    alt_lightmaps: kept.alt_lightmaps.clone(),
+                })
+            };
             let percent = Arc::new(AtomicU32::new(0));
             let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());
             let read = std::thread::Builder::new().name("world read".into()).spawn(move || {
@@ -793,7 +864,10 @@ pub fn world_change_step(world: &mut World) {
             }
             // The portal's place on the ground (z -1, rule 20.1), else
             // the asked one.
-            if let Some(at) = request.portal.as_ref().and_then(|p| p.on_ground()).or(request.at) {
+            let new_game_lvl = world.resource_mut::<WorldChange>().new_game_combat_level.take();
+            if new_game_lvl.is_some() {
+                world.resource_mut::<connor_view::StartAt>().0 = None;
+            } else if let Some(at) = request.portal.as_ref().and_then(|p| p.on_ground()).or(request.at) {
                 world.resource_mut::<connor_view::StartAt>().0 = Some(at);
             }
             {
@@ -801,8 +875,10 @@ pub fn world_change_step(world: &mut World) {
                 // `--item` gives its item in the first world only.
                 held.0 = None;
                 // The combat level before the characters enter (rule 18;
-                // fighting.md rule 3).
-                if let Some(j) = &journey {
+                // fighting.md rule 3; main-menu.md rule 24).
+                if let Some(lvl) = new_game_lvl {
+                    held.1 = Some(lvl);
+                } else if let Some(j) = &journey {
                     held.1 = combat_level_number(j.combat_level);
                 }
             }
