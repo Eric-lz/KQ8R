@@ -1142,12 +1142,16 @@ inventory and menus.
     1.0 s Load thumbnail debounce, live Save thumbnail, blinking `|` caret
     (300 ms), 30-char / 259.9-px input, Backspace repeat, and
     Delete/Overwrite/Max-50 (`#166`) popups.
-  - **4g-4, full `save<N>.vol` save & restore round-trip** (`kq8-viewer`
-    `world_build.rs`, `menu_view.rs`). Packing `savedGameName`, world
-    entries, `current.bin`, `Connor.kq`, `<map>.kq`, `GameState.kq`
-    (with `difficultyFactor` and `nextNoName`), `cur/*.vol` +
-    `worldVolumes`, and `cur/*.kq` + `maps` into `kq8-artifacts/user/save/`,
-    and restoring full game state via the world loading screen.
+  - **4g-4, full `save<N>.vol` save & restore round-trip** (**done** 2026-11-24;
+    `kq8-core` `save_game.rs`; `kq8-viewer` `world_build.rs`,
+    `menu_view.rs`). Packing `savedGameName`, `worldName`,
+    `savedGameVersion`, `WorldVar.cs`, `current.bin`, `GameState.kq`
+    (with `difficultyFactor` and `nextNoName`), `worldVolumes`, `maps`,
+    and `kq8r_state.txt` (`KQ8R_SAVE_V1` with `Journey`, Connor
+    position/heading, and `KeptWorld` states/variables/gone/maps) into
+    `kq8-artifacts/user/save/`, and restoring saved games (plus
+    original `MASK/save/` `worldName`, `WorldVar.cs`, and `GameState.kq`)
+    via the world loading screen without re-running `<world>.cs Begin`.
   - **4g-5, `Replay Intro` and AVI movie playback (`playMovie`)**
     (`W32opn_1.dll`, `W32mdl_1.dll`, `W32ndg_1.dll`), audio suspend/resume,
     key/click skip for `Replay Intro`, and 200 ms `theme.aud` restart.

@@ -141,6 +141,19 @@ pub struct WorldChange {
     /// Combat level chosen on the Main Menu's difficulty popup when starting a
     /// New game (`main-menu.md` rules 10, 24; `world-change.md` rules 10, 21).
     pub new_game_combat_level: Option<i64>,
+    /// Snapshot waiting to be restored by [`WorldChange::restore_save`] (M4 4g-4).
+    pub pending_restore: Option<RestoreSave>,
+    /// Combat level (`1|2|3`) from a restored save when no `Journey` is attached.
+    pub restore_combat_level: Option<i64>,
+    /// True while a saved game restore is in progress (`Step::Down` -> `Step::Loading`).
+    pub restoring: bool,
+}
+
+/// Cross-world & per-world state prepared from a `save<N>.vol` archive (`submenus.md` rule 11, M4 4g-4).
+pub struct RestoreSave {
+    pub journey: Option<Box<Journey>>,
+    pub kept: std::collections::BTreeMap<String, KeptWorld>,
+    pub combat_level: Option<i64>,
 }
 
 /// What is kept of a world Connor left (6e-8, `world-change.md` rules
@@ -178,11 +191,38 @@ impl WorldChange {
     /// records the chosen combat level (`1`/`2`/`3`), and asks for `Daventry`.
     pub fn start_new_game(&mut self, combat_level: i64) {
         self.kept.clear();
+        self.pending_restore = None;
         self.new_game_combat_level = Some(combat_level);
         self.asked = Some(Request {
             world: "Daventry".into(),
             at: None,
             why: format!("New game from main menu (combat level {combat_level})"),
+            portal: None,
+        });
+    }
+
+    /// Kept worlds held by `WorldChange` (for building full save snapshots in M4 4g-4).
+    pub fn kept_worlds(&self) -> &std::collections::BTreeMap<String, KeptWorld> {
+        &self.kept
+    }
+
+    /// Loads a saved game into `world` via the loading screen (`submenus.md` rule 11, M4 4g-4).
+    pub fn restore_save(
+        &mut self,
+        world: String,
+        at: Option<[f32; 3]>,
+        restore: RestoreSave,
+        why: String,
+    ) {
+        self.kept = restore.kept.clone();
+        self.new_game_combat_level = None;
+        self.restore_combat_level = restore.combat_level;
+        self.restoring = true;
+        self.pending_restore = Some(restore);
+        self.asked = Some(Request {
+            world,
+            at,
+            why,
             portal: None,
         });
     }
@@ -633,6 +673,48 @@ pub fn world_change_step(world: &mut World) {
         Step::Playing => {
             let Some(request) = world.resource_mut::<WorldChange>().asked.take() else { return };
             let from = world.resource::<WorldChange>().current.clone();
+            let pending_restore = world.resource_mut::<WorldChange>().pending_restore.take();
+            if let Some(restore) = pending_restore {
+                if request.at.is_none() {
+                    if let Some(mut start_at) = world.get_resource_mut::<connor_view::StartAt>() {
+                        start_at.0 = None;
+                    }
+                }
+                if !from.is_empty() {
+                    let before = Counts::of(world);
+                    let (_, removed) = take_down(world);
+                    let marker = format!("== load game: {from} -> {} ({}) ==", request.world, request.why);
+                    Log::mark_all(&marker, &["viewer", "console"]);
+                    let mut log_guard = log.lock().unwrap();
+                    log_guard.summary(&marker);
+                    log_guard.summary(format!(
+                        "world change: {from} taken down for save restore: {} entities despawned, {removed} per-world resources removed",
+                        before.world_entities
+                    ));
+                } else {
+                    let marker = format!("== load game: {} ({}) ==", request.world, request.why);
+                    Log::mark_all(&marker, &["viewer", "console"]);
+                    log.lock().unwrap().summary(&marker);
+                }
+                if let Ok(mut wl) = Log::create("world") {
+                    if let Some(j) = restore.journey.as_deref() {
+                        for line in j.describe() {
+                            wl.detail(line);
+                        }
+                    } else {
+                        wl.detail("original save loaded (WorldVar.cs + GameState.kq; default Connor.kq kept)");
+                    }
+                }
+                let shared_log = world.resource::<Shared>().log.clone();
+                crate::loading_screen::open(world, &request.world, &shared_log);
+                world.resource_mut::<WorldChange>().step = Step::Down {
+                    request,
+                    frames: FREE_FRAMES,
+                    from,
+                    journey: restore.journey,
+                };
+                return;
+            }
             let is_new_game = world.resource::<WorldChange>().new_game_combat_level.is_some();
             if is_new_game && from.is_empty() {
                 let marker = format!("== new game: {} ({}) ==", request.world, request.why);
@@ -745,13 +827,15 @@ pub fn world_change_step(world: &mut World) {
             // Read on another thread (6e-4a); the window keeps drawing the
             // loading screen. The thread holds `viewer.log` meanwhile.
             let exit_movement = request.portal.as_ref().and_then(|p| Some((p.exit_list.clone()?, p.exit_anim.clone()?)));
+            let is_new_game = world.resource::<WorldChange>().new_game_combat_level.is_some();
+            let restoring = world.resource::<WorldChange>().restoring;
             // Rule 8.1: arriving in Temple 1 drops every kept world (the
-            // maps stay).
-            if request.world.eq_ignore_ascii_case("temple1") {
+            // maps stay), except when restoring a save directly into Temple 1.
+            if !restoring && request.world.eq_ignore_ascii_case("temple1") {
                 let n = std::mem::take(&mut world.resource_mut::<WorldChange>().kept).len();
                 log.lock().unwrap().summary(format!("world change: to Temple 1: {n} kept worlds dropped, the maps kept (world-change.md rule 8.1)"));
             }
-            let is_new_game = world.resource::<WorldChange>().new_game_combat_level.is_some();
+            let has_kept = world.resource::<WorldChange>().kept.contains_key(&request.world.to_ascii_lowercase());
             let kept = world.resource::<WorldChange>().kept.get(&request.world.to_ascii_lowercase()).cloned().unwrap_or_default();
             let arrival = if is_new_game {
                 // `world-change.md` rules 10, 21: in normal play from the Main Menu,
@@ -767,18 +851,20 @@ pub fn world_change_step(world: &mut World) {
                     rusted_rivers: Vec::new(),
                     alt_lightmaps: Default::default(),
                 })
-            } else {
-                journey.as_ref().map(|j| load::Arrival {
-                    no_name_from: j.next_no_name,
+            } else if journey.is_some() || has_kept || restoring {
+                Some(load::Arrival {
+                    no_name_from: journey.as_ref().map_or(1, |j| j.next_no_name),
                     exit_movement,
                     kept_vars: kept.vars.clone(),
                     gone: kept.gone.clone(),
                     came_in: kept.came_in.clone(),
                     states: kept.states.iter().map(|s| (s.name.to_ascii_lowercase(), s.clone())).collect(),
-                    kept_maps: j.other_maps.clone(),
+                    kept_maps: journey.as_ref().map_or_else(Default::default, |j| j.other_maps.clone()),
                     rusted_rivers: kept.rusted_rivers.clone(),
                     alt_lightmaps: kept.alt_lightmaps.clone(),
                 })
+            } else {
+                None
             };
             let percent = Arc::new(AtomicU32::new(0));
             let (name, shared_log, thread_percent) = (request.world.clone(), log.clone(), percent.clone());
@@ -872,6 +958,8 @@ pub fn world_change_step(world: &mut World) {
             // The portal's place on the ground (z -1, rule 20.1), else
             // the asked one.
             let new_game_lvl = world.resource_mut::<WorldChange>().new_game_combat_level.take();
+            let restore_lvl = world.resource_mut::<WorldChange>().restore_combat_level.take();
+            let was_restoring = std::mem::take(&mut world.resource_mut::<WorldChange>().restoring);
             if new_game_lvl.is_some() {
                 world.resource_mut::<connor_view::StartAt>().0 = None;
             } else if let Some(at) = request.portal.as_ref().and_then(|p| p.on_ground()).or(request.at) {
@@ -883,7 +971,7 @@ pub fn world_change_step(world: &mut World) {
                 held.0 = None;
                 // The combat level before the characters enter (rule 18;
                 // fighting.md rule 3; main-menu.md rule 24).
-                if let Some(lvl) = new_game_lvl {
+                if let Some(lvl) = new_game_lvl.or(restore_lvl) {
                     held.1 = Some(lvl);
                 } else if let Some(j) = &journey {
                     held.1 = combat_level_number(j.combat_level);
@@ -892,8 +980,10 @@ pub fn world_change_step(world: &mut World) {
             world.resource_mut::<PendingWorld>().0 = Some((read, opts));
             build_pending(world);
             give_journey(world, journey.as_deref(), &request.world, &log);
-            // Rule 9: `Begin` on every arrival.
-            world.insert_resource(BeginNow(request.world.clone()));
+            // Rule 9: `Begin` on every normal arrival, not on save restore (`submenus.md` rule 11).
+            if !was_restoring {
+                world.insert_resource(BeginNow(request.world.clone()));
+            }
             if let Some(p) = request.portal {
                 log.lock().unwrap().summary(format!("world change: arriving through {}: ConLoc {:?}, CamLoc {:?}, exitAnim {:?} ({:?}), exitScript {:?} (world-change.md rules 6, 20)", p.portal, p.con_loc, p.cam_loc, p.exit_anim, p.exit_list, p.exit_script));
                 world.insert_resource(crate::portal_view::ArrivalNow::new(*p));
