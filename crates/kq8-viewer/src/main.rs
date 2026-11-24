@@ -70,6 +70,7 @@ mod loading_screen;
 mod log;
 mod memory;
 mod menu_view;
+mod movie_view;
 mod object_light;
 mod portal_view;
 mod potion_view;
@@ -698,6 +699,7 @@ fn main() -> ExitCode {
                 }
             }
             app.init_resource::<gui_view::ScreenFrame>()
+                .init_resource::<movie_view::MoviePlayer>()
                 .init_resource::<terrain_view::DebugHudShown>();
             if let Some(read) = maybe_read {
                 app.world_mut().resource_mut::<world_build::PendingWorld>().0 = Some((read, opts));
@@ -758,7 +760,7 @@ fn main() -> ExitCode {
                 // Characters' shadows (M4 4d-7b-2), with this frame's poses.
                 .add_systems(PostUpdate, (anim_view::shadow_draw, shadow_view::object_shadow_draw).after(bevy::transform::TransformSystems::Propagate).run_if(world_build::running))
                 .add_systems(Update, gui_view::fit_screen)
-                .add_systems(Update, (menu_view::menu_camera_step, menu_view::menu_step, menu_view::menu_pointer_draw).chain().after(gui_view::fit_screen))
+                .add_systems(Update, (menu_view::menu_camera_step, menu_view::menu_step, movie_view::movie_step, menu_view::menu_pointer_draw).chain().after(gui_view::fit_screen))
                 .add_systems(Update, gui_view::pointer_draw.after(menu_view::menu_pointer_draw))
                 .add_systems(Update, (gui_view::gui_layout_log, gui_view::popup_step, gui_view::gui_draw, talk_view::caption_draw, talk_view::caption_picture_draw, talk_view::mouth_draw).chain().after(menu_view::menu_step).run_if(world_build::playing))
                 // Sound effects (M3 3h-2) and menu theme / SFX (M4 4f-3).

@@ -351,6 +351,8 @@ pub struct MenuView {
     /// opens (`main-menu.md` rule 25: "in handsOff for a couple of seconds").
     pub death_timer: Option<f64>,
     pub death_handled: bool,
+    /// Countdown (ms) after `Replay Intro` ends before restarting `theme.aud` (`submenus.md` rule 27).
+    pub theme_restart_timer_ms: Option<f64>,
     last_drawn_key: Option<MenuDrawKey>,
     pub log: Option<Log>,
 }
@@ -529,6 +531,7 @@ impl MenuView {
             thumbnail: None,
             death_timer: None,
             death_handled: false,
+            theme_restart_timer_ms: None,
             last_drawn_key: None,
             log,
         }
@@ -610,6 +613,10 @@ impl MenuView {
         if let Some(l) = &mut self.log {
             l.detail(format!("t {:8.3} s (frame {}): {}", self.now_ms / 1000.0, self.total_frames, line.as_ref()));
         }
+    }
+
+    pub fn mark_dirty(&mut self) {
+        self.last_drawn_key = None;
     }
 
     pub fn summary(&mut self, main_log: &Shared, line: impl AsRef<str>) {
@@ -1515,7 +1522,7 @@ pub fn menu_step(
     mut sim: Option<ResMut<crate::door_view::DoorSim>>,
     mut connor: Option<ResMut<crate::connor_view::ConnorSim>>,
     mut change: ResMut<WorldChange>,
-    (time, mut keys, buttons, window, frame, mut key_at, mut char_events): (
+    (time, mut keys, buttons, window, frame, mut key_at, mut char_events, mut movie): (
         Res<Time<Real>>,
         ResMut<ButtonInput<KeyCode>>,
         Res<ButtonInput<MouseButton>>,
@@ -1523,6 +1530,7 @@ pub fn menu_step(
         Res<ScreenFrame>,
         Option<ResMut<KeyAt>>,
         MessageReader<KeyboardInput>,
+        Option<ResMut<crate::movie_view::MoviePlayer>>,
     ),
     mut root_vis: Query<&mut Visibility, With<MenuRoot>>,
     canvas_node: Query<&ImageNode, With<MenuCanvasNode>>,
@@ -1576,6 +1584,7 @@ pub fn menu_step(
     }
 
     // 2. If the menu is closed, check for Escape or `--key menu:open` during play (`main-menu.md` rule 7).
+    let movie_playing = movie.as_ref().is_some_and(|m| m.is_playing());
     if !menu.state.open {
         for mut v in &mut root_vis {
             if *v != Visibility::Hidden {
@@ -1583,7 +1592,7 @@ pub fn menu_step(
             }
         }
         let playing_now = change.is_playing();
-        if !playing_now {
+        if !playing_now || movie_playing {
             return;
         }
         let portal_or_help = sim.as_ref().is_some_and(|s| s.active.world.portal_asking() || s.active.world.help_open());
@@ -1656,7 +1665,23 @@ pub fn menu_step(
         }
     }
 
-    if !menu.state.input_blocked() {
+    if let Some(rem) = menu.theme_restart_timer_ms.as_mut() {
+        *rem -= dt * 1000.0;
+        if *rem <= 0.0 {
+            menu.theme_restart_timer_ms = None;
+            if menu.state.open && menu.screen == MenuScreen::MainMenu && !movie_playing {
+                if let Some(snd) = sound.as_mut() {
+                    snd.start_menu_theme();
+                }
+                menu.summary(
+                    &shared,
+                    "theme.aud restarted 200 ms after Replay Intro (submenus.md rule 27)",
+                );
+            }
+        }
+    }
+
+    if !menu.state.input_blocked() && !movie_playing {
         // Test keys (`--key menu:...`, processed one per frame once the 0.2 s block expires).
         let mut test_cmd: Option<String> = None;
         if let Some(ka) = key_at.as_mut() {
@@ -2126,15 +2151,45 @@ pub fn menu_step(
                 );
             }
             MenuAction::ReplayIntro => {
-                menu.summary(
-                    &shared,
-                    "Replay Intro chosen (rule 12): W32opn_1.avi playback not built yet; returning to menu with 0.2 s input block",
-                );
-                let more = menu.state.finish_replay_intro();
-                for a in more {
-                    if let MenuAction::Note(n) = a {
-                        menu.note(n);
+                menu.theme_restart_timer_ms = None;
+                if let Some(snd) = sound.as_mut() {
+                    snd.fade_menu_theme();
+                }
+                let sound_off = sound.as_ref().is_some_and(|snd| snd.output_off());
+                if let Some(path) = crate::movie_view::resolve_movie_path(&menu.game, "w32opn_1.dll") {
+                    let dest = crate::movie_view::movie_client_dest(&window, &frame);
+                    let started = movie
+                        .as_deref_mut()
+                        .map(|mp| mp.start(path.clone(), true, true, sound_off, dest));
+                    match started {
+                        Some(Ok(len)) => menu.summary(
+                            &shared,
+                            format!(
+                                "Replay Intro started {} ({len} frames, allowSkip=true; theme.aud faded over 1 s, submenus.md rules 27-28)",
+                                path.display()
+                            ),
+                        ),
+                        Some(Err(e)) => {
+                            menu.summary(&shared, format!("Replay Intro could not start {}: {e}", path.display()));
+                            let more = menu.state.finish_replay_intro();
+                            for a in more {
+                                if let MenuAction::Note(n) = a {
+                                    menu.note(n);
+                                }
+                            }
+                            menu.theme_restart_timer_ms = Some(200.0);
+                        }
+                        None => {}
                     }
+                } else {
+                    menu.summary(&shared, "Replay Intro: w32opn_1.dll / .avi not found; returning to menu (submenus.md rule 28)");
+                    let more = menu.state.finish_replay_intro();
+                    for a in more {
+                        if let MenuAction::Note(n) = a {
+                            menu.note(n);
+                        }
+                    }
+                    menu.theme_restart_timer_ms = Some(200.0);
                 }
             }
             MenuAction::Quit => {

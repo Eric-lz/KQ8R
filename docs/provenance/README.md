@@ -4413,6 +4413,14 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `SavedWorldSnapshot`, `KeptWorldSnapshot` (`KQ8R_SAVE_V1`), `format_world_var_cs`, `parse_world_var_cs`, `parse_game_state_kq`: saves `savedGameName`, `savedGameVersion` (`1.000000`), `worldName`, `WorldVar.cs`, `current.bin`, `GameState.kq` (`nextNoName`, `difficultyFactor`), `worldVolumes`, `maps`, and `kq8r_state.txt` (`Journey` + Connor position/heading + `KeptWorld` states/variables/gone/came_in/rivers/maps) to `kq8-artifacts/user/save/save<N>.vol` | `submenus.md` rules 10–11; `MASK/save/save1.vol` inspected (`WorldVar.cs`, `GameState.kq` trailing `u32` + `f32`) | unit tests `kq8r_snapshot_round_trips_connor_journey_and_kept_worlds`, `parses_original_worldvar_cs_and_binary_gamestate_kq` |
 | `WorldChange::restore_save` / `pending_restore` / `PerformLoad`: restores KQ8R saves (all `Journey`, `KeptWorld`, and Connor position/heading) and original `MASK/save/*.vol` saves (`worldName`, `WorldVar.cs`, `GameState.kq` `difficultyFactor` & `nextNoName`) through the world loading screen without running `BeginNow` (`world.cs <World> Begin`) | `submenus.md` rule 11; `world-change.md` rules 9, 13, 17–19 | headless Test 1 (`save25.vol` round-trip in `Daventry`, Connor stayed at `(193000, 193000)` heading `3.1416`, `5` items carried); headless Test 2 (original `MASK/save/save24.vol` loaded `Swamp`, `53` `WorldVar.cs` vars, `difficultyFactor=0.66`) |
 
+## M4 4g-5 2026-11-24: `Replay Intro` and AVI movie playback (`playMovie`) — core `active.rs`; viewer `movie_view.rs`, `menu_view.rs`, `sound_view.rs`, `world_build.rs`, `main.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `WorldState::movie_requests` and `playMovie` script command queuing unskippable `(file, false)` movie playback | `submenus.md` rules 26–27 | unit test `active::talk_tests::play_movie_queues_unskippable_request` |
+| `resolve_movie_path` (prefers GOG `.avi` over legacy Intel Indeo `.dll` on Windows 11), `MoviePlayer` (`winmm::mciSendStringW` `type mpegvideo` pinned to Bevy's main Win32 thread via `MciThreadAnchor`), `movie_step` (`50 ms` `status kq8movie mode` poll, key/click skip for `Replay Intro`, world/sound pause during `playMovie`, 200 ms `theme.aud` restart on return to Main Menu) | `submenus.md` rules 26–28 | unit test `movie_view::tests::resolve_movie_path_prefers_avi_over_dll_and_handles_missing`; headless run (`menu.log`: `w32opn_1.avi` started frame `25`, skipped frame `60`, `theme.aud` restarted at `+206 ms`, `RESULT: PASS`) |
+
+
 
 
 

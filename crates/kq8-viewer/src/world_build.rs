@@ -228,12 +228,18 @@ impl WorldChange {
     }
 }
 
-/// The run condition of the game's systems: a world is in (6e-2) and the
-/// Main Menu is not open (`main-menu.md` rule 7).
-pub fn playing(change: Res<WorldChange>, menu: Option<Res<crate::menu_view::MenuView>>) -> bool {
+/// The run condition of the game's systems: a world is in (6e-2), the
+/// Main Menu is not open (`main-menu.md` rule 7), and no full-motion movie
+/// is playing (`submenus.md` rule 27).
+pub fn playing(
+    change: Res<WorldChange>,
+    menu: Option<Res<crate::menu_view::MenuView>>,
+    movie: Option<Res<crate::movie_view::MoviePlayer>>,
+) -> bool {
     matches!(change.step, Step::Playing)
         && !change.current.is_empty()
         && !menu.is_some_and(|m| m.state.open)
+        && !movie.is_some_and(|m| m.is_playing())
 }
 
 /// The run condition of the game's updates and of the drawing that

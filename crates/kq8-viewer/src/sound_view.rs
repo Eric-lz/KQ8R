@@ -51,6 +51,10 @@ pub struct SoundSim {
 }
 
 impl SoundSim {
+    pub fn output_off(&self) -> bool {
+        self.output.is_none()
+    }
+
     /// Pauses or resumes world sound groups 0, 2, 3, and 5 (`sound.md` rule 54,
     /// `main-menu.md` rules 7.2, 8, 9).
     pub fn set_game_paused(&mut self, paused: bool) {

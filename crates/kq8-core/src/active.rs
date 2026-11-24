@@ -1037,6 +1037,8 @@ pub struct WorldState {
     /// Requests for a new mode, taken by the viewer, which knows his
     /// state (rules 1, 5, 9).
     pub weapon_requests: Vec<crate::weapons::Request>,
+    /// Full-motion AVI movie requests (`(filename, allow_skip)`, `submenus.md` rule 27).
+    pub movie_requests: Vec<(String, bool)>,
     /// The bolt file Connor shoots and his shoot offset (own space): the
     /// start values of `Connor.kq`, then the last ranged item's
     /// (`ranged-weapons.md` rules 17, 21; M5 5f-4), set by
@@ -3201,6 +3203,17 @@ impl WorldState {
         "0".into()
     }
 
+    /// `playMovie <filename>` (`submenus.md` rule 27, script-queued movie with `allowSkip = false`).
+    fn play_movie_cmd(&mut self, words: &[String], at: &str) -> String {
+        let Some(file) = words.get(1).map(|s| s.trim()).filter(|s| !s.is_empty()) else {
+            self.note(format!("{at}: playMovie without a filename; ignored"));
+            return "0".into();
+        };
+        self.movie_requests.push((file.to_string(), false));
+        self.note(format!("{at}: playMovie {file} (allowSkip=false; submenus.md rule 27)"));
+        "1".into()
+    }
+
     /// `allowShadows <0|1>` (`characters.md` rule 36): world-wide shadow toggle.
     fn allow_shadows_cmd(&mut self, words: &[String], at: &str) -> String {
         let Some(v) = words.get(1).filter(|w| looks_like_number(w)) else {
@@ -4826,6 +4839,7 @@ impl ScriptHost for WorldState {
             "mouseAction" => Some(self.mouse_action(words, at)),
             "KQGame::selectScreen" => Some(self.select_screen(words, at)),
             "allowShadows" => Some(self.allow_shadows_cmd(words, at)),
+            "playMovie" | "playmovie" => Some(self.play_movie_cmd(words, at)),
             "useAlternateLightmap" => Some(self.use_alternate_lightmap(words, at)),
             "doPopup" => Some(self.do_popup(words, at)),
             "notStartingHelp" => Some(self.not_starting_help_cmd(words, at)),
@@ -5071,6 +5085,7 @@ impl Active {
                 weapon_mode: crate::weapons::WeaponMode::None,
                 last_away_ranged: false,
                 weapon_requests: Vec::new(),
+                movie_requests: Vec::new(),
                 connor_projectile: None,
                 connor_shoot_offset: [0.0; 3],
                 weapon_swapped: false,
@@ -11956,6 +11971,15 @@ mod talk_tests {
         assert_eq!(w.world_command(&words("allowShadows"), "t"), Some("0".into()));
         assert!(w.allow_shadows);
         assert!(w.requests.is_empty());
+    }
+
+    #[test]
+    fn play_movie_queues_unskippable_request() {
+        let mut a = active("", &[]);
+        let w = &mut a.world;
+        let words = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        assert_eq!(w.world_command(&words("playMovie W32mdl_1.dll"), "t"), Some("1".into()));
+        assert_eq!(w.movie_requests, vec![("W32mdl_1.dll".to_string(), false)]);
     }
 
     #[test]

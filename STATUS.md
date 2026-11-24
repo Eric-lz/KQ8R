@@ -1,19 +1,24 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-11-23 after
-**Study Session A** answered **`Q203`–`Q205`** in
-[docs/behaviour/submenus.md](file:///c:/Games/KQ8R/docs/behaviour/submenus.md)
-and [docs/behaviour/main-menu.md](file:///c:/Games/KQ8R/docs/behaviour/main-menu.md)
-(Load Game, Save Game, `saveN.vol` format, Options, Graphics, Remap Move Keys,
-Credits, and Replay Intro / AVI movies).
+Hand-over in case the chat is lost. Brought up to date 2026-11-24 after
+**Implementation Session (B)** finished **M4 step `4g`** (`4g-1`..`4g-5`:
+all main menu submenus, full save/load, and AVI movie playback, verified in
+`838` unit tests and headless viewer runs; **live check in `cargo play` pending**).
 **Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:**
 - **`Q202`:** Pressure plates popping back up when picking up a thrown rock.
+- **`Q206`:** Minor submenu resource discrepancies (`400.MSG` vs `500.MSG` for Credits, missing `sldrbar.pba`/`sldrtab.pba` vs `slider.pba`, and exact `.gui`/`500.MSG` tag numbering in `Options`/`Graphics`/`movekey`/`Loadgame`/`Savegame`).
 
 Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md`
 (newest entries at the top). The short public summary is `README.md`; the
 detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-11-23)
+## Where we are (2026-11-24)
+
+- **2026-11-24 (B): M4 step 4g — Main menu submenus and AVI playback (`4g-1`..`4g-5`, verified in `838` unit tests + headless `menu.log` runs; awaiting live eye/ear check):**
+  - **`4g-1` (`Options` & `Credits`):** `Options.gui` (9 rows, 2 `Mskicng.pba` cursors, `0..100` live volume sliders updating groups `0x30`/`0x07`/`0x08`, `Subtitles`, `Starting Help`, `kq8-artifacts/user/Options.cs`) and `credits.gui` (26 timed pages from `400.MSG` `1..=25` + `kqteam08.pbm` + Connor score, `27sl.pft`/`20sl.pft`); logged `Q206` in `docs/behaviour/QUESTIONS.md`.
+  - **`4g-2` (`Graphics` & `Remap Move Keys`):** `Graphics.gui` (`640x480`/`800x600`, live `Dynamic Lights`, 4 `setShadowMask` bits `0x01`/`0x04`/`0x02`/`0x08`, `Brightness` `0.3..1.7` written to `Options.cs` — shader `setBrightness` curve still pending) and `movekey.gui` (`13` actions saved to `kq8-artifacts/user/movekeys.kq` with reserved-key `#67` rejection, duplicate `#112` displacement, and live reload into `Gui`/`Controls`/`GameCam`).
+  - **`4g-3` & `4g-4` (`Load Game` & `Save Game`):** `Pvol::build` writer, `Loadgame.gui` & `Savegame.gui` (`kq8-artifacts/user/save/` + read-only `MASK/save/`, 10-row list, 190-px scrollbar, 1.0 s Load thumbnail debounce, live Save thumbnail + blinking `"|"` caret, Delete/Overwrite/Max-50 popups), and full `KQ8R_SAVE_V1` world/Journey/kept-world save & restore round-trip (`WorldVar.cs`, `GameState.kq`, `Connor.kq`, `<map>.kq`, skipping `BeginNow` on restore; original `MASK/save/` binary `PERS` `Connor.kq`/object chunks deferred).
+  - **`4g-5` (`Replay Intro` & `playMovie`):** `WorldState::movie_requests`, `MoviePlayer` (`winmm::mciSendStringW` pinned to Bevy's main thread via `MciThreadAnchor`, preferring `.avi` over legacy Indeo `.dll` on Windows 11), `SoundSim::output_off`, world/sound pause during playback, key/click skip on `Replay Intro`, and 200 ms `theme.aud` restart.
 
 - **2026-11-23 (A): Main menu submenus and AVI movie playback (`Q203`–`Q205`) studied** (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not checked by hand in the running original**; no Rust code written):
   - **`Q203` (Load Game, Save Game, `save<N>.vol`, `Enter` pointer rule):** Documented in `docs/behaviour/submenus.md` (sections 2–3) and `docs/behaviour/main-menu.md` rule 16. Confirmed why `Enter` never visibly moves the software cursor `Cursgui.pba` in the original game. Both screens scan `save/*.vol` for `savedGameName` and sort by `N` (`save<N>.vol`) descending; 10 rows (`LIST0..LIST9`) with `sl_hilite.pba`; 190-px thumb span (`y = 205..395` in 640×480, 10-row page clicks); `Left`/`Right` arrows swap the golden highlight `sl_hibtn.pba` across the 3 stacked right-hand buttons (`Load`/`Save`, `Delete`, `Cancel`, no wrap, `button1.aud`). Load debounces `current.bin` thumbnail decoding by 1000 ms; Save shows live `current.bin`, blinks `"|"` every 300 ms, accepts printable ASCII up to 30 chars and weighted width ≤ 259.9 px (Backspace repeat 500 ms / 200 ms), packs `save/save<N>.vol` (`savedGameName`, current world entries, `current.bin`, `Connor.kq`, `<map>.kq`, `GameState.kq` including `difficultyFactor`, `cur/*.vol` + `worldVolumes`, `cur/*.kq` + `maps`) while advancing `savered.pbm`, and returns to the Main Menu (`screen 0`).

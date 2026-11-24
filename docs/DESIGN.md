@@ -1152,9 +1152,10 @@ inventory and menus.
     `kq8-artifacts/user/save/`, and restoring saved games (plus
     original `MASK/save/` `worldName`, `WorldVar.cs`, and `GameState.kq`)
     via the world loading screen without re-running `<world>.cs Begin`.
-  - **4g-5, `Replay Intro` and AVI movie playback (`playMovie`)**
-    (`W32opn_1.dll`, `W32mdl_1.dll`, `W32ndg_1.dll`), audio suspend/resume,
-    key/click skip for `Replay Intro`, and 200 ms `theme.aud` restart.
+  - **4g-5, `Replay Intro` and AVI movie playback (`playMovie`)** (**done**):
+    (`W32opn_1.dll`/`.avi`, `W32mdl_1.dll`/`.avi`, `W32ndg_1.dll`/`.avi`),
+    audio suspend/resume, key/click skip for `Replay Intro`, and 200 ms
+    `theme.aud` restart via Windows MCI pinned to the main thread.
 
 ### M5 — Fight
 
