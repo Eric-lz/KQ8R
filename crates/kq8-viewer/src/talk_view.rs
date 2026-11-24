@@ -83,9 +83,9 @@ pub fn load_talk(game: &GameDir, world: &str, log: &mut Log) -> (Talk, Vec<(Stri
     talk.book = book;
     let g = game.clone();
     talk.voices = Some(Box::new(move |folder: &str, t: Tuple| voice(&g, folder, t)));
-    let sets = match game.find("Options.cs").map(std::fs::read) {
-        Some(Ok(b)) => options_sets(&b),
-        _ => Vec::new(),
+    let sets = match crate::menu_view::read_user_or_game(game, "Options.cs") {
+        Some(b) => options_sets(&b),
+        None => Vec::new(),
     };
     for (k, v) in &sets {
         log.summary(format!("talk: Options.cs sets {k} = '{v}'"));
@@ -229,10 +229,10 @@ pub struct CaptionStyle {
     screen: [u32; 2],
 }
 
-/// Whether `MASK/Options.cs` has the line `set800mode 1` (4c-1: the game's
+/// Whether `Options.cs` has the line `set800mode 1` (4c-1: the game's
 /// screen is 800 × 600 then; `interface.md` rule 47).
 pub fn set800mode(game: &GameDir) -> bool {
-    let Some(Ok(bytes)) = game.find("Options.cs").map(std::fs::read) else { return false };
+    let Some(bytes) = crate::menu_view::read_user_or_game(game, "Options.cs") else { return false };
     let text: String = bytes.iter().map(|&b| b as char).collect();
     text.lines().any(|line| {
         let mut w = line.split('#').next().unwrap_or("").split_whitespace();
@@ -242,7 +242,7 @@ pub fn set800mode(game: &GameDir) -> bool {
 
 /// Reads the last `notStartingHelp <0|1|2>` setting from `Options.cs` (`interface.md` rule 55).
 pub fn not_starting_help(game: &GameDir) -> Option<u8> {
-    let bytes = std::fs::read(game.find("Options.cs")?).ok()?;
+    let bytes = crate::menu_view::read_user_or_game(game, "Options.cs")?;
     let text: String = bytes.iter().map(|&b| b as char).collect();
     let mut out = None;
     for line in text.lines() {

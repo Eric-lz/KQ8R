@@ -82,6 +82,11 @@ impl SoundSim {
         }
     }
 
+    /// Updates Music, SFX, and Speech group sliders live (`submenus.md` rule 14).
+    pub fn set_group_volumes(&mut self, music: f32, sfx: f32, speech: f32) {
+        self.system.set_sliders(music, sfx, speech);
+    }
+
     /// A sound object prepared for a script's `loadKQ` comes into the
     /// world (M3 3k-4): it plays as any other from now on.
     pub fn wake(&mut self, name: &str) -> bool {
@@ -105,13 +110,13 @@ impl SoundSim {
         };
         log.detail(format!("world {world}; rules from docs/behaviour/sound.md (M3 step 3h-2)"));
         let mut groups = Groups::default();
-        match game.find("Options.cs").map(std::fs::read) {
-            Some(Ok(bytes)) => {
+        match crate::menu_view::read_user_or_game(game, "Options.cs") {
+            Some(bytes) => {
                 for line in groups.apply_script(&bytes) {
                     log.detail(format!("Options.cs: {line}"));
                 }
             }
-            _ => log.detail("Options.cs not found: every group at 1 (rule 52)"),
+            None => log.detail("Options.cs not found: every group at 1 (rule 52)"),
         }
         let values: Vec<String> = (0..GROUPS).map(|g| format!("{g}: {:.2}", groups.loudness(g))).collect();
         log.summary(format!("sound: group loudness {}", values.join(", ")));

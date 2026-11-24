@@ -1105,6 +1105,51 @@ inventory and menus.
     `connor_stats_events`, and `gui_step` passes `dead` (instead of the M4
     4c-2 placeholder `false`) to `gui.meters.send(&stats, dead, red)`, so
     the health bar drops to `0 %` (`0 of 107 px`) on the landing update.
+- **4g — main menu submenus** (planned 2026-11-24). From
+  `docs/behaviour/submenus.md` (A, 2026-11-23) and `main-menu.md` rules
+  11–12. Because `MASK/` is strictly read-only (`AGENTS.md` rule 4),
+  modified `Options.cs` and `movekeys.kq` files are saved under
+  `kq8-artifacts/user/` and `save<N>.vol` games under
+  `kq8-artifacts/saves/` (reading `kq8-artifacts/user/` before `MASK/`
+  and scanning both `kq8-artifacts/saves/` and `MASK/save/`). One step
+  and one commit at a time:
+  - **4g-1, screen switching, Options (`Options.gui`), Credits
+    (`credits.gui`), and `Options.cs` persistence** (**done** 2026-11-24;
+    `kq8-core` `submenus.rs`, `sound.rs`; `kq8-viewer` `menu_view.rs`,
+    `sound_view.rs`, `talk_view.rs`, `load.rs`). Live `Music`/`SFX`/
+    `Speech` volume sliders (step 5, non-zero `< 10` clamped to `10%`,
+    `slider.pba` track + knob), `Subtitles` (`Options::Captions`),
+    `Starting Help` (`notStartingHelp`, disabled when `== 2`), `Options.cs`
+    10-command export to `kq8-artifacts/user/Options.cs`, and 25-page timed
+    Credits (`400.MSG` cases `1..=25` + `kqteam08.pbm` + Connor's score;
+    `Q206` logged for Study Session A) returning to Main Menu with
+    `theme.aud` fade-out and restart.
+  - **4g-2, Graphics (`Graphics.gui`) and Remap Move Keys (`movekey.gui`,
+    `movekeys.kq`)** (`kq8-core` `submenus.rs`; `kq8-viewer` `menu_view.rs`,
+    `shadow_view.rs`, `light_view.rs`, `gui_view.rs`, `connor_view.rs`).
+    Live `Dynamic Lighting` and four `setShadowMask` toggles (`0x01`
+    Connor, `0x04` Monster, `0x02` Character, `0x08` Object), Brightness
+    slider (`0.3..1.7`, default `50 -> 1.0`), modern renderer/resolution
+    status ("Do not reproduce"), and 13-action key remapping with
+    reserved-key rejection (`#67`), duplicate-key displacement (`#112`),
+    live gameplay key reload, and `movekeys.kq` persistence.
+  - **4g-3, Load/Save UI (`Loadgame.gui`, `Savegame.gui`) and `Pvol`
+    writer** (`kq8-data` `pvol.rs`; `kq8-core` `submenus.rs`; `kq8-viewer`
+    `menu_view.rs`). 10-row sorted `save<N>.vol` list, scrollbar (`UP`,
+    `DOWN`, `TAB` 190-px span, 10-row track clicks), `Left`/`Right`
+    highlight across `Load`/`Save`, `Delete`, `Cancel`, 1.0 s Load
+    thumbnail debounce, live Save thumbnail, blinking `|` caret (300 ms),
+    30-char / 259.9-px input, Backspace repeat, and Delete/Overwrite/
+    Max-50 (`#166`) popups.
+  - **4g-4, full `save<N>.vol` save & restore round-trip** (`kq8-viewer`
+    `world_build.rs`, `menu_view.rs`). Packing `savedGameName`, world
+    entries, `current.bin`, `Connor.kq`, `<map>.kq`, `GameState.kq`
+    (with `difficultyFactor` and `nextNoName`), `cur/*.vol` +
+    `worldVolumes`, and `cur/*.kq` + `maps` into `kq8-artifacts/saves/`,
+    and restoring full game state via the world loading screen.
+  - **4g-5, `Replay Intro` and AVI movie playback (`playMovie`)**
+    (`W32opn_1.dll`, `W32mdl_1.dll`, `W32ndg_1.dll`), audio suspend/resume,
+    key/click skip for `Replay Intro`, and 200 ms `theme.aud` restart.
 
 ### M5 — Fight
 

@@ -363,6 +363,29 @@ impl SoundSystem {
         }
     }
 
+    /// Current group sliders (`Groups`).
+    pub fn groups(&self) -> &Groups {
+        &self.groups
+    }
+
+    /// Updates Music (`4..=5`), SFX (`0..=2`), and Speech (`3`) sliders live
+    /// (`docs/behaviour/submenus.md` rule 14).
+    pub fn set_sliders(&mut self, music: f32, sfx: f32, speech: f32) {
+        let sfx = sfx.clamp(0.0, 1.0);
+        let speech = speech.clamp(0.0, 1.0);
+        let music = music.clamp(0.0, 1.0);
+        for g in 0..=2 {
+            self.groups.slider[g] = sfx;
+        }
+        self.groups.slider[3] = speech;
+        for g in 4..=5 {
+            self.groups.slider[g] = music;
+        }
+        self.note(format!(
+            "sliders updated live: music={music:.2}, sfx={sfx:.2}, speech={speech:.2}"
+        ));
+    }
+
     /// `sound.md` rule 54: when the game pauses, groups 0, 2, 3 and 5 pause
     /// (keeping their places) and resume afterwards; groups 1 and 4 keep playing.
     pub fn set_game_paused(&mut self, paused: bool) {
@@ -1258,5 +1281,20 @@ mod tests {
         }
         assert!(!s.is_playing(fx) && !s.is_playing(speech), "paused world one-shots finish after resume");
         assert!(!s.is_playing(theme), "theme finishes fading out after resume");
+    }
+
+    #[test]
+    fn set_sliders_updates_playing_menu_theme_and_sfx_live() {
+        let mut s = SoundSystem::default();
+        let theme = s.start(&Start::menu_theme("theme.aud", "menu".into()), found(10.0), &ears()).unwrap();
+        let sfx = s.start(&Start::menu_one_shot("intrface.aud", "toggle".into()), found(1.0), &ears()).unwrap();
+        s.orders.clear();
+
+        s.set_sliders(0.45, 0.25, 0.70);
+        s.update(0.016, &ears());
+
+        assert!(s.orders.contains(&Order::Gains { id: theme, gains: [0.45, 0.45] }));
+        assert!(s.orders.contains(&Order::Gains { id: sfx, gains: [0.25, 0.25] }));
+        assert!(close(s.groups().loudness(3), 0.70));
     }
 }
