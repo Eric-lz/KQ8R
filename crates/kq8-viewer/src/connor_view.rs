@@ -78,6 +78,22 @@ pub struct Controls {
 }
 
 impl Controls {
+    /// Applies bindings from `movekeys.kq` (`submenus.md` rules 20, 22).
+    pub fn apply_movekeys(&mut self, bytes: &[u8]) {
+        let mk = kq8_core::submenus::MoveKeysFile::parse(bytes);
+        let vk = |row: usize| mk.bindings.get(row).and_then(|b| crate::menu_view::vk_to_keycode(b.vk));
+        self.forward = vk(0);
+        self.back = vk(1);
+        self.right = vk(2);
+        self.left = vk(3);
+        self.run = vk(4);
+        self.jump = vk(5);
+        self.draw = vk(6);
+        self.shift = vk(9);
+        self.away = vk(11);
+        self.held.clear();
+    }
+
     /// The value of the pair (`plus` gives +1, `minus` −1) from the keys
     /// held: the one pressed last wins.
     fn axis(&self, plus: Option<KeyCode>, minus: Option<KeyCode>) -> i8 {
@@ -766,7 +782,7 @@ pub fn spawn_connor(
             code
         })
     };
-    let controls = Controls {
+    let mut controls = Controls {
         forward: key("MoveY", 1.0),
         back: key("MoveY", -1.0),
         left: key("RotateZ", 1.0),
@@ -778,6 +794,10 @@ pub fn spawn_connor(
         shift: key("ModifyDn", 0.0),
         held: Vec::new(),
     };
+    if let Ok(bytes) = std::fs::read(crate::menu_view::user_config_path("movekeys.kq")) {
+        controls.apply_movekeys(&bytes);
+        main_log.summary("connor: applied user movekeys.kq overrides");
+    }
     main_log.summary(format!(
         "connor: keys from Connor.sae: forward {:?}, back {:?}, turn left {:?}, turn right {:?}, run on/off {:?}, jump {:?}, draw {:?}, away {:?}, modifier {:?}",
         controls.forward, controls.back, controls.left, controls.right, controls.run, controls.jump, controls.draw, controls.away, controls.shift

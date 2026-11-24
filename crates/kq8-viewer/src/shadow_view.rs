@@ -400,20 +400,23 @@ pub fn object_shadow_draw(
     let mut on_buildings = (0, 0);
     let mut fallbacks = 0;
     for (root, test, at, off) in &roots {
-        if test.character || !kq8_data::characters::casts_shadow(world.mask, test.shadow_mask, true, 256.0) {
+        if test.character {
             continue;
         }
-        let entry = shadows.entry(root).or_default();
-        if !world.allow {
-            if entry.pieces > 0 || entry.key.is_some() {
-                show_shadow(&[], &mut entry.slot, &mut commands, &mut meshes, &material);
-                entry.pieces = 0;
-                entry.on_buildings = 0;
-                entry.fallback = false;
-                entry.key = None;
+        let casts = world.allow && kq8_data::characters::casts_shadow(world.mask, test.shadow_mask, true, 256.0);
+        if !casts {
+            if let Some(entry) = shadows.get_mut(&root) {
+                if entry.pieces > 0 || entry.key.is_some() {
+                    show_shadow(&[], &mut entry.slot, &mut commands, &mut meshes, &material);
+                    entry.pieces = 0;
+                    entry.on_buildings = 0;
+                    entry.fallback = false;
+                    entry.key = None;
+                }
             }
             continue;
         }
+        let entry = shadows.entry(root).or_default();
         let mut meshes_shown = Vec::new();
         let drawn = !off && visibility.get(root).is_ok_and(|v| *v != Visibility::Hidden);
         if drawn {

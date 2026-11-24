@@ -1125,8 +1125,9 @@ inventory and menus.
     `Q206` logged for Study Session A) returning to Main Menu with
     `theme.aud` fade-out and restart.
   - **4g-2, Graphics (`Graphics.gui`) and Remap Move Keys (`movekey.gui`,
-    `movekeys.kq`)** (`kq8-core` `submenus.rs`; `kq8-viewer` `menu_view.rs`,
-    `shadow_view.rs`, `light_view.rs`, `gui_view.rs`, `connor_view.rs`).
+    `movekeys.kq`)** (**done** 2026-11-24; `kq8-core` `submenus.rs`;
+    `kq8-viewer` `menu_view.rs`, `shadow_view.rs`, `anim_view.rs`,
+    `light_view.rs`, `gui_view.rs`, `connor_view.rs`, `game_camera.rs`).
     Live `Dynamic Lighting` and four `setShadowMask` toggles (`0x01`
     Connor, `0x04` Monster, `0x02` Character, `0x08` Object), Brightness
     slider (`0.3..1.7`, default `50 -> 1.0`), modern renderer/resolution

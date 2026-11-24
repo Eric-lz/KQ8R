@@ -108,6 +108,17 @@ struct Keys {
 }
 
 impl GameCam {
+    /// Applies Center Camera (`row 7`) and Modify Action (`row 9`) from `movekeys.kq`.
+    pub fn apply_movekeys(&mut self, bytes: &[u8]) {
+        let mk = kq8_core::submenus::MoveKeysFile::parse(bytes);
+        if let Some(b) = mk.bindings.get(7) {
+            self.keys.reset = crate::menu_view::vk_to_keycode(b.vk);
+        }
+        if let Some(b) = mk.bindings.get(9) {
+            self.keys.shift = crate::menu_view::vk_to_keycode(b.vk);
+        }
+    }
+
     /// The flights ended since the last call (U-2).
     pub fn take_flights_ended(&mut self) -> u32 {
         std::mem::take(&mut self.flights_ended)
@@ -563,7 +574,7 @@ pub fn make(
             Some("l") => Some(MouseButton::Left),
             _ => None,
         });
-    let keys = Keys {
+    let mut keys = Keys {
         change_mode: key(camera_keys, "CameraChangeMode", 0.0),
         tilt_up: key(camera_keys, "RotateX", 0.05),
         tilt_down: key(camera_keys, "RotateX", -0.05),
@@ -571,6 +582,15 @@ pub fn make(
         shift: key(connor_keys, "ModifyDn", 0.0),
         mouse,
     };
+    if let Ok(bytes) = std::fs::read(crate::menu_view::user_config_path("movekeys.kq")) {
+        let mk = kq8_core::submenus::MoveKeysFile::parse(&bytes);
+        if let Some(b) = mk.bindings.get(7) {
+            keys.reset = crate::menu_view::vk_to_keycode(b.vk);
+        }
+        if let Some(b) = mk.bindings.get(9) {
+            keys.shift = crate::menu_view::vk_to_keycode(b.vk);
+        }
+    }
     main_log.summary(format!(
         "camera: starts at ({:.0}, {:.0}, {:.0}) ({}); keys: mode {:?}, tilt up {:?}, tilt down {:?}, reset {:?}, modifier {:?}, mouse {:?}",
         position[0],

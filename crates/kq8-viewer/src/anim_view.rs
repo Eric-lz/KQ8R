@@ -95,8 +95,11 @@ struct Playing {
     opacity_shown: f32,
     own: std::collections::HashMap<AssetId<ObjectMaterial>, (Handle<ObjectMaterial>, f32)>,
     /// A character that casts a shadow (rule 36), and its shadow mesh once
-    /// made (M4 4d-7b-2).
+    /// made (M4 4d-7b-2). `shadow_mask` and `translucency` allow live
+    /// updates from `Graphics.gui` (`ShadowWorld.mask`).
     casts: bool,
+    shadow_mask: u32,
+    translucency: f32,
     shadow: Option<crate::shadow_view::ShadowSlot>,
     /// A character: whether its body is shown now (underground,
     /// `character-movement.md` rules 28, 30, M5 5a-8; or hidden at the end
@@ -276,6 +279,8 @@ impl AnimSim {
             opacity_shown: 1.0,
             own: Default::default(),
             casts: false,
+            shadow_mask: 0,
+            translucency: 256.0,
             shadow: None,
             birth_shown: None,
             new_draw,
@@ -733,7 +738,9 @@ pub fn spawn_animated(
             parts,
             opacity_shown: opacity,
             own: Default::default(),
-            casts: a.character.as_ref().is_some_and(|c| c.casts_shadow),
+            casts: a.character.as_ref().is_some_and(|c| c.keys.shadow_mask != 0 && p.translucency >= 256.0),
+            shadow_mask: a.character.as_ref().map_or(0, |c| c.keys.shadow_mask),
+            translucency: p.translucency,
             shadow: None,
             birth_shown: a.character.is_some().then_some(!unborn),
             new_draw,
@@ -1267,31 +1274,40 @@ pub fn shadow_draw(
     };
     let height_above = |p: shadow::V3| p[2] - ground.0.height_at(p[0], p[1]).map_or(f32::NAN, |g| g.height);
     // Connor (the user's check: he casts one; his own cast test is not in
-    // the notes, Q130): while his body is shown.
+    // the notes, Q130): while his body is shown and world mask bit 0x01 is on.
+    let world_mask = shadow_world.as_ref().map_or(0x0F, |w| w.mask);
     if let Some(c) = connor.as_ref() {
-        let body = connor_body.iter().next();
-        let drawn = body.is_some_and(|(_, v)| *v != Visibility::Hidden);
-        let shown = c.shown;
-        let model = match shown.filter(|_| drawn) {
-            Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes, sources),
-            None => Vec::new(),
-        };
-        let at = body.map_or([0.0; 3], |(t, _)| {
-            let v = t.translation();
-            [v.x * 100.0, -v.z * 100.0, v.y * 100.0]
-        });
-        let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
-        let caster = shown.filter(|_| drawn).and_then(|f| balls.get(f).ok()).map(|(at, b)| crate::shadow_view::caster(at, b));
-        let on = crate::shadow_view::receivers(&ground.0, at, &corners, dir, caster, &active);
-        let cast = shadow::cast(&model, dir, &on.triangles);
-        if report && drawn {
-            lines.push(line("Connor", &model, &on, cast.len(), height_above(at)));
+        if world_mask & 0x01 == 0 {
+            crate::shadow_view::show_shadow(&[], &mut connor_shadow, &mut commands, &mut meshes, &material);
+        } else {
+            let body = connor_body.iter().next();
+            let drawn = body.is_some_and(|(_, v)| *v != Visibility::Hidden);
+            let shown = c.shown;
+            let model = match shown.filter(|_| drawn) {
+                Some(frame) => crate::shadow_view::frame_triangles(frame, &children, &parts, &meshes, sources),
+                None => Vec::new(),
+            };
+            let at = body.map_or([0.0; 3], |(t, _)| {
+                let v = t.translation();
+                [v.x * 100.0, -v.z * 100.0, v.y * 100.0]
+            });
+            let corners: Vec<shadow::V3> = model.iter().flatten().copied().collect();
+            let caster = shown.filter(|_| drawn).and_then(|f| balls.get(f).ok()).map(|(at, b)| crate::shadow_view::caster(at, b));
+            let on = crate::shadow_view::receivers(&ground.0, at, &corners, dir, caster, &active);
+            let cast = shadow::cast(&model, dir, &on.triangles);
+            if report && drawn {
+                lines.push(line("Connor", &model, &on, cast.len(), height_above(at)));
+            }
+            crate::shadow_view::show_shadow(&cast, &mut connor_shadow, &mut commands, &mut meshes, &material);
         }
-        crate::shadow_view::show_shadow(&cast, &mut connor_shadow, &mut commands, &mut meshes, &material);
     }
     let Some(doors) = doors else { return };
     let world = &doors.active.world;
     for p in sim.playing.iter_mut().filter(|p| p.casts) {
+        if !kq8_data::characters::casts_shadow(world_mask, p.shadow_mask, true, p.translucency) {
+            crate::shadow_view::show_shadow(&[], &mut p.shadow, &mut commands, &mut meshes, &material);
+            continue;
+        }
         let Source::Core(i) = p.source else { continue };
         let Some(a) = world.anims.get(i) else { continue };
         let drawn = !a.gone && world.characters_in_range.contains(&p.name.to_ascii_lowercase()) && visibility.get(p.body).is_ok_and(|v| *v != Visibility::Hidden);

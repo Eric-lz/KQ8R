@@ -464,16 +464,9 @@ pub struct CaptionPlace {
 #[derive(Resource, Default)]
 pub struct KeyAt(pub Vec<(String, u64)>);
 
-/// A Windows virtual-key number (`movekeys.kq` `KeyChar<n>`) as a Bevy
-/// key; only the ones the panels use.
+/// A Windows virtual-key number (`movekeys.kq` `KeyChar<n>`) as a Bevy key.
 fn virtual_key(n: i64) -> Option<KeyCode> {
-    Some(match n {
-        9 => KeyCode::Tab,
-        13 => KeyCode::Enter,
-        27 => KeyCode::Escape,
-        32 => KeyCode::Space,
-        _ => return None,
-    })
+    u32::try_from(n).ok().and_then(crate::menu_view::vk_to_keycode)
 }
 
 /// The first of `names` (paths under the install) that exists.
@@ -507,7 +500,8 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
     let scale = kq8_core::caption::scale(screen);
     // Rule 10: the bottom-bar key is row 12 of movekeys.kq, the map key
     // row 8 (M6 6d-3).
-    let keys_file = first_found(game, &["movekeys.kq".into()]).map(|(_, b)| kq8_data::kq_text::parse(&b));
+    let keys_file = crate::menu_view::read_user_or_game(game, "movekeys.kq")
+        .map(|b| kq8_data::kq_text::parse(&b));
     let row = |n: u32, default: KeyCode, manual: &str| match &keys_file {
         Some(file) => {
             let s = file.first();
@@ -589,6 +583,37 @@ pub fn load_gui(game: &GameDir, world: &str, main: &mut Log) -> Option<Gui> {
 }
 
 impl Gui {
+    /// Reloads `movekeys.kq` bindings live after Remap Move Keys saves (`submenus.md` rule 22).
+    pub fn reload_movekeys(&mut self) {
+        let Some(bytes) = crate::menu_view::read_user_or_game(&self.game, "movekeys.kq") else {
+            return;
+        };
+        let parsed = kq8_data::kq_text::parse(&bytes);
+        let Some(s) = parsed.first() else { return };
+        let key_at = |n: u32| {
+            s.number(&format!("KeyChar{n}"))
+                .and_then(Result::ok)
+                .map(|v| v as i64)
+                .and_then(virtual_key)
+        };
+        self.space_key = key_at(12);
+        self.map_key = key_at(8);
+        self.movekey_names = (0..=12)
+            .map(|n| {
+                let num = s
+                    .get(&format!("KeyName{n}"))
+                    .and_then(|v| v.trim().strip_prefix('#'))
+                    .and_then(|v| v.parse::<u32>().ok());
+                let word = s.get(&format!("KeyWord{n}")).unwrap_or("").trim().to_string();
+                (num, word)
+            })
+            .collect();
+        self.note(format!(
+            "reloaded movekeys.kq: bottom-bar={:?}, map={:?}",
+            self.space_key, self.map_key
+        ));
+    }
+
     fn resolve_movekey_names(&self, sim: &DoorSim) -> Vec<String> {
         self.movekey_names
             .iter()

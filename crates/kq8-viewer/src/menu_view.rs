@@ -23,9 +23,13 @@ use kq8_core::main_menu::{
     THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH, TITLE_FONT, TITLE_LINE_RECT, TITLE_RECTS,
 };
 use kq8_core::submenus::{
-    CreditsState, MenuScreen, OptionsState, SubmenuAction, SubmenuTexts, UserOptions,
-    CREDITS_PHOTO_FILE, CREDITS_PHOTO_RECT, OPT_LABEL_RECTS, OPT_ROW_COUNT, OPT_ROW_RECTS,
-    OPT_SLIDER_RECTS, OPT_TITLE_RECT, OPT_VALUE_RECTS, SLIDER_KNOB_SIZE, SLIDER_LEFT,
+    brightness_factor, move_label_rect, move_value_rect, CreditsState, GraphicsState, MenuScreen,
+    MoveKeysFile, MoveKeysState, OptionsState, SubmenuAction, SubmenuTexts, UserOptions,
+    CREDITS_PHOTO_FILE, CREDITS_PHOTO_RECT, GRA_BRIGHTNESS_SLIDER_RECT, GRA_LABEL_RECTS,
+    GRA_MODE_LABEL_RECT, GRA_RES_LABEL_RECT, GRA_ROW_COUNT, GRA_SHADOW_BITS, GRA_TITLE_RECT,
+    GRA_VALUE_RECTS, MOVE_KEY_COUNT, MOVE_TITLE_RECT, OPT_LABEL_RECTS,
+    OPT_ROW_COUNT, OPT_ROW_RECTS, OPT_SLIDER_RECTS, OPT_TITLE_RECT, OPT_VALUE_RECTS,
+    SLIDER_KNOB_SIZE, SLIDER_LEFT,
 };
 use kq8_data::font::Font;
 use kq8_data::msg::MessageFile;
@@ -77,6 +81,208 @@ pub fn write_user_config(filename: &str, contents: &str) -> std::io::Result<Path
     Ok(path)
 }
 
+/// Maps a Windows virtual-key code (`movekeys.kq` `KeyChar<n>`) to a Bevy `KeyCode`.
+pub fn vk_to_keycode(vk: u32) -> Option<KeyCode> {
+    Some(match vk {
+        0x08 => KeyCode::Backspace,
+        0x09 => KeyCode::Tab,
+        0x0D => KeyCode::Enter,
+        0x10 => KeyCode::ShiftLeft,
+        0x11 => KeyCode::ControlLeft,
+        0x12 => KeyCode::AltLeft,
+        0x1B => KeyCode::Escape,
+        0x20 => KeyCode::Space,
+        0x21 => KeyCode::PageUp,
+        0x22 => KeyCode::PageDown,
+        0x23 => KeyCode::End,
+        0x24 => KeyCode::Home,
+        0x25 => KeyCode::ArrowLeft,
+        0x26 => KeyCode::ArrowUp,
+        0x27 => KeyCode::ArrowRight,
+        0x28 => KeyCode::ArrowDown,
+        0x2D => KeyCode::Insert,
+        0x2E => KeyCode::Delete,
+        0x30 => KeyCode::Digit0,
+        0x31 => KeyCode::Digit1,
+        0x32 => KeyCode::Digit2,
+        0x33 => KeyCode::Digit3,
+        0x34 => KeyCode::Digit4,
+        0x35 => KeyCode::Digit5,
+        0x36 => KeyCode::Digit6,
+        0x37 => KeyCode::Digit7,
+        0x38 => KeyCode::Digit8,
+        0x39 => KeyCode::Digit9,
+        0x41 => KeyCode::KeyA,
+        0x42 => KeyCode::KeyB,
+        0x43 => KeyCode::KeyC,
+        0x44 => KeyCode::KeyD,
+        0x45 => KeyCode::KeyE,
+        0x46 => KeyCode::KeyF,
+        0x47 => KeyCode::KeyG,
+        0x48 => KeyCode::KeyH,
+        0x49 => KeyCode::KeyI,
+        0x4A => KeyCode::KeyJ,
+        0x4B => KeyCode::KeyK,
+        0x4C => KeyCode::KeyL,
+        0x4D => KeyCode::KeyM,
+        0x4E => KeyCode::KeyN,
+        0x4F => KeyCode::KeyO,
+        0x50 => KeyCode::KeyP,
+        0x51 => KeyCode::KeyQ,
+        0x52 => KeyCode::KeyR,
+        0x53 => KeyCode::KeyS,
+        0x54 => KeyCode::KeyT,
+        0x55 => KeyCode::KeyU,
+        0x56 => KeyCode::KeyV,
+        0x57 => KeyCode::KeyW,
+        0x58 => KeyCode::KeyX,
+        0x59 => KeyCode::KeyY,
+        0x5A => KeyCode::KeyZ,
+        0x60 => KeyCode::Numpad0,
+        0x61 => KeyCode::Numpad1,
+        0x62 => KeyCode::Numpad2,
+        0x63 => KeyCode::Numpad3,
+        0x64 => KeyCode::Numpad4,
+        0x65 => KeyCode::Numpad5,
+        0x66 => KeyCode::Numpad6,
+        0x67 => KeyCode::Numpad7,
+        0x68 => KeyCode::Numpad8,
+        0x69 => KeyCode::Numpad9,
+        0x6A => KeyCode::NumpadMultiply,
+        0x6B => KeyCode::NumpadAdd,
+        0x6D => KeyCode::NumpadSubtract,
+        0x6E => KeyCode::NumpadDecimal,
+        0x6F => KeyCode::NumpadDivide,
+        0x70 => KeyCode::F1,
+        0x71 => KeyCode::F2,
+        0x72 => KeyCode::F3,
+        0x73 => KeyCode::F4,
+        0x74 => KeyCode::F5,
+        0x75 => KeyCode::F6,
+        0x76 => KeyCode::F7,
+        0x77 => KeyCode::F8,
+        0x78 => KeyCode::F9,
+        0x79 => KeyCode::F10,
+        0x7A => KeyCode::F11,
+        0x7B => KeyCode::F12,
+        0xBA => KeyCode::Semicolon,
+        0xBB => KeyCode::Equal,
+        0xBC => KeyCode::Comma,
+        0xBD => KeyCode::Minus,
+        0xBE => KeyCode::Period,
+        0xBF => KeyCode::Slash,
+        0xC0 => KeyCode::Backquote,
+        0xDB => KeyCode::BracketLeft,
+        0xDC => KeyCode::Backslash,
+        0xDD => KeyCode::BracketRight,
+        0xDE => KeyCode::Quote,
+        _ => return None,
+    })
+}
+
+/// Maps a Bevy `KeyCode` back to a Windows virtual-key code for Remap Move Keys.
+pub fn keycode_to_vk(key: KeyCode) -> Option<u32> {
+    Some(match key {
+        KeyCode::Backspace => 0x08,
+        KeyCode::Tab => 0x09,
+        KeyCode::Enter | KeyCode::NumpadEnter => 0x0D,
+        KeyCode::ShiftLeft | KeyCode::ShiftRight => 0x10,
+        KeyCode::ControlLeft | KeyCode::ControlRight => 0x11,
+        KeyCode::AltLeft | KeyCode::AltRight => 0x12,
+        KeyCode::Escape => 0x1B,
+        KeyCode::Space => 0x20,
+        KeyCode::PageUp => 0x21,
+        KeyCode::PageDown => 0x22,
+        KeyCode::End => 0x23,
+        KeyCode::Home => 0x24,
+        KeyCode::ArrowLeft => 0x25,
+        KeyCode::ArrowUp => 0x26,
+        KeyCode::ArrowRight => 0x27,
+        KeyCode::ArrowDown => 0x28,
+        KeyCode::Insert => 0x2D,
+        KeyCode::Delete => 0x2E,
+        KeyCode::Digit0 => 0x30,
+        KeyCode::Digit1 => 0x31,
+        KeyCode::Digit2 => 0x32,
+        KeyCode::Digit3 => 0x33,
+        KeyCode::Digit4 => 0x34,
+        KeyCode::Digit5 => 0x35,
+        KeyCode::Digit6 => 0x36,
+        KeyCode::Digit7 => 0x37,
+        KeyCode::Digit8 => 0x38,
+        KeyCode::Digit9 => 0x39,
+        KeyCode::KeyA => 0x41,
+        KeyCode::KeyB => 0x42,
+        KeyCode::KeyC => 0x43,
+        KeyCode::KeyD => 0x44,
+        KeyCode::KeyE => 0x45,
+        KeyCode::KeyF => 0x46,
+        KeyCode::KeyG => 0x47,
+        KeyCode::KeyH => 0x48,
+        KeyCode::KeyI => 0x49,
+        KeyCode::KeyJ => 0x4A,
+        KeyCode::KeyK => 0x4B,
+        KeyCode::KeyL => 0x4C,
+        KeyCode::KeyM => 0x4D,
+        KeyCode::KeyN => 0x4E,
+        KeyCode::KeyO => 0x4F,
+        KeyCode::KeyP => 0x50,
+        KeyCode::KeyQ => 0x51,
+        KeyCode::KeyR => 0x52,
+        KeyCode::KeyS => 0x53,
+        KeyCode::KeyT => 0x54,
+        KeyCode::KeyU => 0x55,
+        KeyCode::KeyV => 0x56,
+        KeyCode::KeyW => 0x57,
+        KeyCode::KeyX => 0x58,
+        KeyCode::KeyY => 0x59,
+        KeyCode::KeyZ => 0x5A,
+        KeyCode::Numpad0 => 0x60,
+        KeyCode::Numpad1 => 0x61,
+        KeyCode::Numpad2 => 0x62,
+        KeyCode::Numpad3 => 0x63,
+        KeyCode::Numpad4 => 0x64,
+        KeyCode::Numpad5 => 0x65,
+        KeyCode::Numpad6 => 0x66,
+        KeyCode::Numpad7 => 0x67,
+        KeyCode::Numpad8 => 0x68,
+        KeyCode::Numpad9 => 0x69,
+        KeyCode::NumpadMultiply => 0x6A,
+        KeyCode::NumpadAdd => 0x6B,
+        KeyCode::NumpadSubtract => 0x6D,
+        KeyCode::NumpadDecimal => 0x6E,
+        KeyCode::NumpadDivide => 0x6F,
+        KeyCode::F1 => 0x70,
+        KeyCode::F2 => 0x71,
+        KeyCode::F3 => 0x72,
+        KeyCode::F4 => 0x73,
+        KeyCode::F5 => 0x74,
+        KeyCode::F6 => 0x75,
+        KeyCode::F7 => 0x76,
+        KeyCode::F8 => 0x77,
+        KeyCode::F9 => 0x78,
+        KeyCode::F10 => 0x79,
+        KeyCode::F11 => 0x7A,
+        KeyCode::F12 => 0x7B,
+        KeyCode::Semicolon => 0xBA,
+        KeyCode::Equal => 0xBB,
+        KeyCode::Comma => 0xBC,
+        KeyCode::Minus => 0xBD,
+        KeyCode::Period => 0xBE,
+        KeyCode::Slash => 0xBF,
+        KeyCode::Backquote => 0xC0,
+        KeyCode::BracketLeft => 0xDB,
+        KeyCode::Backslash => 0xDC,
+        KeyCode::BracketRight => 0xDD,
+        KeyCode::Quote => 0xDE,
+        _ => return None,
+    })
+}
+
+fn just_pressed_vk(keys: &ButtonInput<KeyCode>) -> Option<u32> {
+    keys.get_just_pressed().find_map(|&k| keycode_to_vk(k))
+}
+
 #[derive(Component)]
 pub struct MenuRoot;
 
@@ -106,8 +312,11 @@ pub struct MenuView {
     pub submenu_texts: SubmenuTexts,
     pub options: UserOptions,
     pub options_state: OptionsState,
+    pub graphics_state: GraphicsState,
+    pub movekeys_state: MoveKeysState,
     pub credits_state: Option<CreditsState>,
     pub slider_drag: Option<usize>,
+    pub gra_brightness_drag: bool,
     pub msg400: Option<MessageFile>,
     #[allow(dead_code)]
     pub msg500: Option<MessageFile>,
@@ -135,7 +344,9 @@ struct MenuDrawKey {
     popup: Option<MenuPopup>,
     options_selected: usize,
     options_sliders: [i32; 3],
-    options_flags: (bool, u8, bool, u32, i32),
+    options_flags: (bool, u8, bool, u32, i32, bool),
+    graphics_selected: usize,
+    movekeys_state: (usize, Option<usize>, Option<usize>, Vec<(u32, String)>),
     credits_page: Option<usize>,
 }
 
@@ -183,6 +394,10 @@ impl MenuView {
             .map(|b| UserOptions::parse(&b))
             .unwrap_or_default();
         let options_state = OptionsState::from_options(&options);
+        let movekeys_file = read_user_or_game(game, "movekeys.kq")
+            .map(|b| MoveKeysFile::parse(&b))
+            .unwrap_or_default();
+        let movekeys_state = MoveKeysState::new(movekeys_file);
 
         let mut files = HashMap::new();
         for name in [
@@ -261,8 +476,11 @@ impl MenuView {
             submenu_texts,
             options,
             options_state,
+            graphics_state: GraphicsState::default(),
+            movekeys_state,
             credits_state: None,
             slider_drag: None,
+            gra_brightness_drag: false,
             msg400,
             msg500,
             palette,
@@ -390,6 +608,19 @@ impl MenuView {
                 self.options.dynamic_lighting,
                 self.options.shadow_mask,
                 self.options.brightness,
+                self.options.mode_800,
+            ),
+            graphics_selected: self.graphics_state.selected,
+            movekeys_state: (
+                self.movekeys_state.selected,
+                self.movekeys_state.capturing,
+                self.movekeys_state.invalid_key_row,
+                self.movekeys_state
+                    .file
+                    .bindings
+                    .iter()
+                    .map(|b| (b.vk, b.name_tag.clone()))
+                    .collect(),
             ),
             credits_page: self.credits_state.as_ref().map(|c| c.page),
         }
@@ -446,6 +677,8 @@ impl MenuView {
     pub fn render_canvas(&self) -> gui_draw::Canvas {
         match self.screen {
             MenuScreen::Options => return self.render_options(),
+            MenuScreen::Graphics => return self.render_graphics(),
+            MenuScreen::MoveKeys => return self.render_movekeys(),
             MenuScreen::Credits => return self.render_credits(),
             _ => {}
         }
@@ -658,6 +891,143 @@ impl MenuView {
         pieces.reverse();
         gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette)
     }
+
+    fn render_graphics(&self) -> gui_draw::Canvas {
+        let mut pieces: Vec<Piece> = Vec::new();
+        self.push_submenu_bg(&mut pieces, SUBMENU_BG_PICTURE);
+
+        if let Some(font) = self.fonts.get(&TITLE_FONT.to_ascii_lowercase()) {
+            pieces.push(Piece::Text {
+                rect: GRA_TITLE_RECT,
+                font,
+                justification: 0xC,
+                text: self.submenu_texts.graphics_title.clone(),
+            });
+        }
+
+        let font20 = self.fonts.get(&OPT_FONT.to_ascii_lowercase());
+        let font27 = self.fonts.get(&ITEM_FONT.to_ascii_lowercase());
+        if let Some(font) = font20 {
+            pieces.push(Piece::Text {
+                rect: GRA_MODE_LABEL_RECT,
+                font,
+                justification: 0xA,
+                text: self.submenu_texts.gra_mode_label.clone(),
+            });
+            pieces.push(Piece::Text {
+                rect: GRA_RES_LABEL_RECT,
+                font,
+                justification: 0xA,
+                text: self.submenu_texts.gra_res_label.clone(),
+            });
+        }
+
+        for row in 0..GRA_ROW_COUNT {
+            let font = if row == 11 { font27 } else { font20 };
+            let Some(font) = font else { continue };
+            let just = if row <= 4 {
+                0x9
+            } else if row == 11 {
+                0xC
+            } else {
+                0xA
+            };
+            let raw = &self.submenu_texts.gra_rows[row];
+            let text = match row {
+                1 => format!("> {raw} <"),
+                3 if !self.options.mode_800 => format!("> {raw} <"),
+                4 if self.options.mode_800 => format!("> {raw} <"),
+                _ => raw.clone(),
+            };
+            let rect = GRA_LABEL_RECTS[row];
+            if GraphicsState::is_row_enabled(row) {
+                pieces.push(Piece::Text { rect, font, justification: just, text });
+            } else {
+                pieces.push(Piece::TextDithered { rect, font, justification: just, text });
+            }
+        }
+
+        if let Some(font) = font20 {
+            for &(row, rect) in &GRA_VALUE_RECTS {
+                let on = match row {
+                    5 => self.options.dynamic_lighting,
+                    _ => GRA_SHADOW_BITS
+                        .iter()
+                        .find(|&&(r, _)| r == row)
+                        .is_some_and(|&(_, bit)| self.options.shadow_mask & bit != 0),
+                };
+                let text = if on {
+                    self.submenu_texts.on.clone()
+                } else {
+                    self.submenu_texts.off.clone()
+                };
+                pieces.push(Piece::Text { rect, font, justification: 0x9, text });
+            }
+        }
+
+        self.push_slider(&mut pieces, GRA_BRIGHTNESS_SLIDER_RECT, self.options.brightness);
+        self.push_submenu_cursors(&mut pieces, self.graphics_state.cursor_rects());
+
+        pieces.reverse();
+        gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette)
+    }
+
+    fn render_movekeys(&self) -> gui_draw::Canvas {
+        let mut pieces: Vec<Piece> = Vec::new();
+        self.push_submenu_bg(&mut pieces, SUBMENU_BG_PICTURE);
+
+        if let Some(font) = self.fonts.get(&TITLE_FONT.to_ascii_lowercase()) {
+            pieces.push(Piece::Text {
+                rect: MOVE_TITLE_RECT,
+                font,
+                justification: 0xC,
+                text: self.submenu_texts.movekeys_title.clone(),
+            });
+        }
+
+        let font20 = self.fonts.get(&OPT_FONT.to_ascii_lowercase());
+        let font27 = self.fonts.get(&ITEM_FONT.to_ascii_lowercase());
+        if let Some(font) = font20 {
+            for row in 0..MOVE_KEY_COUNT {
+                pieces.push(Piece::Text {
+                    rect: move_label_rect(row),
+                    font,
+                    justification: 0xA,
+                    text: self.submenu_texts.move_rows[row].clone(),
+                });
+                let val_text = if self.movekeys_state.invalid_key_row == Some(row) {
+                    self.submenu_texts.invalid_key.clone()
+                } else if self.movekeys_state.capturing == Some(row) {
+                    self.submenu_texts.press_desired_key.clone()
+                } else if let Some(b) = self.movekeys_state.file.bindings.get(row) {
+                    self.submenu_texts.resolve_tag(&b.name_tag).to_string()
+                } else {
+                    String::new()
+                };
+                pieces.push(Piece::Text {
+                    rect: move_value_rect(row),
+                    font,
+                    justification: 0x9,
+                    text: val_text,
+                });
+            }
+        }
+        if let Some(font) = font27 {
+            let locked = self.movekeys_state.capturing.is_some();
+            let rect = move_label_rect(MOVE_KEY_COUNT);
+            let text = self.submenu_texts.back_to_options.clone();
+            if locked {
+                pieces.push(Piece::TextDithered { rect, font, justification: 0xC, text });
+            } else {
+                pieces.push(Piece::Text { rect, font, justification: 0xC, text });
+            }
+        }
+
+        self.push_submenu_cursors(&mut pieces, self.movekeys_state.cursor_rects());
+
+        pieces.reverse();
+        gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette)
+    }
 }
 
 /// Spawns the persistent Main Menu UI nodes at startup.
@@ -781,24 +1151,34 @@ pub fn menu_pointer_draw(
 
 /// Every frame: handles Main Menu input, death timer, opening via Escape,
 /// and redraws the menu canvas when needed.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn menu_step(
     menu: Option<ResMut<MenuView>>,
     mut sound: Option<ResMut<SoundSim>>,
     mut sim: Option<ResMut<crate::door_view::DoorSim>>,
-    connor: Option<Res<crate::connor_view::ConnorSim>>,
+    mut connor: Option<ResMut<crate::connor_view::ConnorSim>>,
     mut change: ResMut<WorldChange>,
-    time: Res<Time<Real>>,
-    mut keys: ResMut<ButtonInput<KeyCode>>,
-    buttons: Res<ButtonInput<MouseButton>>,
-    window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    frame: Res<ScreenFrame>,
-    mut key_at: Option<ResMut<KeyAt>>,
+    (time, mut keys, buttons, window, frame, mut key_at): (
+        Res<Time<Real>>,
+        ResMut<ButtonInput<KeyCode>>,
+        Res<ButtonInput<MouseButton>>,
+        Query<&Window, With<bevy::window::PrimaryWindow>>,
+        Res<ScreenFrame>,
+        Option<ResMut<KeyAt>>,
+    ),
     mut root_vis: Query<&mut Visibility, With<MenuRoot>>,
     canvas_node: Query<&ImageNode, With<MenuCanvasNode>>,
     mut images: ResMut<Assets<Image>>,
     mut commands: Commands,
     shared: Res<Shared>,
+    (mut gui, mut ground_light, mut ground_materials, mut light_label, mut shadow_world, mut game_cam): (
+        Option<ResMut<crate::gui_view::Gui>>,
+        Option<ResMut<crate::light_view::GroundLight>>,
+        ResMut<Assets<crate::ground_haze::GroundMaterial>>,
+        Query<&mut Text, With<crate::light_view::LightLabel>>,
+        Option<ResMut<crate::shadow_view::ShadowWorld>>,
+        Option<ResMut<crate::game_camera::GameCam>>,
+    ),
 ) {
     let Some(mut menu) = menu else { return };
     let dt = time.delta_secs_f64();
@@ -993,6 +1373,33 @@ pub fn menu_step(
                         _ => {}
                     }
                 }
+                MenuScreen::Graphics => {
+                    let mv = &mut *menu;
+                    match sub.as_str() {
+                        "up" | "gra:up" => sub_actions.extend(mv.graphics_state.move_selection(-1)),
+                        "down" | "gra:down" => sub_actions.extend(mv.graphics_state.move_selection(1)),
+                        "left" | "gra:left" => sub_actions.extend(mv.graphics_state.adjust_left_right(-1, &mut mv.options)),
+                        "right" | "gra:right" => sub_actions.extend(mv.graphics_state.adjust_left_right(1, &mut mv.options)),
+                        "enter" | "gra:enter" => sub_actions.extend(mv.graphics_state.activate(&mut mv.options)),
+                        "escape" | "close" | "gra:escape" => sub_actions.extend(mv.graphics_state.press_escape()),
+                        _ => {}
+                    }
+                }
+                MenuScreen::MoveKeys => {
+                    let mv = &mut *menu;
+                    match sub.as_str() {
+                        "up" | "mk:up" => sub_actions.extend(mv.movekeys_state.move_selection(-1)),
+                        "down" | "mk:down" => sub_actions.extend(mv.movekeys_state.move_selection(1)),
+                        "enter" | "mk:enter" => sub_actions.extend(mv.movekeys_state.activate()),
+                        "escape" | "close" | "mk:escape" => sub_actions.extend(mv.movekeys_state.press_escape()),
+                        vk if vk.starts_with("vk:") => {
+                            if let Ok(code) = vk[3..].parse::<u32>() {
+                                sub_actions.extend(mv.movekeys_state.press_vk(code));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 MenuScreen::Credits => {
                     if matches!(sub.as_str(), "escape" | "close" | "credits:escape") {
                         sub_actions.push(SubmenuAction::ExitCreditsToMain);
@@ -1071,6 +1478,72 @@ pub fn menu_step(
                 }
                 if buttons.just_released(MouseButton::Left) {
                     mv.slider_drag = None;
+                }
+            }
+            MenuScreen::Graphics => {
+                let mv = &mut *menu;
+                if keys.just_pressed(KeyCode::ArrowUp) {
+                    sub_actions.extend(mv.graphics_state.move_selection(-1));
+                }
+                if keys.just_pressed(KeyCode::ArrowDown) {
+                    sub_actions.extend(mv.graphics_state.move_selection(1));
+                }
+                if keys.just_pressed(KeyCode::ArrowLeft) {
+                    sub_actions.extend(mv.graphics_state.adjust_left_right(-1, &mut mv.options));
+                }
+                if keys.just_pressed(KeyCode::ArrowRight) {
+                    sub_actions.extend(mv.graphics_state.adjust_left_right(1, &mut mv.options));
+                }
+                if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
+                    sub_actions.extend(mv.graphics_state.activate(&mut mv.options));
+                }
+                if keys.just_pressed(KeyCode::Escape) {
+                    keys.clear_just_pressed(KeyCode::Escape);
+                    sub_actions.extend(mv.graphics_state.press_escape());
+                }
+                if buttons.just_pressed(MouseButton::Left) {
+                    if let Some(pos) = cursor_layout {
+                        let (acts, drag) = mv.graphics_state.click_at(pos, &mut mv.options);
+                        mv.gra_brightness_drag = drag;
+                        sub_actions.extend(acts);
+                    }
+                } else if buttons.pressed(MouseButton::Left) && mv.gra_brightness_drag {
+                    if let Some(pos) = cursor_layout {
+                        sub_actions.extend(mv.graphics_state.set_brightness_from_x(pos[0], &mut mv.options));
+                    }
+                } else {
+                    mv.gra_brightness_drag = false;
+                }
+                if buttons.just_released(MouseButton::Left) {
+                    mv.gra_brightness_drag = false;
+                }
+            }
+            MenuScreen::MoveKeys => {
+                let mv = &mut *menu;
+                if mv.movekeys_state.capturing.is_some() {
+                    if let Some(vk) = just_pressed_vk(&keys) {
+                        keys.clear_just_pressed(KeyCode::Escape);
+                        sub_actions.extend(mv.movekeys_state.press_vk(vk));
+                    }
+                } else {
+                    if keys.just_pressed(KeyCode::ArrowUp) {
+                        sub_actions.extend(mv.movekeys_state.move_selection(-1));
+                    }
+                    if keys.just_pressed(KeyCode::ArrowDown) {
+                        sub_actions.extend(mv.movekeys_state.move_selection(1));
+                    }
+                    if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
+                        sub_actions.extend(mv.movekeys_state.activate());
+                    }
+                    if keys.just_pressed(KeyCode::Escape) {
+                        keys.clear_just_pressed(KeyCode::Escape);
+                        sub_actions.extend(mv.movekeys_state.press_escape());
+                    }
+                    if buttons.just_pressed(MouseButton::Left) {
+                        if let Some(pos) = cursor_layout {
+                            sub_actions.extend(mv.movekeys_state.click_at(pos));
+                        }
+                    }
                 }
             }
             MenuScreen::Credits => {
@@ -1191,6 +1664,58 @@ pub fn menu_step(
                     snd.set_group_volumes(music, sfx, speech);
                 }
             }
+            SubmenuAction::ApplyGraphics { dynamic_lighting, shadow_mask, brightness, mode_800 } => {
+                if let Some(sw) = shadow_world.as_deref_mut() {
+                    sw.mask = shadow_mask;
+                }
+                if let Some(gl) = ground_light.as_deref_mut() {
+                    crate::light_view::set_dynamic_lighting(
+                        dynamic_lighting,
+                        "Graphics menu",
+                        &shared,
+                        gl,
+                        &mut images,
+                        &mut ground_materials,
+                        &mut light_label,
+                    );
+                }
+                menu.note(format!(
+                    "applied Graphics: dynamic_lighting={dynamic_lighting}, shadow_mask={shadow_mask} ({shadow_mask:#x}), brightness={brightness} ({:.2}), mode_800={mode_800}",
+                    brightness_factor(brightness)
+                ));
+            }
+            SubmenuAction::SwitchScreen(MenuScreen::Options) => {
+                menu.gra_brightness_drag = false;
+                menu.screen = MenuScreen::Options;
+                menu.last_drawn_key = None;
+                menu.summary(&shared, "returned to Options screen");
+            }
+            SubmenuAction::SwitchScreen(MenuScreen::Graphics) => {
+                if let Some(gl) = ground_light.as_ref() {
+                    menu.options.dynamic_lighting = gl.dynamic;
+                }
+                if let Some(sw) = shadow_world.as_ref() {
+                    menu.options.shadow_mask = sw.mask;
+                }
+                menu.graphics_state.reset_on_open();
+                menu.gra_brightness_drag = false;
+                menu.screen = MenuScreen::Graphics;
+                menu.last_drawn_key = None;
+                let msg = format!(
+                    "opened Graphics screen (submenus.md rules 17-19): dynamic={}, shadow_mask={}, brightness={} ({:.2})",
+                    menu.options.dynamic_lighting,
+                    menu.options.shadow_mask,
+                    menu.options.brightness,
+                    brightness_factor(menu.options.brightness)
+                );
+                menu.summary(&shared, msg);
+            }
+            SubmenuAction::SwitchScreen(MenuScreen::MoveKeys) => {
+                menu.movekeys_state.reset_on_open();
+                menu.screen = MenuScreen::MoveKeys;
+                menu.last_drawn_key = None;
+                menu.summary(&shared, "opened Remap Move Keys screen (submenus.md rules 20-22)");
+            }
             SubmenuAction::SwitchScreen(MenuScreen::Credits) => {
                 let score = sim
                     .as_ref()
@@ -1209,8 +1734,29 @@ pub fn menu_step(
             SubmenuAction::SwitchScreen(target) => {
                 menu.summary(
                     &shared,
-                    format!("{target:?} screen selected: coming in step 4g-2; staying on Options"),
+                    format!("{target:?} screen selected: coming in next step"),
                 );
+            }
+            SubmenuAction::SaveMoveKeysAndReturnToOptions => {
+                let text = menu.movekeys_state.file.format();
+                match write_user_config("movekeys.kq", &text) {
+                    Ok(path) => menu.summary(
+                        &shared,
+                        format!("saved {} and returned to Options", path.display()),
+                    ),
+                    Err(e) => menu.summary(&shared, format!("failed to write movekeys.kq: {e}")),
+                }
+                if let Some(g) = gui.as_deref_mut() {
+                    g.reload_movekeys();
+                }
+                if let Some(c) = connor.as_deref_mut() {
+                    c.controls.apply_movekeys(text.as_bytes());
+                }
+                if let Some(cam) = game_cam.as_deref_mut() {
+                    cam.apply_movekeys(text.as_bytes());
+                }
+                menu.screen = MenuScreen::Options;
+                menu.last_drawn_key = None;
             }
             SubmenuAction::SaveOptionsAndReturnToMain => {
                 let text = menu.options.format();

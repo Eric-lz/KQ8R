@@ -269,6 +269,44 @@ pub fn toggle_light(
     shared.log.lock().unwrap().summary(format!("key F7: ground light mode {} ({changed} ground materials)", mode.name()));
 }
 
+/// F9 (M1 7j) & Graphics menu (`submenus.md` rule 17): switches dynamic lighting
+/// on or off, swapping the ground's shadow/light map and updating materials.
+pub fn set_dynamic_lighting(
+    dynamic: bool,
+    why: &str,
+    shared: &Shared,
+    light: &mut GroundLight,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<crate::ground_haze::GroundMaterial>,
+    label: &mut Query<&mut Text, With<LightLabel>>,
+) {
+    if light.dynamic == dynamic {
+        return;
+    }
+    light.toggle_dynamic();
+    if let Some(handle) = light.image.clone() {
+        if let Some(mut image) = images.get_mut(&handle) {
+            *image = light_image(&light.map);
+        }
+    }
+    let (inv_spacing, side) = light.lookup();
+    for (_, m) in materials.iter_mut() {
+        m.settings.light_inv_spacing = inv_spacing;
+        m.settings.light_side = side;
+    }
+    for mut t in label.iter_mut() {
+        t.0 = label_text(light.mode, light.dynamic);
+    }
+    shared.log.lock().unwrap().summary(format!(
+        "{why}: dynamic lighting {} (ground shows its {} map, {} x {} points; point lights on the ground and building surfaces {})",
+        if light.dynamic { "on" } else { "off" },
+        if light.dynamic { "shadow" } else { "light" },
+        light.map.side,
+        light.map.side,
+        if light.dynamic { "on" } else { "off" }
+    ));
+}
+
 /// F9 (M1 7j): dynamic lighting on / off, as the original's video option:
 /// the other ground map (the whole picture rewritten, and the ground
 /// materials' lookup if its size differs), and point lights on the ground
@@ -284,28 +322,8 @@ pub fn toggle_dynamic(
     if !keys.just_pressed(KeyCode::F9) {
         return;
     }
-    light.toggle_dynamic();
-    if let Some(handle) = light.image.clone() {
-        if let Some(mut image) = images.get_mut(&handle) {
-            *image = light_image(&light.map);
-        }
-    }
-    let (inv_spacing, side) = light.lookup();
-    for (_, m) in materials.iter_mut() {
-        m.settings.light_inv_spacing = inv_spacing;
-        m.settings.light_side = side;
-    }
-    for mut t in &mut label {
-        t.0 = label_text(light.mode, light.dynamic);
-    }
-    shared.log.lock().unwrap().summary(format!(
-        "key F9: dynamic lighting {} (ground shows its {} map, {} x {} points; point lights on the ground and building surfaces {})",
-        if light.dynamic { "on" } else { "off" },
-        if light.dynamic { "shadow" } else { "light" },
-        light.map.side,
-        light.map.side,
-        if light.dynamic { "on" } else { "off" }
-    ));
+    let next = !light.dynamic;
+    set_dynamic_lighting(next, "key F9", &shared, &mut light, &mut images, &mut materials, &mut label);
 }
 
 /// Every frame (rule 26): put last frame's patches back, paint this
