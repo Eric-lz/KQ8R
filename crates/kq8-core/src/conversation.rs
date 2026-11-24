@@ -532,7 +532,7 @@ impl Active {
         }
         let partner = c.partner.clone();
         let now = self.world.now();
-        let captions = self.scripts.vars.get("Options::Captions") == Some("true");
+        let captions = self.captions_enabled();
         let mut talk = std::mem::take(&mut self.world.talk);
         let w = &self.world;
         let exists = |name: &str| w.known.contains(&name.to_ascii_lowercase()) && !w.is_gone(name);

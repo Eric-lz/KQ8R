@@ -184,8 +184,8 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
       - `4`: **800x600** (`IDCTL_GRA_800X600`, `#117` `"800x600"`)
       - `5`: **Dynamic Lights** (`IDCTL_GRA_DYNAMIC_LIGHTS` `#8`, value `IDCTL_GRA_DYNAMIC_LIGHT_BOOL`: `#17` `"On"` / `#16` `"Off"`)
       - `6`: **Connor Shadows** (`IDCTL_GRA_CONNOR_SHADOWS` `#24`, value `IDCTL_GRA_CONNOR_SHADOW_BOOL`, bit `1` = `0x01` of `shadowMask`)
-      - `7`: **Monster Shadows** (`IDCTL_GRA_MONSTER_SHADOWS` `#26`, value `IDCTL_GRA_MONSTER_SHADOW_BOOL`, bit `2` = `0x04` of `shadowMask`)
-      - `8`: **Character Shadows** (`IDCTL_GRA_CHARACTER_SHADOWS` `#27`, value `IDCTL_GRA_CHARACTER_SHADOW_BOOL`, bit `3` = `0x02` of `shadowMask`)
+      - `7`: **Monster Shadows** (`IDCTL_GRA_MONSTER_SHADOWS` `#26`, value `IDCTL_GRA_MONSTER_SHADOW_BOOL`, bit `1` = `0x02` of `shadowMask` — matches default `KQMonster` `shadowMask=2` including the Wizard in `characters.md` rule 36, confirmed live 2026-11-24)
+      - `8`: **Character Shadows** (`IDCTL_GRA_CHARACTER_SHADOWS` `#27`, value `IDCTL_GRA_CHARACTER_SHADOW_BOOL`, bit `2` = `0x04` of `shadowMask` — matches explicit `shadowMask=4` NPCs such as the Girl, Ferryman, Archon)
       - `9`: **Object Shadows** (`IDCTL_GRA_OBJECT_SHADOWS` `#28`, value `IDCTL_GRA_OBJECT_SHADOW_BOOL`, bit `4` = `0x08` of `shadowMask`)
       - `10`: **Brightness** (`IDCTL_GRA_BRIGHTNESS` `#2`, slider `IDCTL_GRA_BRIGHTNESS_SLIDER`)
       - `11`: **Back to Options Menu** (`IDCTL_GRA_BACKTOMAIN`, `#31` `"Back to Options Menu"`) -> returns to Options (`screen 2`)
@@ -299,7 +299,7 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
 | Save name maximum weighted width | `259.9` | pixels (`2599` tenths of a pixel) |
 | Volume slider range and arrow step | `0..100`, step `5` | non-zero values `< 10` clamp to `10` (`0.10..1.00`), `0` is `0.0` |
 | Brightness slider range and formula | `0..100` (default `50`) | `brightness = 0.3 + (val / 100.0) * 1.4` (range `0.3..1.7`) |
-| Shadow mask bits (`setShadowMask`) | `0x01..0x0F` | bit `0x01` Connor, `0x02` Character, `0x04` Monster, `0x08` Object |
+| Shadow mask bits (`setShadowMask`) | `0x01..0x0F` | bit `0x01` Connor, `0x02` Monster, `0x04` Character, `0x08` Object |
 | Configurable move keys | `13` | actions `0..12` in `movekeys.kq` (plus row `13` Back to Options) |
 | Credits page count | `26` | pages `0..25` (`500.MSG` cases `1..26`) |
 | Credits line heights | `30` / `17` | pixels (`27sl.pft` large lines / `20sl.pft` `'*'`-prefixed small lines) |

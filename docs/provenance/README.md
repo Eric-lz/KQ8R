@@ -4420,6 +4420,16 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `WorldState::movie_requests` and `playMovie` script command queuing unskippable `(file, false)` movie playback | `submenus.md` rules 26–27 | unit test `active::talk_tests::play_movie_queues_unskippable_request` |
 | `resolve_movie_path` (prefers GOG `.avi` over legacy Intel Indeo `.dll` on Windows 11), `MoviePlayer` (`winmm::mciSendStringW` `type mpegvideo` pinned to Bevy's main Win32 thread via `MciThreadAnchor`), `movie_step` (`50 ms` `status kq8movie mode` poll, key/click skip for `Replay Intro`, world/sound pause during `playMovie`, 200 ms `theme.aud` restart on return to Main Menu) | `submenus.md` rules 26–28 | unit test `movie_view::tests::resolve_movie_path_prefers_avi_over_dll_and_handles_missing`; headless run (`menu.log`: `w32opn_1.avi` started frame `25`, skipped frame `60`, `theme.aud` restarted at `+206 ms`, `RESULT: PASS`) |
 
+## M4 4g-F1 2026-11-24: Live-check fixes (`Replay Intro` MCI overlay, `Saveload.ppl` palette, subtitles, shadow bits) — core `active.rs`, `conversation.rs`, `submenus.rs`; viewer `menu_view.rs`, `movie_view.rs`, `main.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `Active::captions_enabled` case-insensitive `"true"` / `"1"` check (`Options::Captions = TRUE`) and lowercase `"true"`/`"false"` formatting in `UserOptions::format` | `submenus.md` rules 15–16; `MASK/Options.cs` (`true`) | unit test `active::talk_tests::options_captions_accepts_true_case_insensitively_and_one` |
+| `GRA_SHADOW_BITS`: Monster Shadows = `0x02` (default `KQMonster` `shadowMask=2` incl. Wizard), Character Shadows = `0x04` (explicit `shadowMask=4` NPCs such as Girl, Ferryman, Archon) | `submenus.md` rule 17; `characters.md` rule 36; user original-game check (`Q206` d) | unit test `submenus::tests::graphics_shadow_bits_and_brightness_formula`; headless Test C (`menu.log`: row `7` -> bit `0x2`, `15 -> 13 -> 15`) |
+| `saveload_palette` (`GAME/Resource/Saveload.ppl`) and `SL_POINTER_FILE` (`slcurgui.pba`) applied to `LoadGame`, `SaveGame`, `Credits` (`4black.pbm`, `kqteam08.pbm`), and `current.bin` (`pal_id=999`), with `sl_notmb.pbm` fallback for blank live thumbnails | `MASK/GAME/Resource/Saveload.ppl`, `MASK/save/save1.vol` inspected (`Q206` d); user visual check 2026-11-24 | headless Test C (`26` pictures loaded; `Credits` & `Load Game` opened cleanly) |
+| `MciThreadAnchor` (`!Send`) pinning MCI to Bevy's main Win32 message-pump thread, `queue_start` from `MenuAction::ReplayIntro`, owned borderless click-transparent popup overlay (`parent <hwnd> style popup`, `WS_EX_NOACTIVATE \| WS_EX_TRANSPARENT`) aligned to `ScreenFrame`, and `status position >= length` stop check | `submenus.md` rules 26–28; user live check 2026-11-24 | headless Test B (`w32opn_1.avi` stays playing across frames `25..150` with no premature stop or theme restart); headless Test A (skip at frame `60` closes MCI and restarts `theme.aud` at `+200 ms`) |
+
+
 
 
 

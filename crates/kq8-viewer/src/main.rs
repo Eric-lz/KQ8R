@@ -700,6 +700,7 @@ fn main() -> ExitCode {
             }
             app.init_resource::<gui_view::ScreenFrame>()
                 .init_resource::<movie_view::MoviePlayer>()
+                .init_non_send::<movie_view::MciThreadAnchor>()
                 .init_resource::<terrain_view::DebugHudShown>();
             if let Some(read) = maybe_read {
                 app.world_mut().resource_mut::<world_build::PendingWorld>().0 = Some((read, opts));

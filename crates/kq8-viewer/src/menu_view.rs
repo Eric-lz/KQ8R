@@ -64,6 +64,8 @@ const SUBMENU_BG_PICTURE: &str = "blkbkgd.pbm";
 const BLACK_PICTURE: &str = "4black.pbm";
 const SUBMENU_CURSOR_PICTURE: &str = "mskicng.pba";
 const SLIDER_PICTURE: &str = "slider.pba";
+const SAVELOAD_PALETTE_FILE: &str = "Saveload.ppl";
+const SL_POINTER_FILE: &str = "slcurgui.pba";
 const OPT_FONT: &str = "20.pft";
 const CREDITS_SMALL_FONT: &str = "20sl.pft";
 const CREDITS_LARGE_FONT: &str = "27sl.pft";
@@ -341,6 +343,7 @@ pub struct MenuView {
     #[allow(dead_code)]
     pub msg500: Option<MessageFile>,
     pub palette: [Rgb; 256],
+    pub saveload_palette: [Rgb; 256],
     files: HashMap<String, Vec<Bitmap>>,
     fonts: HashMap<String, Font>,
     pub now_ms: f64,
@@ -402,6 +405,15 @@ impl MenuView {
                 std::array::from_fn(|i| [i as u8, i as u8, i as u8])
             }
         };
+        let saveload_palette = match find_bytes(game, &[&format!("GAME/Resource/{SAVELOAD_PALETTE_FILE}"), &format!("GAME/8Gui/{SAVELOAD_PALETTE_FILE}")])
+            .and_then(|(_, b)| kq8_data::Palette::parse(&b).ok())
+        {
+            Some(p) => kq8_data::palette::as_shown(p.colors),
+            None => {
+                main_log.summary(format!("menu: {SAVELOAD_PALETTE_FILE} not found; falling back to {PALETTE_FILE}"));
+                palette
+            }
+        };
 
         let gui_ok = find_bytes(game, &[&format!("GAME/Resource/{GUI_FILE}"), &format!("GAME/8Gui/{GUI_FILE}")])
             .and_then(|(_, b)| kq8_data::gui::parse(&b).ok())
@@ -431,6 +443,7 @@ impl MenuView {
             POPUP_BTN_PICTURE,
             POPUP_HI_BTN_PICTURE,
             POINTER_FILE,
+            SL_POINTER_FILE,
             SUBMENU_BG_PICTURE,
             BLACK_PICTURE,
             SUBMENU_CURSOR_PICTURE,
@@ -523,6 +536,7 @@ impl MenuView {
             msg400,
             msg500,
             palette,
+            saveload_palette,
             files,
             fonts,
             now_ms: 0.0,
@@ -582,9 +596,14 @@ impl MenuView {
             return;
         };
         if sl.is_save {
-            if self.thumbnail.is_some() {
-                let bin = self.current_thumbnail_bin();
-                self.sl_preview_rgba = decode_thumbnail_bin(&bin, &self.palette, None);
+            if let Some(t) = &self.thumbnail {
+                let has_image = t.pixels.iter().any(|&p| p != 0 && p != 25);
+                if has_image {
+                    let bin = self.current_thumbnail_bin();
+                    self.sl_preview_rgba = decode_thumbnail_bin(&bin, &self.saveload_palette, None);
+                } else {
+                    self.sl_preview_rgba = None;
+                }
             } else {
                 self.sl_preview_rgba = None;
             }
@@ -600,7 +619,7 @@ impl MenuView {
         let pvol = Pvol::parse(bytes).ok()?;
         let chunk = pvol.find("current.bin")?;
         let raw = pvol.data(chunk).ok()?;
-        decode_thumbnail_bin(raw, &self.palette, None)
+        decode_thumbnail_bin(raw, &self.saveload_palette, None)
     }
 
     fn scan_saveload_entries(&self) -> Vec<kq8_core::submenus::SaveEntry> {
@@ -1016,7 +1035,7 @@ impl MenuView {
         }
 
         pieces.reverse();
-        gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette)
+        gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.saveload_palette)
     }
 
     fn render_graphics(&self) -> gui_draw::Canvas {
@@ -1375,7 +1394,7 @@ impl MenuView {
         }
 
         pieces.reverse();
-        let mut canvas = gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette);
+        let mut canvas = gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.saveload_palette);
         if let Some(ref rgba) = self.sl_preview_rgba {
             let tw = THUMBNAIL_WIDTH as usize;
             let th = THUMBNAIL_HEIGHT as usize;
@@ -1465,7 +1484,7 @@ pub fn menu_pointer_draw(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     frame: Res<ScreenFrame>,
-    mut shown: Local<Option<u32>>,
+    mut shown: Local<Option<(u32, bool)>>,
 ) {
     use bevy::window::{CursorIcon, CustomCursor, CustomCursorImage};
     let Some(menu) = menu else { return };
@@ -1475,16 +1494,31 @@ pub fn menu_pointer_draw(
     }
     let Ok((entity, _)) = window.single() else { return };
     let step = ((frame.0[3] / 480.0).round() as u32).max(1);
-    if *shown == Some(step) {
+    let use_saveload_pal = matches!(
+        menu.screen,
+        MenuScreen::LoadGame | MenuScreen::SaveGame | MenuScreen::Credits
+    );
+    let key = (step, use_saveload_pal);
+    if *shown == Some(key) {
         return;
     }
-    let Some(frames) = menu.files.get(&POINTER_FILE.to_ascii_lowercase()) else {
-        *shown = Some(step);
+    let ptr_name = if use_saveload_pal { SL_POINTER_FILE } else { POINTER_FILE };
+    let Some(frames) = menu
+        .files
+        .get(&ptr_name.to_ascii_lowercase())
+        .or_else(|| menu.files.get(&POINTER_FILE.to_ascii_lowercase()))
+    else {
+        *shown = Some(key);
         return;
     };
     let Some(pic) = frames.first().and_then(Pic::of) else {
-        *shown = Some(step);
+        *shown = Some(key);
         return;
+    };
+    let pal = if use_saveload_pal {
+        &menu.saveload_palette
+    } else {
+        &menu.palette
     };
     let (pw, ph) = (pic.width * step, pic.height * step);
     let mut rgba = vec![0u8; (pw * ph * 4) as usize];
@@ -1494,7 +1528,7 @@ pub fn menu_pointer_draw(
             if pic.see_through && index == 0 {
                 continue;
             }
-            let [r, g, b] = menu.palette[index as usize];
+            let [r, g, b] = pal[index as usize];
             let at = ((y * pw + x) * 4) as usize;
             rgba[at..at + 4].copy_from_slice(&[r, g, b, 255]);
         }
@@ -1510,7 +1544,7 @@ pub fn menu_pointer_draw(
     commands
         .entity(entity)
         .insert(CursorIcon::Custom(CustomCursor::Image(CustomCursorImage { handle, hotspot: (0, 0), ..default() })));
-    *shown = Some(step);
+    *shown = Some(key);
 }
 
 /// Every frame: handles Main Menu input, death timer, opening via Escape,
@@ -2157,29 +2191,8 @@ pub fn menu_step(
                 }
                 let sound_off = sound.as_ref().is_some_and(|snd| snd.output_off());
                 if let Some(path) = crate::movie_view::resolve_movie_path(&menu.game, "w32opn_1.dll") {
-                    let dest = crate::movie_view::movie_client_dest(&window, &frame);
-                    let started = movie
-                        .as_deref_mut()
-                        .map(|mp| mp.start(path.clone(), true, true, sound_off, dest));
-                    match started {
-                        Some(Ok(len)) => menu.summary(
-                            &shared,
-                            format!(
-                                "Replay Intro started {} ({len} frames, allowSkip=true; theme.aud faded over 1 s, submenus.md rules 27-28)",
-                                path.display()
-                            ),
-                        ),
-                        Some(Err(e)) => {
-                            menu.summary(&shared, format!("Replay Intro could not start {}: {e}", path.display()));
-                            let more = menu.state.finish_replay_intro();
-                            for a in more {
-                                if let MenuAction::Note(n) = a {
-                                    menu.note(n);
-                                }
-                            }
-                            menu.theme_restart_timer_ms = Some(200.0);
-                        }
-                        None => {}
+                    if let Some(mp) = movie.as_deref_mut() {
+                        mp.queue_start(path, true, true, sound_off);
                     }
                 } else {
                     menu.summary(&shared, "Replay Intro: w32opn_1.dll / .avi not found; returning to menu (submenus.md rule 28)");

@@ -7444,12 +7444,20 @@ impl Active {
         self.world.updates += 1;
     }
 
+    /// Rule 10 (`Options.cs`): case-insensitive `"true"` / `"1"` enable captions.
+    pub(crate) fn captions_enabled(&self) -> bool {
+        self.scripts
+            .vars
+            .get("Options::Captions")
+            .is_some_and(|v| v.eq_ignore_ascii_case("true") || v == "1")
+    }
+
     /// Remarks and speech, once per update after the events (M4 4a-2,
     /// `talking.md` rules 7, 10-11): waits after a turn, lines ending and
     /// starting, mouth changes; then each finished line's `TalkComplete`.
     fn talk_step(&mut self, now: f64) {
         // Rule 10: captions follow the console variable (Options.cs).
-        let captions = self.scripts.vars.get("Options::Captions") == Some("true");
+        let captions = self.captions_enabled();
         let mut talk = std::mem::take(&mut self.world.talk);
         let w = &self.world;
         let exists = |name: &str| w.known.contains(&name.to_ascii_lowercase()) && !w.is_gone(name);
@@ -11744,6 +11752,35 @@ mod talk_tests {
         assert!(log.contains("1000 55 0 0 1…2 waits 0.5 s"), "{log}");
         // Not a KQMonster: nothing.
         assert_eq!(a.world.speak(&["KQMonster::speak".into(), door.clone(), "Connor".into(), "0".into(), "0".into(), "0".into(), "1".into(), "1".into(), "1".into()], "t"), "1");
+    }
+
+    #[test]
+    fn options_captions_accepts_true_case_insensitively_and_one() {
+        let mut a = active("", &[]);
+        with_book(&mut a);
+        let speak: Vec<String> = ["KQMonster::speak", "Connor", "Connor", "1000", "63", "0", "0", "1", "0"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        for (val, want) in [
+            ("TRUE", true),
+            ("true", true),
+            ("1", true),
+            ("FALSE", false),
+            ("false", false),
+            ("0", false),
+        ] {
+            a.scripts.vars.set("Options::Captions", val.into());
+            assert_eq!(a.captions_enabled(), want, "val={val}");
+            a.world.talk.clear("Connor", a.world.now());
+            a.world.talk.events.clear();
+            a.world.speak(&speak, "t");
+            a.update();
+            let shown = a.world.talk.events.iter().any(|e| {
+                matches!(e, crate::talk::TalkEvent::Start { caption: Some(_), .. })
+            });
+            assert_eq!(shown, want, "caption event mismatch for val={val}");
+        }
     }
 
     #[test]

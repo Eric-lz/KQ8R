@@ -1,12 +1,10 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-24 after
-**Implementation Session (B)** finished **M4 step `4g`** (`4g-1`..`4g-5`:
-all main menu submenus, full save/load, and AVI movie playback, verified in
-`838` unit tests and headless viewer runs; **live check in `cargo play` pending**).
+**Implementation Session (B)** finished **M4 step `4g`** (`4g-1`..`4g-5` + live-check fixes **`4g-F1`**, verified in `839` unit tests and headless viewer runs; **re-check in `cargo play` pending**).
 **Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:**
 - **`Q202`:** Pressure plates popping back up when picking up a thrown rock.
-- **`Q206`:** Minor submenu resource discrepancies (`400.MSG` vs `500.MSG` for Credits, missing `sldrbar.pba`/`sldrtab.pba` vs `slider.pba`, and exact `.gui`/`500.MSG` tag numbering in `Options`/`Graphics`/`movekey`/`Loadgame`/`Savegame`).
+- **`Q206`:** Minor submenu resource discrepancies (`400.MSG` vs `500.MSG` for Credits, missing `sldrbar.pba`/`sldrtab.pba` vs `slider.pba`, `Saveload.ppl` vs `Menus.ppl`, `0x02` Monster / `0x04` Character shadow bits, and exact `.gui`/`500.MSG` tag numbering).
 
 Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md`
 (newest entries at the top). The short public summary is `README.md`; the
@@ -14,7 +12,11 @@ detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-24)
 
-- **2026-11-24 (B): M4 step 4g — Main menu submenus and AVI playback (`4g-1`..`4g-5`, verified in `838` unit tests + headless `menu.log` runs; awaiting live eye/ear check):**
+- **2026-11-24 (B): M4 step 4g-F1 — Live-check fixes for submenus & AVI playback (`839` unit tests + headless Tests A/B/C pass; ready for live re-check):**
+  - **`Replay Intro` / `playMovie`:** Added `MciThreadAnchor` (`!Send`) so all Windows MCI calls share Bevy's main Win32 message-pump thread, queued `ReplayIntro` into `movie_step` (stops `theme.aud` restarting early and eliminates worker-thread MCI deadlocks/unclosable windows), and attached the video as an owned borderless, click-transparent popup overlay aligned to the 4:3 `ScreenFrame` (`status position >= length` also stops cleanly).
+  - **Subtitles & Shadow bits:** `Active::captions_enabled` now matches `Options::Captions` case-insensitively (`"true"`/`"TRUE"`/`"1"`), `UserOptions::format` writes lowercase `"true"`/`"false"`, and `GRA_SHADOW_BITS` swaps Monster (`0x02`) vs Character (`0x04`) to match `MASK/` data and the original game.
+  - **`Saveload.ppl` palette:** `LoadGame`, `SaveGame`, `Credits` (`4black.pbm`, `kqteam08.pbm`), `slcurgui.pba`, and `current.bin` now render with `GAME/Resource/Saveload.ppl` instead of `Menus.ppl` (plus `sl_notmb.pbm` shown instead of solid black when live capture is blank).
+- **2026-11-24 (B): M4 step 4g — Main menu submenus and AVI playback (`4g-1`..`4g-5`, checked live 2026-11-24 -> fixed in `4g-F1`):**
   - **`4g-1` (`Options` & `Credits`):** `Options.gui` (9 rows, 2 `Mskicng.pba` cursors, `0..100` live volume sliders updating groups `0x30`/`0x07`/`0x08`, `Subtitles`, `Starting Help`, `kq8-artifacts/user/Options.cs`) and `credits.gui` (26 timed pages from `400.MSG` `1..=25` + `kqteam08.pbm` + Connor score, `27sl.pft`/`20sl.pft`); logged `Q206` in `docs/behaviour/QUESTIONS.md`.
   - **`4g-2` (`Graphics` & `Remap Move Keys`):** `Graphics.gui` (`640x480`/`800x600`, live `Dynamic Lights`, 4 `setShadowMask` bits `0x01`/`0x04`/`0x02`/`0x08`, `Brightness` `0.3..1.7` written to `Options.cs` — shader `setBrightness` curve still pending) and `movekey.gui` (`13` actions saved to `kq8-artifacts/user/movekeys.kq` with reserved-key `#67` rejection, duplicate `#112` displacement, and live reload into `Gui`/`Controls`/`GameCam`).
   - **`4g-3` & `4g-4` (`Load Game` & `Save Game`):** `Pvol::build` writer, `Loadgame.gui` & `Savegame.gui` (`kq8-artifacts/user/save/` + read-only `MASK/save/`, 10-row list, 190-px scrollbar, 1.0 s Load thumbnail debounce, live Save thumbnail + blinking `"|"` caret, Delete/Overwrite/Max-50 popups), and full `KQ8R_SAVE_V1` world/Journey/kept-world save & restore round-trip (`WorldVar.cs`, `GameState.kq`, `Connor.kq`, `<map>.kq`, skipping `BeginNow` on restore; original `MASK/save/` binary `PERS` `Connor.kq`/object chunks deferred).

@@ -162,7 +162,7 @@ impl UserOptions {
             self.music_vol.clamp(0.0, 1.0),
             self.shadow_mask & 0x0F,
             if self.dynamic_lighting { "true" } else { "false" },
-            if self.captions { "TRUE" } else { "FALSE" },
+            if self.captions { "true" } else { "false" },
             self.not_starting_help.min(2),
             self.gmode_name,
             self.brightness.clamp(0, 100),
@@ -847,11 +847,12 @@ pub const GRA_VALUE_RECTS: [(usize, [i32; 4]); 5] = [
     (9, [330, 340, 600, 370]),
 ];
 
-/// Shadow mask bits (`submenus.md` rule 17).
+/// Shadow mask bits (`submenus.md` rule 17; `characters.md` rule 36: default
+/// `KQMonster` = `2` incl. Wizard, explicit NPC `shadowMask=4`, plain objects = `8`).
 pub const GRA_SHADOW_BITS: [(usize, u32); 4] = [
     (6, 0x01), // Connor
-    (7, 0x04), // Monster
-    (8, 0x02), // Character
+    (7, 0x02), // Monster
+    (8, 0x04), // Character
     (9, 0x08), // Object
 ];
 
@@ -2318,11 +2319,11 @@ mod tests {
         assert!(!GraphicsState::is_row_enabled(0));
         assert!(!GraphicsState::is_row_enabled(1));
         assert!(!GraphicsState::is_row_enabled(2));
-        // Toggle Monster Shadows (row 7 -> bit 0x04): 15 -> 11.
+        // Toggle Monster Shadows (row 7 -> bit 0x02): 15 -> 13.
         gra.selected = 7;
         gra.activate(&mut opts);
-        assert_eq!(opts.shadow_mask, 11);
-        // Toggle Character Shadows (row 8 -> bit 0x02): 11 -> 9.
+        assert_eq!(opts.shadow_mask, 13);
+        // Toggle Character Shadows (row 8 -> bit 0x04): 13 -> 9.
         gra.selected = 8;
         gra.activate(&mut opts);
         assert_eq!(opts.shadow_mask, 9);
