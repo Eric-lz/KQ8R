@@ -8,9 +8,12 @@
 //! - Remap Move Keys (`movekey.gui`, `movekeys.kq`, `submenus.md` rules 20–22)
 //! - Credits roll (`credits.gui`, `400.MSG`, `submenus.md` rules 23–25, `Q206`)
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use kq8_data::msg::MessageFile;
+use kq8_data::palette::Rgb;
+use kq8_data::pvol::Pvol;
 
 /// GUI screens reachable from the Main Menu (`submenus.md` rule 1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -275,6 +278,16 @@ pub struct SubmenuTexts {
     pub no: String,
     pub on: String,
     pub off: String,
+    pub load_title: String,
+    pub save_title: String,
+    pub load_btn: String,
+    pub save_btn: String,
+    pub delete_btn: String,
+    pub cancel_btn: String,
+    pub ok_btn: String,
+    pub delete_prompt: String,
+    pub overwrite_prompt: String,
+    pub max_saves_prompt: String,
     pub msg_cases: BTreeMap<u32, String>,
 }
 
@@ -333,6 +346,16 @@ impl Default for SubmenuTexts {
             no: "No".into(),
             on: "On".into(),
             off: "Off".into(),
+            load_title: "Load Game".into(),
+            save_title: "Save Game".into(),
+            load_btn: "Load".into(),
+            save_btn: "Save".into(),
+            delete_btn: "Delete".into(),
+            cancel_btn: "Cancel".into(),
+            ok_btn: "OK".into(),
+            delete_prompt: "Are you sure you want to delete the save game:".into(),
+            overwrite_prompt: "Are you sure you want to overwrite the save game:".into(),
+            max_saves_prompt: "No more space for saved games. Delete an old game or overwrite an existing game.".into(),
             msg_cases: BTreeMap::new(),
         }
     }
@@ -381,6 +404,16 @@ impl SubmenuTexts {
         if let Some(s) = get(14) { out.no = s; }
         if let Some(s) = get(17) { out.on = s; }
         if let Some(s) = get(16) { out.off = s; }
+        if let Some(s) = get(36) { out.load_title = s; }
+        if let Some(s) = get(37) { out.save_title = s; }
+        if let Some(s) = get(10) { out.load_btn = s; }
+        if let Some(s) = get(24) { out.save_btn = s; }
+        if let Some(s) = get(86) { out.delete_btn = s; }
+        if let Some(s) = get(35) { out.cancel_btn = s; }
+        if let Some(s) = get(148) { out.ok_btn = s; }
+        if let Some(s) = get(119) { out.delete_prompt = s; }
+        if let Some(s) = get(125) { out.overwrite_prompt = s; }
+        if let Some(s) = get(166) { out.max_saves_prompt = s; }
         out
     }
 
@@ -398,7 +431,8 @@ impl SubmenuTexts {
     }
 }
 
-/// Actions emitted by `OptionsState`, `GraphicsState`, `MoveKeysState`, and `CreditsState`.
+/// Actions emitted by submenu state machines (`OptionsState`, `GraphicsState`,
+/// `MoveKeysState`, `SaveLoadState`, and `CreditsState`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum SubmenuAction {
     PlaySound(&'static str),
@@ -407,6 +441,11 @@ pub enum SubmenuAction {
     SwitchScreen(MenuScreen),
     SaveOptionsAndReturnToMain,
     SaveMoveKeysAndReturnToOptions,
+    DeleteSave { slot: u32, path: PathBuf, read_only: bool },
+    PerformSave { slot: u32, name: String },
+    PerformLoad { slot: u32, path: PathBuf, name: String },
+    LoadThumbnail { path: PathBuf },
+    ReturnToMainMenu,
     ExitCreditsToMain,
     Note(String),
 }
@@ -1331,9 +1370,846 @@ impl MoveKeysState {
     }
 }
 
+/// Layout constants and assets for `Loadgame.gui` / `Savegame.gui` (`submenus.md` rules 3–10, `gui-verify.log`).
+pub const SL_BG_PICTURE: &str = "saveload.pbm";
+pub const SL_HILITE_PICTURE: &str = "sl_hilite.pba";
+pub const SL_BTN_PICTURE: &str = "sl_buton.pba";
+pub const SL_HIBTN_PICTURE: &str = "sl_hibtn.pba";
+pub const SL_UP_PICTURE: &str = "sl_scton.pba";
+pub const SL_DOWN_PICTURE: &str = "sl_scbon.pba";
+pub const SL_TAB_PICTURE: &str = "sl_scbox.pba";
+pub const SL_NOTMB_PICTURE: &str = "sl_notmb.pbm";
+pub const SL_POPUP_BG: &str = "sl_win2.pbm";
+pub const SL_POPUP_BTN: &str = "s_ybtn.pba";
+pub const SL_POPUP_HIBTN: &str = "s_yhibtn.pba";
+pub const SL_SAVE_BAR: &str = "savebar.pba";
+pub const SL_SAVE_RED: &str = "savered.pbm";
+pub const SL_TITLE_FONT: &str = "45sl.pft";
+pub const SL_LIST_FONT: &str = "20sl.pft";
+pub const SL_POPUP_FONT: &str = "consoles.pft";
+
+pub const SL_TITLE_RECT: [i32; 4] = [0, 0, 640, 138];
+pub const LOAD_NAME_RECT: [i32; 4] = [78, 150, 578, 175];
+pub const SAVE_NAME_RECT: [i32; 4] = [78, 150, 586, 175];
+pub const SL_LIST_ROWS: usize = 10;
+pub const SL_SCROLL_UP_RECT: [i32; 4] = [68, 185, 88, 205];
+pub const SL_SCROLL_TRACK_RECT: [i32; 4] = [68, 205, 88, 415];
+pub const SL_SCROLL_DOWN_RECT: [i32; 4] = [68, 415, 88, 435];
+pub const SL_THUMB_TOP: i32 = 205;
+pub const SL_THUMB_SPAN: i32 = 190;
+pub const SL_THUMB_SIZE: i32 = 20;
+pub const SL_BUTTON_RECTS: [[i32; 4]; 3] = [
+    [434, 192, 582, 229],
+    [434, 234, 582, 271],
+    [434, 276, 582, 313],
+];
+pub const SL_THUMB_RECT: [i32; 4] = [428, 316, 588, 436];
+pub const SL_SAVE_BAR_RECT: [i32; 4] = [63, 442, 598, 458];
+pub const SL_SAVE_RED_RECT: [i32; 4] = [69, 447, 593, 453];
+pub const SL_MAX_SAVES: usize = 50;
+pub const SL_THUMB_DEBOUNCE_MS: f64 = 1000.0;
+pub const SL_CARET_BLINK_MS: f64 = 300.0;
+pub const SL_BACKSPACE_DELAY_MS: f64 = 500.0;
+pub const SL_BACKSPACE_REPEAT_MS: f64 = 200.0;
+
+pub const LOAD_POPUP_BG_RECT: [i32; 4] = [140, 130, 500, 250];
+pub const LOAD_POPUP_TWO_BTNS: [[i32; 4]; 2] = [[195, 200, 283, 236], [357, 200, 445, 236]];
+pub const LOAD_POPUP_OK_BTN: [i32; 4] = [276, 200, 364, 236];
+pub const SAVE_POPUP_BG_RECT: [i32; 4] = [140, 120, 500, 240];
+pub const SAVE_POPUP_TWO_BTNS: [[i32; 4]; 2] = [[190, 185, 278, 221], [360, 185, 448, 221]];
+pub const SAVE_POPUP_OK_BTN: [i32; 4] = [276, 185, 364, 221];
+
+pub fn sl_list_row_rect(row: usize) -> [i32; 4] {
+    let top = 185 + row as i32 * 25;
+    [95, top, 420, top + 25]
+}
+
+pub fn sl_hilite_rect(row: usize) -> [i32; 4] {
+    let top = 185 + row as i32 * 25;
+    [95, top, 419, top + 25]
+}
+
+/// Parses `<N>` from a filename matching `save<N>.vol` case-insensitively (`submenus.md` rule 3).
+pub fn parse_save_slot(filename: &str) -> Option<u32> {
+    let lower = filename.to_ascii_lowercase();
+    let mid = lower.strip_prefix("save")?.strip_suffix(".vol")?;
+    if mid.is_empty() {
+        return None;
+    }
+    mid.parse::<u32>().ok()
+}
+
+/// One valid saved-game entry discovered from `save<N>.vol` (`submenus.md` rule 3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SaveEntry {
+    pub slot: u32,
+    pub filename: String,
+    pub name: String,
+    pub path: PathBuf,
+    pub read_only: bool,
+}
+
+fn read_saved_game_entry(path: &Path, filename: &str, read_only: bool) -> Option<SaveEntry> {
+    let slot = parse_save_slot(filename)?;
+    let bytes = std::fs::read(path).ok()?;
+    let pvol = Pvol::parse(bytes).ok()?;
+    let chunk = pvol.find("savedGameName")?;
+    let raw = pvol.data(chunk).ok()?;
+    let end = raw.iter().position(|&b| b == 0).unwrap_or(raw.len());
+    let name = String::from_utf8_lossy(&raw[..end]).trim_end_matches('\0').to_string();
+    Some(SaveEntry {
+        slot,
+        filename: filename.to_string(),
+        name,
+        path: path.to_path_buf(),
+        read_only,
+    })
+}
+
+/// Scans `user_save_dir` (read-write) and `game_save_dir` (read-only `MASK/save`),
+/// returning valid saves sorted in descending slot order (`submenus.md` rule 3).
+/// Entries in `user_save_dir` shadow matching slots in `game_save_dir`.
+pub fn scan_save_entries(
+    user_save_dir: &Path,
+    game_save_dir: &Path,
+    hidden_read_only: &BTreeSet<String>,
+) -> Vec<SaveEntry> {
+    let mut by_slot: BTreeMap<u32, SaveEntry> = BTreeMap::new();
+    for (dir, read_only) in [(game_save_dir, true), (user_save_dir, false)] {
+        let Ok(rd) = std::fs::read_dir(dir) else { continue };
+        for entry in rd.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+            if read_only && hidden_read_only.contains(&name.to_ascii_lowercase()) {
+                continue;
+            }
+            if let Some(save) = read_saved_game_entry(&path, name, read_only) {
+                by_slot.insert(save.slot, save);
+            }
+        }
+    }
+    by_slot.into_values().rev().collect()
+}
+
+/// Decodes a 19,204-byte `current.bin` (`u32` LE palette ID + 160 × 120 8-bit pixels)
+/// into 160 × 120 RGBA pixels (`submenus.md` rule 7).
+pub fn decode_thumbnail_bin(
+    bytes: &[u8],
+    menu_palette: &[Rgb; 256],
+    world_palette: Option<&[Rgb; 256]>,
+) -> Option<Vec<u8>> {
+    let count = 160 * 120;
+    if bytes.len() < 4 + count {
+        return None;
+    }
+    let pal_id = u32::from_le_bytes(bytes[0..4].try_into().ok()?);
+    let pal = if pal_id == 999 {
+        menu_palette
+    } else {
+        world_palette.unwrap_or(menu_palette)
+    };
+    let mut rgba = Vec::with_capacity(count * 4);
+    for &idx in &bytes[4..4 + count] {
+        let [r, g, b] = pal[idx as usize];
+        rgba.extend_from_slice(&[r, g, b, 255]);
+    }
+    Some(rgba)
+}
+
+/// Weighted width in tenths of a pixel for `IDCTL_SAVE_NAME` (`submenus.md` rule 8).
+pub fn save_name_weighted_width(s: &str) -> u32 {
+    s.chars()
+        .map(|c| match c {
+            ' ' => 50,
+            'I' | 'i' | 'j' | 'l' => 56,
+            'M' | 'm' => 200,
+            'W' => 222,
+            _ => 125,
+        })
+        .sum()
+}
+
+/// Returns true if `ch` can be appended to `current` under rule 8
+/// (`<= 29` chars before insertion, printable ASCII `0x20..=0x7E`, weighted width `<= 2599`).
+pub fn can_append_save_char(current: &str, ch: char) -> bool {
+    if !(('\x20'..='\x7E').contains(&ch)) || current.chars().count() >= 30 {
+        return false;
+    }
+    let next_w = save_name_weighted_width(current) + save_name_weighted_width(&ch.to_string());
+    next_w <= 2599
+}
+
+fn split_sl_popup_lines(text: &str, max_lines: usize) -> Vec<String> {
+    let normalized: String = text
+        .replace("\r\n", " ")
+        .replace('\n', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let trimmed = normalized.trim();
+    if trimmed.is_empty() {
+        return vec![String::new()];
+    }
+    let max_chars = 38usize;
+    if trimmed.chars().count() <= max_chars || max_lines <= 1 {
+        return vec![trimmed.to_string()];
+    }
+    if max_lines == 2 {
+        return crate::main_menu::split_popup_text(trimmed);
+    }
+    let mut lines = Vec::new();
+    let mut rest = trimmed;
+    while !rest.is_empty() && lines.len() + 1 < max_lines && rest.chars().count() > max_chars {
+        let mut cut = None;
+        for (idx, ch) in rest.char_indices() {
+            if rest[..idx].chars().count() > max_chars {
+                break;
+            }
+            if ch == ' ' {
+                cut = Some(idx);
+            }
+        }
+        if let Some(idx) = cut {
+            lines.push(rest[..idx].trim_end().to_string());
+            rest = rest[idx + 1..].trim_start();
+        } else {
+            break;
+        }
+    }
+    if !rest.is_empty() {
+        lines.push(rest.to_string());
+    }
+    lines
+}
+
+/// Confirmation or error popup on `Loadgame.gui` / `Savegame.gui` (`submenus.md` rule 9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SaveLoadPopup {
+    DeleteConfirm {
+        entry_index: usize,
+        lines: Vec<String>,
+        highlight: usize,
+    },
+    OverwriteConfirm {
+        slot: u32,
+        name: String,
+        lines: Vec<String>,
+        highlight: usize,
+    },
+    MaxSavesError {
+        lines: Vec<String>,
+    },
+}
+
+impl SaveLoadPopup {
+    pub fn lines(&self) -> &[String] {
+        match self {
+            SaveLoadPopup::DeleteConfirm { lines, .. }
+            | SaveLoadPopup::OverwriteConfirm { lines, .. }
+            | SaveLoadPopup::MaxSavesError { lines } => lines,
+        }
+    }
+
+    pub fn is_two_button(&self) -> bool {
+        !matches!(self, SaveLoadPopup::MaxSavesError { .. })
+    }
+
+    pub fn highlight(&self) -> usize {
+        match self {
+            SaveLoadPopup::DeleteConfirm { highlight, .. }
+            | SaveLoadPopup::OverwriteConfirm { highlight, .. } => *highlight,
+            SaveLoadPopup::MaxSavesError { .. } => 0,
+        }
+    }
+
+    pub fn button_rects(&self, is_save: bool) -> Vec<[i32; 4]> {
+        if self.is_two_button() {
+            if is_save { SAVE_POPUP_TWO_BTNS.to_vec() } else { LOAD_POPUP_TWO_BTNS.to_vec() }
+        } else if is_save {
+            vec![SAVE_POPUP_OK_BTN]
+        } else {
+            vec![LOAD_POPUP_OK_BTN]
+        }
+    }
+
+    pub fn bg_rect(is_save: bool) -> [i32; 4] {
+        if is_save { SAVE_POPUP_BG_RECT } else { LOAD_POPUP_BG_RECT }
+    }
+
+    pub fn text_rects(&self, is_save: bool) -> Vec<[i32; 4]> {
+        let count = self.lines().len();
+        let top0 = if is_save {
+            if count >= 3 { 128 } else { 135 }
+        } else if count >= 3 {
+            138
+        } else {
+            145
+        };
+        let step = if count >= 3 { 18 } else { 20 };
+        (0..count)
+            .map(|i| {
+                let y = top0 + i as i32 * step;
+                [140, y, 500, y + step]
+            })
+            .collect()
+    }
+}
+
+/// Shared state machine for `Loadgame.gui` (`is_save = false`) and `Savegame.gui` (`is_save = true`)
+/// (`submenus.md` rules 3–9).
+#[derive(Debug, Clone)]
+pub struct SaveLoadState {
+    pub is_save: bool,
+    pub entries: Vec<SaveEntry>,
+    pub top_index: usize,
+    pub selected_row: usize,
+    pub active_button: usize,
+    pub popup: Option<SaveLoadPopup>,
+    pub typed_name: String,
+    pub caret_visible: bool,
+    pub caret_timer_ms: f64,
+    pub backspace_held_ms: Option<f64>,
+    pub thumb_debounce_ms: Option<f64>,
+    pub scroll_drag: bool,
+    pub save_progress: Option<f32>,
+}
+
+impl SaveLoadState {
+    pub fn new(is_save: bool, entries: Vec<SaveEntry>) -> Self {
+        let typed_name = if is_save {
+            entries.first().map(|e| e.name.clone()).unwrap_or_default()
+        } else {
+            String::new()
+        };
+        SaveLoadState {
+            is_save,
+            entries,
+            top_index: 0,
+            selected_row: 0,
+            active_button: 0,
+            popup: None,
+            typed_name,
+            caret_visible: true,
+            caret_timer_ms: 0.0,
+            backspace_held_ms: None,
+            thumb_debounce_ms: None,
+            scroll_drag: false,
+            save_progress: None,
+        }
+    }
+
+    pub fn selected_index(&self) -> Option<usize> {
+        let idx = self.top_index + self.selected_row;
+        (idx < self.entries.len()).then_some(idx)
+    }
+
+    pub fn selected_entry(&self) -> Option<&SaveEntry> {
+        self.selected_index().and_then(|i| self.entries.get(i))
+    }
+
+    pub fn thumb_y(&self) -> i32 {
+        if self.entries.len() <= SL_LIST_ROWS {
+            SL_THUMB_TOP
+        } else {
+            let max_top = (self.entries.len() - SL_LIST_ROWS) as i32;
+            SL_THUMB_TOP + (self.top_index as i32 * SL_THUMB_SPAN) / max_top
+        }
+    }
+
+    pub fn thumb_rect(&self) -> [i32; 4] {
+        let y = self.thumb_y();
+        [68, y, 88, y + SL_THUMB_SIZE]
+    }
+
+    /// Rebuilds the list after a save or delete while clamping `top_index` and `selected_row`.
+    pub fn set_entries(&mut self, entries: Vec<SaveEntry>) {
+        self.entries = entries;
+        let max_top = self.entries.len().saturating_sub(SL_LIST_ROWS);
+        self.top_index = self.top_index.min(max_top);
+        let vis = self.entries.len().saturating_sub(self.top_index).min(SL_LIST_ROWS);
+        self.selected_row = if vis == 0 { 0 } else { self.selected_row.min(vis - 1) };
+        if self.is_save {
+            self.typed_name = self.selected_entry().map(|e| e.name.clone()).unwrap_or_default();
+        }
+        self.thumb_debounce_ms = None;
+    }
+
+    fn on_selection_changed(&mut self) {
+        if self.is_save {
+            if let Some(entry) = self.selected_entry() {
+                self.typed_name = entry.name.clone();
+            }
+        } else {
+            self.thumb_debounce_ms = Some(SL_THUMB_DEBOUNCE_MS);
+        }
+    }
+
+    pub fn move_list(&mut self, delta: i32) -> Vec<SubmenuAction> {
+        if self.popup.is_some() || delta == 0 || self.entries.is_empty() {
+            return Vec::new();
+        }
+        let prev = (self.top_index, self.selected_row);
+        if delta < 0 {
+            if self.selected_row > 0 {
+                self.selected_row -= 1;
+            } else if self.top_index > 0 {
+                self.top_index -= 1;
+            }
+        } else {
+            let visible_max = self
+                .entries
+                .len()
+                .saturating_sub(self.top_index)
+                .min(SL_LIST_ROWS)
+                .saturating_sub(1);
+            if self.selected_row < visible_max {
+                self.selected_row += 1;
+            } else if self.top_index + SL_LIST_ROWS < self.entries.len() {
+                self.top_index += 1;
+            }
+        }
+        if (self.top_index, self.selected_row) == prev {
+            return Vec::new();
+        }
+        self.on_selection_changed();
+        vec![SubmenuAction::PlaySound("click.aud")]
+    }
+
+    pub fn scroll_step(&mut self, delta: i32) -> Vec<SubmenuAction> {
+        if self.popup.is_some() || delta == 0 {
+            return Vec::new();
+        }
+        let prev_idx = self.selected_index();
+        if self.entries.len() > SL_LIST_ROWS {
+            if delta < 0 && self.top_index > 0 {
+                self.top_index -= 1;
+                self.selected_row = (self.selected_row + 1).min(SL_LIST_ROWS - 1);
+            } else if delta > 0 && self.top_index + SL_LIST_ROWS < self.entries.len() {
+                self.top_index += 1;
+                self.selected_row = self.selected_row.saturating_sub(1);
+            }
+        }
+        if self.selected_index() != prev_idx {
+            self.on_selection_changed();
+        }
+        vec![SubmenuAction::PlaySound("button1.aud")]
+    }
+
+    pub fn scroll_page(&mut self, delta: i32) -> Vec<SubmenuAction> {
+        if self.popup.is_some() || delta == 0 {
+            return Vec::new();
+        }
+        let prev_top = self.top_index;
+        let max_top = self.entries.len().saturating_sub(SL_LIST_ROWS);
+        if delta < 0 {
+            self.top_index = self.top_index.saturating_sub(SL_LIST_ROWS);
+        } else {
+            self.top_index = (self.top_index + SL_LIST_ROWS).min(max_top);
+        }
+        if self.top_index != prev_top {
+            self.on_selection_changed();
+        }
+        vec![SubmenuAction::PlaySound("button1.aud")]
+    }
+
+    pub fn drag_thumb(&mut self, y: f32) -> Vec<SubmenuAction> {
+        if self.popup.is_some() || self.entries.len() <= SL_LIST_ROWS {
+            return Vec::new();
+        }
+        let max_top = self.entries.len() - SL_LIST_ROWS;
+        let frac = ((y - SL_THUMB_TOP as f32) / SL_THUMB_SPAN as f32).clamp(0.0, 1.0);
+        let new_top = (frac * max_top as f32).round() as usize;
+        if new_top != self.top_index {
+            self.top_index = new_top;
+            self.on_selection_changed();
+        }
+        Vec::new()
+    }
+
+    pub fn move_button(&mut self, delta: i32) -> Vec<SubmenuAction> {
+        if delta == 0 {
+            return Vec::new();
+        }
+        if let Some(popup) = self.popup.as_mut() {
+            match popup {
+                SaveLoadPopup::DeleteConfirm { highlight, .. }
+                | SaveLoadPopup::OverwriteConfirm { highlight, .. } => {
+                    let next = if delta < 0 { 0 } else { 1 };
+                    if *highlight != next {
+                        *highlight = next;
+                        return vec![SubmenuAction::PlaySound("button1.aud")];
+                    }
+                }
+                SaveLoadPopup::MaxSavesError { .. } => {}
+            }
+            return Vec::new();
+        }
+        let next = if delta < 0 {
+            self.active_button.saturating_sub(1)
+        } else {
+            (self.active_button + 1).min(2)
+        };
+        if next != self.active_button {
+            self.active_button = next;
+            vec![SubmenuAction::PlaySound("button1.aud")]
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn lowest_unused_slot(&self) -> u32 {
+        let mut slot = 1u32;
+        while self.entries.iter().any(|e| e.slot == slot) {
+            slot += 1;
+        }
+        slot
+    }
+
+    pub fn activate_button(&mut self, texts: &SubmenuTexts) -> Vec<SubmenuAction> {
+        if let Some(popup) = self.popup.take() {
+            let mut acts = vec![SubmenuAction::PlaySound("button1.aud")];
+            match popup {
+                SaveLoadPopup::DeleteConfirm { entry_index, highlight, .. } => {
+                    if highlight == 0 {
+                        if let Some(entry) = self.entries.get(entry_index).cloned() {
+                            acts.push(SubmenuAction::DeleteSave {
+                                slot: entry.slot,
+                                path: entry.path,
+                                read_only: entry.read_only,
+                            });
+                        }
+                    }
+                }
+                SaveLoadPopup::OverwriteConfirm { slot, name, highlight, .. } => {
+                    if highlight == 0 {
+                        acts.push(SubmenuAction::PerformSave { slot, name });
+                    }
+                }
+                SaveLoadPopup::MaxSavesError { .. } => {}
+            }
+            return acts;
+        }
+
+        match self.active_button {
+            0 => {
+                if self.is_save {
+                    let trimmed = self.typed_name.trim_start().to_string();
+                    if trimmed.is_empty() {
+                        return vec![SubmenuAction::Note("Save skipped: save name is empty".into())];
+                    }
+                    if let Some(existing) = self
+                        .entries
+                        .iter()
+                        .find(|e| e.name.eq_ignore_ascii_case(&trimmed))
+                    {
+                        let lines = split_sl_popup_lines(
+                            &format!("{} {}", texts.overwrite_prompt, trimmed),
+                            2,
+                        );
+                        self.popup = Some(SaveLoadPopup::OverwriteConfirm {
+                            slot: existing.slot,
+                            name: trimmed,
+                            lines,
+                            highlight: 1,
+                        });
+                        return vec![SubmenuAction::PlaySound("button1.aud")];
+                    }
+                    if self.entries.len() >= SL_MAX_SAVES {
+                        self.popup = Some(SaveLoadPopup::MaxSavesError {
+                            lines: split_sl_popup_lines(&texts.max_saves_prompt, 3),
+                        });
+                        return vec![SubmenuAction::PlaySound("button1.aud")];
+                    }
+                    let slot = self.lowest_unused_slot();
+                    vec![
+                        SubmenuAction::PlaySound("button1.aud"),
+                        SubmenuAction::PerformSave { slot, name: trimmed },
+                    ]
+                } else {
+                    let Some(entry) = self.selected_entry().cloned() else {
+                        return Vec::new();
+                    };
+                    vec![
+                        SubmenuAction::PlaySound("button1.aud"),
+                        SubmenuAction::PerformLoad {
+                            slot: entry.slot,
+                            path: entry.path,
+                            name: entry.name,
+                        },
+                    ]
+                }
+            }
+            1 => {
+                let Some(idx) = self.selected_index() else {
+                    return Vec::new();
+                };
+                let entry_name = self.entries[idx].name.clone();
+                let lines = split_sl_popup_lines(
+                    &format!("{} {}", texts.delete_prompt, entry_name),
+                    2,
+                );
+                self.popup = Some(SaveLoadPopup::DeleteConfirm {
+                    entry_index: idx,
+                    lines,
+                    highlight: 1,
+                });
+                vec![SubmenuAction::PlaySound("button1.aud")]
+            }
+            _ => {
+                self.active_button = 0;
+                vec![
+                    SubmenuAction::PlaySound("button1.aud"),
+                    SubmenuAction::ReturnToMainMenu,
+                ]
+            }
+        }
+    }
+
+    pub fn press_escape(&mut self) -> Vec<SubmenuAction> {
+        if self.popup.take().is_some() {
+            return vec![SubmenuAction::Note("closed Save/Load popup with Escape".into())];
+        }
+        self.active_button = 0;
+        vec![SubmenuAction::ReturnToMainMenu]
+    }
+
+    pub fn type_char(&mut self, ch: char) -> bool {
+        if !self.is_save || self.popup.is_some() {
+            return false;
+        }
+        if can_append_save_char(&self.typed_name, ch) {
+            self.typed_name.push(ch);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn press_backspace(&mut self) -> bool {
+        if !self.is_save || self.popup.is_some() || self.typed_name.is_empty() {
+            return false;
+        }
+        self.typed_name.pop();
+        true
+    }
+
+    pub fn click_at(&mut self, pos: [f32; 2], texts: &SubmenuTexts) -> Vec<SubmenuAction> {
+        if let Some(popup) = self.popup.as_mut() {
+            let rects = popup.button_rects(self.is_save);
+            for (idx, r) in rects.into_iter().enumerate() {
+                if point_in_rect(pos, r) {
+                    match popup {
+                        SaveLoadPopup::DeleteConfirm { highlight, .. }
+                        | SaveLoadPopup::OverwriteConfirm { highlight, .. } => {
+                            *highlight = idx;
+                        }
+                        SaveLoadPopup::MaxSavesError { .. } => {}
+                    }
+                    return self.activate_button(texts);
+                }
+            }
+            return Vec::new();
+        }
+
+        for (idx, &rect) in SL_BUTTON_RECTS.iter().enumerate() {
+            if point_in_rect(pos, rect) {
+                self.active_button = idx;
+                return self.activate_button(texts);
+            }
+        }
+
+        for row in 0..SL_LIST_ROWS {
+            if point_in_rect(pos, sl_list_row_rect(row)) {
+                if self.top_index + row < self.entries.len() {
+                    if self.selected_row != row {
+                        self.selected_row = row;
+                        self.on_selection_changed();
+                    } else if self.is_save {
+                        self.on_selection_changed();
+                    }
+                    return vec![SubmenuAction::PlaySound("click.aud")];
+                }
+                return Vec::new();
+            }
+        }
+
+        if point_in_rect(pos, SL_SCROLL_UP_RECT) {
+            return self.scroll_step(-1);
+        }
+        if point_in_rect(pos, SL_SCROLL_DOWN_RECT) {
+            return self.scroll_step(1);
+        }
+        let thumb_r = self.thumb_rect();
+        if point_in_rect(pos, thumb_r) {
+            self.scroll_drag = true;
+            return Vec::new();
+        }
+        if point_in_rect(pos, SL_SCROLL_TRACK_RECT) {
+            let dir = if pos[1] < thumb_r[1] as f32 { -1 } else { 1 };
+            return self.scroll_page(dir);
+        }
+        Vec::new()
+    }
+
+    pub fn tick(&mut self, dt_ms: f64, backspace_down: bool) -> Vec<SubmenuAction> {
+        let mut acts = Vec::new();
+        if self.is_save {
+            self.caret_timer_ms += dt_ms;
+            if self.caret_timer_ms >= SL_CARET_BLINK_MS {
+                self.caret_timer_ms %= SL_CARET_BLINK_MS;
+                self.caret_visible = !self.caret_visible;
+            }
+            if backspace_down && self.popup.is_none() {
+                match self.backspace_held_ms {
+                    None => {
+                        self.backspace_held_ms = Some(SL_BACKSPACE_DELAY_MS);
+                    }
+                    Some(mut rem) => {
+                        rem -= dt_ms;
+                        while rem <= 0.0 {
+                            self.press_backspace();
+                            rem += SL_BACKSPACE_REPEAT_MS;
+                        }
+                        self.backspace_held_ms = Some(rem);
+                    }
+                }
+            } else {
+                self.backspace_held_ms = None;
+            }
+        } else if let Some(rem) = self.thumb_debounce_ms.as_mut() {
+            *rem -= dt_ms;
+            if *rem <= 0.0 {
+                self.thumb_debounce_ms = None;
+                if let Some(entry) = self.selected_entry() {
+                    acts.push(SubmenuAction::LoadThumbnail { path: entry.path.clone() });
+                }
+            }
+        }
+        acts
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_entries(count: u32) -> Vec<SaveEntry> {
+        (1..=count)
+            .rev()
+            .map(|slot| SaveEntry {
+                slot,
+                filename: format!("save{slot}.vol"),
+                name: format!("Slot {slot}"),
+                path: PathBuf::from(format!("save{slot}.vol")),
+                read_only: false,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn save_list_sorts_descending_and_scrolls_with_10_row_window() {
+        assert_eq!(parse_save_slot("SAVE12.VOL"), Some(12));
+        assert_eq!(parse_save_slot("not_a_save.vol"), None);
+
+        let mut st = SaveLoadState::new(false, test_entries(15));
+        assert_eq!(st.entries[0].slot, 15);
+        assert_eq!(st.entries[14].slot, 1);
+        assert_eq!(st.thumb_y(), SL_THUMB_TOP);
+
+        // Move down 9 rows to bottom visible row (slot 6), then 1 more to scroll window.
+        for _ in 0..9 {
+            st.move_list(1);
+        }
+        assert_eq!((st.top_index, st.selected_row), (0, 9));
+        assert_eq!(st.selected_entry().unwrap().slot, 6);
+
+        st.move_list(1);
+        assert_eq!((st.top_index, st.selected_row), (1, 9));
+        assert_eq!(st.selected_entry().unwrap().slot, 5);
+        assert_eq!(st.thumb_y(), SL_THUMB_TOP + SL_THUMB_SPAN / 5);
+
+        // Moving back to row 0 then Up scrolls top_index back to 0.
+        for _ in 0..9 {
+            st.move_list(-1);
+        }
+        assert_eq!((st.top_index, st.selected_row), (1, 0));
+        st.move_list(-1);
+        assert_eq!((st.top_index, st.selected_row), (0, 0));
+    }
+
+    #[test]
+    fn save_name_typing_enforces_30_char_and_2599_width_limits() {
+        let mut st = SaveLoadState::new(true, Vec::new());
+        // Narrow 'i' (56 tenths) reaches 30-char limit first (30 * 56 = 1680 <= 2599).
+        for _ in 0..35 {
+            st.type_char('i');
+        }
+        assert_eq!(st.typed_name.len(), 30);
+
+        // Wide 'W' (222 tenths) hits 2599-width limit at 11 chars (11 * 222 = 2442, 12th = 2664 > 2599).
+        st.typed_name.clear();
+        for _ in 0..20 {
+            st.type_char('W');
+        }
+        assert_eq!(st.typed_name.len(), 11);
+        assert!(save_name_weighted_width(&st.typed_name) <= 2599);
+
+        assert!(st.press_backspace());
+        assert_eq!(st.typed_name.len(), 10);
+    }
+
+    #[test]
+    fn save_load_popups_delete_overwrite_and_max_50_limit() {
+        let texts = SubmenuTexts::default();
+        let mut st = SaveLoadState::new(true, test_entries(2));
+        // Existing save name triggers OverwriteConfirm with Cancel (1) highlighted by default.
+        st.typed_name = "  slot 2".into();
+        st.activate_button(&texts);
+        assert!(matches!(
+            st.popup,
+            Some(SaveLoadPopup::OverwriteConfirm { slot: 2, highlight: 1, .. })
+        ));
+        // Left selects Yes (0) then Enter emits PerformSave.
+        st.move_button(-1);
+        let acts = st.activate_button(&texts);
+        assert!(acts.contains(&SubmenuAction::PerformSave {
+            slot: 2,
+            name: "slot 2".into(),
+        }));
+
+        // Delete opens DeleteConfirm with Cancel (1) highlighted.
+        st.active_button = 1;
+        st.activate_button(&texts);
+        assert!(matches!(
+            st.popup,
+            Some(SaveLoadPopup::DeleteConfirm { entry_index: 0, highlight: 1, .. })
+        ));
+        // Escape closes popup without deleting.
+        st.press_escape();
+        assert!(st.popup.is_none());
+
+        // 50 saves triggers MaxSavesError (#166) on a new save name.
+        let mut full = SaveLoadState::new(true, test_entries(SL_MAX_SAVES as u32));
+        full.typed_name = "Brand New Save".into();
+        full.activate_button(&texts);
+        assert!(matches!(full.popup, Some(SaveLoadPopup::MaxSavesError { .. })));
+    }
+
+    #[test]
+    fn load_thumbnail_debounce_fires_after_1000_ms() {
+        let mut st = SaveLoadState::new(false, test_entries(3));
+        assert!(st.tick(2000.0, false).is_empty());
+
+        st.move_list(1);
+        assert!(st.thumb_debounce_ms.is_some());
+        assert!(st.tick(999.0, false).is_empty());
+        let acts = st.tick(1.0, false);
+        assert_eq!(
+            acts,
+            vec![SubmenuAction::LoadThumbnail { path: PathBuf::from("save2.vol") }]
+        );
+        assert!(st.thumb_debounce_ms.is_none());
+    }
 
     #[test]
     fn slider_volume_floor_and_options_cs_round_trip() {

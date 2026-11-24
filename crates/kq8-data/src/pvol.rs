@@ -78,6 +78,53 @@ impl Pvol {
     pub fn find(&self, name: &str) -> Option<&PvolEntry> {
         self.entries.iter().find(|e| e.name.eq_ignore_ascii_case(name))
     }
+
+    /// Packs `(name, data)` chunks into an uncompressed `PVOL` archive
+    /// (`docs/behaviour/submenus.md` rule 10, layout matching `Pvol::parse`).
+    pub fn build(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut out = Vec::from(b"PVOL\0\0\0\0".as_slice());
+        let mut vblk_offsets = Vec::with_capacity(entries.len());
+
+        for &(_, data) in entries {
+            vblk_offsets.push(out.len() as u32);
+            out.extend_from_slice(b"VBLK");
+            let header_size = (data.len() as u32) | 0x8000_0000;
+            out.extend_from_slice(&header_size.to_le_bytes());
+            out.extend_from_slice(data);
+            while out.len() % 4 != 0 {
+                out.push(0);
+            }
+        }
+
+        let names_at = out.len() as u32;
+        out[4..8].copy_from_slice(&names_at.to_le_bytes());
+
+        let mut names_buf = Vec::new();
+        let mut name_offsets = Vec::with_capacity(entries.len());
+        for &(name, _) in entries {
+            name_offsets.push(names_buf.len() as u32);
+            names_buf.extend_from_slice(name.as_bytes());
+            names_buf.push(0);
+        }
+
+        out.extend_from_slice(b"vols");
+        out.extend_from_slice(&(names_buf.len() as u32).to_le_bytes());
+        out.extend_from_slice(&names_buf);
+        while out.len() % 4 != 0 {
+            out.push(0);
+        }
+
+        out.extend_from_slice(b"voli");
+        out.extend_from_slice(&((entries.len() * 17) as u32).to_le_bytes());
+        for (i, &(_, data)) in entries.iter().enumerate() {
+            out.extend_from_slice(&0u32.to_le_bytes());
+            out.extend_from_slice(&name_offsets[i].to_le_bytes());
+            out.extend_from_slice(&vblk_offsets[i].to_le_bytes());
+            out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+            out.push(0);
+        }
+        out
+    }
 }
 
 #[cfg(test)]
@@ -102,5 +149,22 @@ mod tests {
         assert_eq!(v.entries, vec![PvolEntry { name: "a.txt".into(), at: 8, size: 5, compression: 0 }]);
         assert_eq!(v.data(v.find("A.TXT").unwrap()).unwrap(), b"hello");
         assert!(Pvol::parse(b"RESLIST\0".to_vec()).is_err());
+    }
+
+    #[test]
+    fn pvol_build_round_trips_through_parse() {
+        let blob1 = b"My Saved Game\0";
+        let blob2 = b"1.000000\0";
+        let blob3 = &[1u8, 2, 3, 4, 5, 6, 7];
+        let packed = Pvol::build(&[
+            ("savedGameName", blob1),
+            ("savedGameVersion", blob2),
+            ("current.bin", blob3),
+        ]);
+        let parsed = Pvol::parse(packed).unwrap();
+        assert_eq!(parsed.entries.len(), 3);
+        assert_eq!(parsed.data(parsed.find("SAVEDGAMENAME").unwrap()).unwrap(), blob1);
+        assert_eq!(parsed.data(parsed.find("savedGameVersion").unwrap()).unwrap(), blob2);
+        assert_eq!(parsed.data(parsed.find("current.bin").unwrap()).unwrap(), blob3);
     }
 }

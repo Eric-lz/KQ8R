@@ -1108,10 +1108,10 @@ inventory and menus.
 - **4g — main menu submenus** (planned 2026-11-24). From
   `docs/behaviour/submenus.md` (A, 2026-11-23) and `main-menu.md` rules
   11–12. Because `MASK/` is strictly read-only (`AGENTS.md` rule 4),
-  modified `Options.cs` and `movekeys.kq` files are saved under
+  `modified Options.cs` and `movekeys.kq` files are saved under
   `kq8-artifacts/user/` and `save<N>.vol` games under
-  `kq8-artifacts/saves/` (reading `kq8-artifacts/user/` before `MASK/`
-  and scanning both `kq8-artifacts/saves/` and `MASK/save/`). One step
+  `kq8-artifacts/user/save/` (reading `kq8-artifacts/user/` before `MASK/`
+  and scanning both `kq8-artifacts/user/save/` and `MASK/save/`). One step
   and one commit at a time:
   - **4g-1, screen switching, Options (`Options.gui`), Credits
     (`credits.gui`), and `Options.cs` persistence** (**done** 2026-11-24;
@@ -1135,18 +1135,18 @@ inventory and menus.
     reserved-key rejection (`#67`), duplicate-key displacement (`#112`),
     live gameplay key reload, and `movekeys.kq` persistence.
   - **4g-3, Load/Save UI (`Loadgame.gui`, `Savegame.gui`) and `Pvol`
-    writer** (`kq8-data` `pvol.rs`; `kq8-core` `submenus.rs`; `kq8-viewer`
-    `menu_view.rs`). 10-row sorted `save<N>.vol` list, scrollbar (`UP`,
-    `DOWN`, `TAB` 190-px span, 10-row track clicks), `Left`/`Right`
-    highlight across `Load`/`Save`, `Delete`, `Cancel`, 1.0 s Load
-    thumbnail debounce, live Save thumbnail, blinking `|` caret (300 ms),
-    30-char / 259.9-px input, Backspace repeat, and Delete/Overwrite/
-    Max-50 (`#166`) popups.
+    writer** (**done** 2026-11-24; `kq8-data` `pvol.rs`; `kq8-core`
+    `submenus.rs`; `kq8-viewer` `menu_view.rs`). 10-row sorted `save<N>.vol`
+    list, scrollbar (`UP`, `DOWN`, `TAB` 190-px span, 10-row track clicks),
+    `Left`/`Right` highlight across `Load`/`Save`, `Delete`, `Cancel`,
+    1.0 s Load thumbnail debounce, live Save thumbnail, blinking `|` caret
+    (300 ms), 30-char / 259.9-px input, Backspace repeat, and
+    Delete/Overwrite/Max-50 (`#166`) popups.
   - **4g-4, full `save<N>.vol` save & restore round-trip** (`kq8-viewer`
     `world_build.rs`, `menu_view.rs`). Packing `savedGameName`, world
     entries, `current.bin`, `Connor.kq`, `<map>.kq`, `GameState.kq`
     (with `difficultyFactor` and `nextNoName`), `cur/*.vol` +
-    `worldVolumes`, and `cur/*.kq` + `maps` into `kq8-artifacts/saves/`,
+    `worldVolumes`, and `cur/*.kq` + `maps` into `kq8-artifacts/user/save/`,
     and restoring full game state via the world loading screen.
   - **4g-5, `Replay Intro` and AVI movie playback (`playMovie`)**
     (`W32opn_1.dll`, `W32mdl_1.dll`, `W32ndg_1.dll`), audio suspend/resume,

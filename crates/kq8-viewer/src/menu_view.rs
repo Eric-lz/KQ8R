@@ -8,11 +8,12 @@
 //! core [`MainMenuState`] rules, coordinates sound pause and `theme.aud`
 //! with [`SoundSim`], and logs every menu event to `kq8-artifacts/logs/menu.log`.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::ImageSampler;
+use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use kq8_core::gui_draw::{self, Pic, Piece};
@@ -23,17 +24,24 @@ use kq8_core::main_menu::{
     THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH, TITLE_FONT, TITLE_LINE_RECT, TITLE_RECTS,
 };
 use kq8_core::submenus::{
-    brightness_factor, move_label_rect, move_value_rect, CreditsState, GraphicsState, MenuScreen,
-    MoveKeysFile, MoveKeysState, OptionsState, SubmenuAction, SubmenuTexts, UserOptions,
-    CREDITS_PHOTO_FILE, CREDITS_PHOTO_RECT, GRA_BRIGHTNESS_SLIDER_RECT, GRA_LABEL_RECTS,
-    GRA_MODE_LABEL_RECT, GRA_RES_LABEL_RECT, GRA_ROW_COUNT, GRA_SHADOW_BITS, GRA_TITLE_RECT,
-    GRA_VALUE_RECTS, MOVE_KEY_COUNT, MOVE_TITLE_RECT, OPT_LABEL_RECTS,
-    OPT_ROW_COUNT, OPT_ROW_RECTS, OPT_SLIDER_RECTS, OPT_TITLE_RECT, OPT_VALUE_RECTS,
-    SLIDER_KNOB_SIZE, SLIDER_LEFT,
+    brightness_factor, decode_thumbnail_bin, move_label_rect, move_value_rect, scan_save_entries,
+    sl_hilite_rect, sl_list_row_rect, CreditsState, GraphicsState, MenuScreen, MoveKeysFile,
+    MoveKeysState, OptionsState, SaveLoadPopup, SaveLoadState, SubmenuAction, SubmenuTexts,
+    UserOptions, CREDITS_PHOTO_FILE, CREDITS_PHOTO_RECT, GRA_BRIGHTNESS_SLIDER_RECT,
+    GRA_LABEL_RECTS, GRA_MODE_LABEL_RECT, GRA_RES_LABEL_RECT, GRA_ROW_COUNT, GRA_SHADOW_BITS,
+    GRA_TITLE_RECT, GRA_VALUE_RECTS, LOAD_NAME_RECT, MOVE_KEY_COUNT, MOVE_TITLE_RECT,
+    OPT_LABEL_RECTS, OPT_ROW_COUNT, OPT_ROW_RECTS, OPT_SLIDER_RECTS, OPT_TITLE_RECT,
+    OPT_VALUE_RECTS, SAVE_NAME_RECT, SLIDER_KNOB_SIZE, SLIDER_LEFT, SL_BG_PICTURE,
+    SL_BTN_PICTURE, SL_BUTTON_RECTS, SL_DOWN_PICTURE, SL_HIBTN_PICTURE, SL_HILITE_PICTURE,
+    SL_LIST_FONT, SL_LIST_ROWS, SL_NOTMB_PICTURE, SL_POPUP_BG, SL_POPUP_BTN, SL_POPUP_FONT,
+    SL_POPUP_HIBTN, SL_SAVE_BAR, SL_SAVE_BAR_RECT, SL_SAVE_RED, SL_SAVE_RED_RECT,
+    SL_SCROLL_DOWN_RECT, SL_SCROLL_UP_RECT, SL_TAB_PICTURE, SL_THUMB_RECT, SL_TITLE_FONT,
+    SL_TITLE_RECT, SL_UP_PICTURE,
 };
 use kq8_data::font::Font;
 use kq8_data::msg::MessageFile;
 use kq8_data::palette::Rgb;
+use kq8_data::pvol::Pvol;
 use kq8_data::{Bitmap, GameDir};
 
 use crate::gui_view::{KeyAt, ScreenFrame};
@@ -53,8 +61,6 @@ const SLIDER_PICTURE: &str = "slider.pba";
 const OPT_FONT: &str = "20.pft";
 const CREDITS_SMALL_FONT: &str = "20sl.pft";
 const CREDITS_LARGE_FONT: &str = "27sl.pft";
-const SL_TITLE_FONT: &str = "45sl.pft";
-const SL_POPUP_FONT: &str = "consoles.pft";
 
 /// Path for user-written config files (`Options.cs`, `movekeys.kq`) under
 /// `kq8-artifacts/user/` so `MASK/` remains strictly read-only (`AGENTS.md` rule 4).
@@ -79,6 +85,11 @@ pub fn write_user_config(filename: &str, contents: &str) -> std::io::Result<Path
     }
     std::fs::write(&path, contents.as_bytes())?;
     Ok(path)
+}
+
+/// Directory for user-written save archives (`kq8-artifacts/user/save/`, keeping `MASK/` read-only).
+pub fn user_save_dir() -> PathBuf {
+    PathBuf::from("kq8-artifacts").join("user").join("save")
 }
 
 /// Maps a Windows virtual-key code (`movekeys.kq` `KeyChar<n>`) to a Bevy `KeyCode`.
@@ -314,6 +325,9 @@ pub struct MenuView {
     pub options_state: OptionsState,
     pub graphics_state: GraphicsState,
     pub movekeys_state: MoveKeysState,
+    pub saveload_state: Option<SaveLoadState>,
+    pub sl_preview_rgba: Option<Vec<u8>>,
+    pub hidden_saveload_entries: BTreeSet<String>,
     pub credits_state: Option<CreditsState>,
     pub slider_drag: Option<usize>,
     pub gra_brightness_drag: bool,
@@ -347,6 +361,7 @@ struct MenuDrawKey {
     options_flags: (bool, u8, bool, u32, i32, bool),
     graphics_selected: usize,
     movekeys_state: (usize, Option<usize>, Option<usize>, Vec<(u32, String)>),
+    saveload_state: Option<(bool, usize, usize, usize, String, bool, Option<SaveLoadPopup>, usize, usize)>,
     credits_page: Option<usize>,
 }
 
@@ -413,6 +428,19 @@ impl MenuView {
             SUBMENU_CURSOR_PICTURE,
             SLIDER_PICTURE,
             CREDITS_PHOTO_FILE,
+            SL_BG_PICTURE,
+            SL_HILITE_PICTURE,
+            SL_BTN_PICTURE,
+            SL_HIBTN_PICTURE,
+            SL_UP_PICTURE,
+            SL_DOWN_PICTURE,
+            SL_TAB_PICTURE,
+            SL_NOTMB_PICTURE,
+            SL_POPUP_BG,
+            SL_POPUP_BTN,
+            SL_POPUP_HIBTN,
+            SL_SAVE_BAR,
+            SL_SAVE_RED,
         ] {
             let rel1 = format!("GAME/8Gui/{name}");
             let rel2 = format!("GAME/Resource/{name}");
@@ -478,6 +506,9 @@ impl MenuView {
             options_state,
             graphics_state: GraphicsState::default(),
             movekeys_state,
+            saveload_state: None,
+            sl_preview_rgba: None,
+            hidden_saveload_entries: BTreeSet::new(),
             credits_state: None,
             slider_drag: None,
             gra_brightness_drag: false,
@@ -497,11 +528,76 @@ impl MenuView {
         }
     }
 
-    pub fn scan_saves(game: &GameDir, ignored: &std::collections::BTreeSet<String>) -> SaveScan {
+    pub fn game_save_dir(game: &GameDir) -> PathBuf {
+        game.find("save").unwrap_or_else(|| game.root().join("save"))
+    }
+
+    pub fn scan_saves(game: &GameDir, ignored: &BTreeSet<String>) -> SaveScan {
+        let user_dir = user_save_dir();
+        let game_dir = Self::game_save_dir(game);
+        let entries = scan_save_entries(&user_dir, &game_dir, ignored);
+        if !entries.is_empty() {
+            let game_scan = if game_dir.exists() {
+                main_menu::scan_save_folder(&game_dir, ignored)
+            } else {
+                SaveScan::default()
+            };
+            return SaveScan {
+                total_files: entries.len().max(game_scan.total_files),
+                valid_saves: entries.len(),
+                first_corrupt: game_scan.first_corrupt,
+            };
+        }
         match game.find("save") {
             Some(dir) => main_menu::scan_save_folder(&dir, ignored),
             None => SaveScan::default(),
         }
+    }
+
+    fn current_thumbnail_bin(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(4 + (THUMBNAIL_WIDTH * THUMBNAIL_HEIGHT) as usize);
+        out.extend_from_slice(&999u32.to_le_bytes());
+        if let Some(t) = &self.thumbnail {
+            let count = (THUMBNAIL_WIDTH * THUMBNAIL_HEIGHT) as usize;
+            out.extend_from_slice(&t.pixels[..t.pixels.len().min(count)]);
+            out.resize(4 + count, 0);
+        } else {
+            out.resize(4 + (THUMBNAIL_WIDTH * THUMBNAIL_HEIGHT) as usize, 0);
+        }
+        out
+    }
+
+    fn refresh_saveload_preview(&mut self) {
+        let Some(sl) = self.saveload_state.as_ref() else {
+            self.sl_preview_rgba = None;
+            return;
+        };
+        if sl.is_save {
+            if self.thumbnail.is_some() {
+                let bin = self.current_thumbnail_bin();
+                self.sl_preview_rgba = decode_thumbnail_bin(&bin, &self.palette, None);
+            } else {
+                self.sl_preview_rgba = None;
+            }
+            return;
+        }
+        self.sl_preview_rgba = sl
+            .selected_entry()
+            .and_then(|e| self.load_thumbnail_from_path(&e.path));
+    }
+
+    fn load_thumbnail_from_path(&self, path: &std::path::Path) -> Option<Vec<u8>> {
+        let bytes = std::fs::read(path).ok()?;
+        let pvol = Pvol::parse(bytes).ok()?;
+        let chunk = pvol.find("current.bin")?;
+        let raw = pvol.data(chunk).ok()?;
+        decode_thumbnail_bin(raw, &self.palette, None)
+    }
+
+    fn scan_saveload_entries(&self) -> Vec<kq8_core::submenus::SaveEntry> {
+        let mut hidden = self.state.corrupt_saves_ignored.clone();
+        hidden.extend(self.hidden_saveload_entries.iter().cloned());
+        scan_save_entries(&user_save_dir(), &Self::game_save_dir(&self.game), &hidden)
     }
 
     pub fn note(&mut self, line: impl AsRef<str>) {
@@ -520,6 +616,8 @@ impl MenuView {
     pub fn open_from_gameplay(&mut self, world_name: &str, how: &str, sound: Option<&mut SoundSim>, shared: &Shared) {
         self.screen = MenuScreen::MainMenu;
         self.credits_state = None;
+        self.saveload_state = None;
+        self.sl_preview_rgba = None;
         self.slider_drag = None;
         // Rule 7.3 & 22 ("Do not reproduce" 3): 160 x 120 thumbnail kept in memory.
         self.thumbnail = Some(SavedThumbnail {
@@ -549,6 +647,8 @@ impl MenuView {
     pub fn open_on_death(&mut self, world_name: &str, sound: Option<&mut SoundSim>, shared: &Shared) {
         self.screen = MenuScreen::MainMenu;
         self.credits_state = None;
+        self.saveload_state = None;
+        self.sl_preview_rgba = None;
         self.slider_drag = None;
         if let Some(snd) = sound {
             snd.set_game_paused(true);
@@ -622,6 +722,19 @@ impl MenuView {
                     .map(|b| (b.vk, b.name_tag.clone()))
                     .collect(),
             ),
+            saveload_state: self.saveload_state.as_ref().map(|s| {
+                (
+                    s.is_save,
+                    s.top_index,
+                    s.selected_row,
+                    s.active_button,
+                    s.typed_name.clone(),
+                    s.caret_visible,
+                    s.popup.clone(),
+                    s.entries.len(),
+                    usize::from(self.sl_preview_rgba.is_some()),
+                )
+            }),
             credits_page: self.credits_state.as_ref().map(|c| c.page),
         }
     }
@@ -679,6 +792,7 @@ impl MenuView {
             MenuScreen::Options => return self.render_options(),
             MenuScreen::Graphics => return self.render_graphics(),
             MenuScreen::MoveKeys => return self.render_movekeys(),
+            MenuScreen::LoadGame | MenuScreen::SaveGame => return self.render_saveload(),
             MenuScreen::Credits => return self.render_credits(),
             _ => {}
         }
@@ -1028,6 +1142,243 @@ impl MenuView {
         pieces.reverse();
         gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette)
     }
+
+    fn render_saveload(&self) -> gui_draw::Canvas {
+        let mut pieces: Vec<Piece> = Vec::new();
+        self.push_submenu_bg(&mut pieces, SL_BG_PICTURE);
+
+        let Some(st) = self.saveload_state.as_ref() else {
+            pieces.reverse();
+            return gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette);
+        };
+
+        if let Some(font) = self.fonts.get(&SL_TITLE_FONT.to_ascii_lowercase()) {
+            let title = if st.is_save {
+                &self.submenu_texts.save_title
+            } else {
+                &self.submenu_texts.load_title
+            };
+            pieces.push(Piece::Text {
+                rect: SL_TITLE_RECT,
+                font,
+                justification: 0xC,
+                text: title.clone(),
+            });
+        }
+
+        let font20 = self.fonts.get(&SL_LIST_FONT.to_ascii_lowercase());
+        if let Some(font) = font20 {
+            let name_rect = if st.is_save { SAVE_NAME_RECT } else { LOAD_NAME_RECT };
+            let name_text = if st.is_save {
+                let caret = if st.caret_visible { "|" } else { "" };
+                format!("{}{}", st.typed_name, caret)
+            } else {
+                st.selected_entry().map_or_else(String::new, |e| e.name.clone())
+            };
+            pieces.push(Piece::Text {
+                rect: name_rect,
+                font,
+                justification: 0x9,
+                text: name_text,
+            });
+        }
+
+        if st.selected_entry().is_some() {
+            if let Some(pic) = self
+                .files
+                .get(&SL_HILITE_PICTURE.to_ascii_lowercase())
+                .and_then(|v| v.first())
+                .and_then(Pic::of)
+            {
+                pieces.push(Piece::Picture {
+                    rect: sl_hilite_rect(st.selected_row),
+                    pic,
+                    stretch: true,
+                });
+            }
+        }
+
+        if let Some(font) = font20 {
+            for row in 0..SL_LIST_ROWS {
+                if let Some(entry) = st.entries.get(st.top_index + row) {
+                    pieces.push(Piece::Text {
+                        rect: sl_list_row_rect(row),
+                        font,
+                        justification: 0x9,
+                        text: entry.name.clone(),
+                    });
+                }
+            }
+        }
+
+        for (file, rect) in [
+            (SL_UP_PICTURE, SL_SCROLL_UP_RECT),
+            (SL_DOWN_PICTURE, SL_SCROLL_DOWN_RECT),
+            (SL_TAB_PICTURE, st.thumb_rect()),
+        ] {
+            if let Some(pic) = self
+                .files
+                .get(&file.to_ascii_lowercase())
+                .and_then(|v| v.first())
+                .and_then(Pic::of)
+            {
+                pieces.push(Piece::Picture { rect, pic, stretch: true });
+            }
+        }
+
+        let action_label = if st.is_save {
+            &self.submenu_texts.save_btn
+        } else {
+            &self.submenu_texts.load_btn
+        };
+        let btn_labels = [
+            action_label.as_str(),
+            self.submenu_texts.delete_btn.as_str(),
+            self.submenu_texts.cancel_btn.as_str(),
+        ];
+        for (idx, (&rect, label)) in SL_BUTTON_RECTS.iter().zip(btn_labels).enumerate() {
+            let pic_name = if idx == st.active_button { SL_HIBTN_PICTURE } else { SL_BTN_PICTURE };
+            if let Some(mut pic) = self
+                .files
+                .get(&pic_name.to_ascii_lowercase())
+                .and_then(|v| v.first())
+                .and_then(Pic::of)
+            {
+                pic.see_through = false;
+                pieces.push(Piece::Picture { rect, pic, stretch: true });
+            }
+            if let Some(font) = font20 {
+                pieces.push(Piece::Text {
+                    rect,
+                    font,
+                    justification: 0xC,
+                    text: label.to_string(),
+                });
+            }
+        }
+
+        if self.sl_preview_rgba.is_none() {
+            if let Some(mut pic) = self
+                .files
+                .get(&SL_NOTMB_PICTURE.to_ascii_lowercase())
+                .and_then(|v| v.first())
+                .and_then(Pic::of)
+            {
+                pic.see_through = false;
+                pieces.push(Piece::Picture {
+                    rect: SL_THUMB_RECT,
+                    pic,
+                    stretch: true,
+                });
+            }
+        }
+
+        if st.is_save {
+            if let Some(frac) = st.save_progress {
+                if let Some(pic) = self
+                    .files
+                    .get(&SL_SAVE_BAR.to_ascii_lowercase())
+                    .and_then(|v| v.first())
+                    .and_then(Pic::of)
+                {
+                    pieces.push(Piece::Picture {
+                        rect: SL_SAVE_BAR_RECT,
+                        pic,
+                        stretch: true,
+                    });
+                }
+                if let Some(mut pic) = self
+                    .files
+                    .get(&SL_SAVE_RED.to_ascii_lowercase())
+                    .and_then(|v| v.first())
+                    .and_then(Pic::of)
+                {
+                    pic.see_through = false;
+                    let fill_w = ((SL_SAVE_RED_RECT[2] - SL_SAVE_RED_RECT[0]) as f32 * frac.clamp(0.0, 1.0)) as i32;
+                    pieces.push(Piece::Picture {
+                        rect: [
+                            SL_SAVE_RED_RECT[0],
+                            SL_SAVE_RED_RECT[1],
+                            SL_SAVE_RED_RECT[0] + fill_w.max(1),
+                            SL_SAVE_RED_RECT[3],
+                        ],
+                        pic,
+                        stretch: true,
+                    });
+                }
+            }
+        }
+
+        if let Some(popup) = &st.popup {
+            if let Some(mut pic) = self
+                .files
+                .get(&SL_POPUP_BG.to_ascii_lowercase())
+                .and_then(|v| v.first())
+                .and_then(Pic::of)
+            {
+                pic.see_through = false;
+                pieces.push(Piece::Picture {
+                    rect: SaveLoadPopup::bg_rect(st.is_save),
+                    pic,
+                    stretch: false,
+                });
+            }
+            if let Some(font) = self.fonts.get(&SL_POPUP_FONT.to_ascii_lowercase()) {
+                for (line, rect) in popup.lines().iter().zip(popup.text_rects(st.is_save)) {
+                    pieces.push(Piece::Text {
+                        rect,
+                        font,
+                        justification: 0xC,
+                        text: line.clone(),
+                    });
+                }
+            }
+            let labels: Vec<&str> = if popup.is_two_button() {
+                vec![self.submenu_texts.yes.as_str(), self.submenu_texts.cancel_btn.as_str()]
+            } else {
+                vec![self.submenu_texts.ok_btn.as_str()]
+            };
+            let hl = popup.highlight();
+            for (idx, (rect, label)) in popup.button_rects(st.is_save).into_iter().zip(labels).enumerate() {
+                let pic_name = if idx == hl { SL_POPUP_HIBTN } else { SL_POPUP_BTN };
+                if let Some(mut pic) = self
+                    .files
+                    .get(&pic_name.to_ascii_lowercase())
+                    .and_then(|v| v.first())
+                    .and_then(Pic::of)
+                {
+                    pic.see_through = false;
+                    pieces.push(Piece::Picture { rect, pic, stretch: true });
+                }
+                if let Some(font) = self.fonts.get(&SL_POPUP_FONT.to_ascii_lowercase()) {
+                    pieces.push(Piece::Text {
+                        rect,
+                        font,
+                        justification: 0xC,
+                        text: label.to_string(),
+                    });
+                }
+            }
+        }
+
+        pieces.reverse();
+        let mut canvas = gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette);
+        if let Some(ref rgba) = self.sl_preview_rgba {
+            let tw = THUMBNAIL_WIDTH as usize;
+            let th = THUMBNAIL_HEIGHT as usize;
+            if rgba.len() >= tw * th * 4 {
+                let x0 = SL_THUMB_RECT[0] as usize;
+                let y0 = SL_THUMB_RECT[1] as usize;
+                let cw = canvas.width as usize;
+                for row in 0..th {
+                    let src = row * tw * 4;
+                    let dst = ((y0 + row) * cw + x0) * 4;
+                    canvas.rgba[dst..dst + tw * 4].copy_from_slice(&rgba[src..src + tw * 4]);
+                }
+            }
+        }
+        canvas
+    }
 }
 
 /// Spawns the persistent Main Menu UI nodes at startup.
@@ -1158,13 +1509,14 @@ pub fn menu_step(
     mut sim: Option<ResMut<crate::door_view::DoorSim>>,
     mut connor: Option<ResMut<crate::connor_view::ConnorSim>>,
     mut change: ResMut<WorldChange>,
-    (time, mut keys, buttons, window, frame, mut key_at): (
+    (time, mut keys, buttons, window, frame, mut key_at, mut char_events): (
         Res<Time<Real>>,
         ResMut<ButtonInput<KeyCode>>,
         Res<ButtonInput<MouseButton>>,
         Query<&Window, With<bevy::window::PrimaryWindow>>,
         Res<ScreenFrame>,
         Option<ResMut<KeyAt>>,
+        MessageReader<KeyboardInput>,
     ),
     mut root_vis: Query<&mut Visibility, With<MenuRoot>>,
     canvas_node: Query<&ImageNode, With<MenuCanvasNode>>,
@@ -1184,6 +1536,15 @@ pub fn menu_step(
     let dt = time.delta_secs_f64();
     menu.now_ms += dt * 1000.0;
     menu.total_frames += 1;
+
+    let mut typed_chars: Vec<char> = Vec::new();
+    for ev in char_events.read() {
+        if ev.state.is_pressed() {
+            if let Some(txt) = &ev.text {
+                typed_chars.extend(txt.chars());
+            }
+        }
+    }
 
     // 1. Check Connor's death -> 2.0 s handsOff timer -> Main Menu (`main-menu.md` rule 25).
     let connor_dead = connor.as_ref().is_some_and(|c| c.walker.mode == kq8_core::connor::Mode::Dead);
@@ -1281,6 +1642,11 @@ pub fn menu_step(
         if finish_credits {
             sub_actions.push(SubmenuAction::Note("credits finished final page timer (submenus.md rule 25)".into()));
             sub_actions.push(SubmenuAction::ExitCreditsToMain);
+        }
+    } else if matches!(menu.screen, MenuScreen::LoadGame | MenuScreen::SaveGame) {
+        let bs = keys.pressed(KeyCode::Backspace);
+        if let Some(sl) = menu.saveload_state.as_mut() {
+            sub_actions.extend(sl.tick(dt * 1000.0, bs));
         }
     }
 
@@ -1400,12 +1766,75 @@ pub fn menu_step(
                         _ => {}
                     }
                 }
+                MenuScreen::LoadGame | MenuScreen::SaveGame => {
+                    let texts = menu.submenu_texts.clone();
+                    if let Some(sl) = menu.saveload_state.as_mut() {
+                        if let Some(raw_text) = cmd[5..].strip_prefix("sl:type:") {
+                            for ch in raw_text.chars() {
+                                sl.type_char(ch);
+                            }
+                        } else {
+                            match sub.as_str() {
+                                "up" | "sl:up" | "load:up" | "save:up" => sub_actions.extend(sl.move_list(-1)),
+                                "down" | "sl:down" | "load:down" | "save:down" => sub_actions.extend(sl.move_list(1)),
+                                "left" | "sl:left" => sub_actions.extend(sl.move_button(-1)),
+                                "right" | "sl:right" => sub_actions.extend(sl.move_button(1)),
+                                "enter" | "sl:enter" => sub_actions.extend(sl.activate_button(&texts)),
+                                "escape" | "close" | "sl:escape" => sub_actions.extend(sl.press_escape()),
+                                "backspace" | "sl:backspace" => {
+                                    sl.press_backspace();
+                                }
+                                click if click.starts_with("sl:click:") || click.starts_with("click:") => {
+                                    let target = click.strip_prefix("sl:click:").unwrap_or_else(|| &click[6..]);
+                                    match target {
+                                        "ok" | "load" | "save" => {
+                                            sl.active_button = 0;
+                                            sub_actions.extend(sl.activate_button(&texts));
+                                        }
+                                        "delete" => {
+                                            sl.active_button = 1;
+                                            sub_actions.extend(sl.activate_button(&texts));
+                                        }
+                                        "cancel" => {
+                                            sl.active_button = 2;
+                                            sub_actions.extend(sl.activate_button(&texts));
+                                        }
+                                        "up" => sub_actions.extend(sl.scroll_step(-1)),
+                                        "down" => sub_actions.extend(sl.scroll_step(1)),
+                                        "yes" | "btn0" => {
+                                            if let Some(r) = sl.popup.as_ref().and_then(|p| p.button_rects(sl.is_save).into_iter().next()) {
+                                                let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
+                                                sub_actions.extend(sl.click_at(mid, &texts));
+                                            }
+                                        }
+                                        "no" | "btn1" => {
+                                            if let Some(r) = sl.popup.as_ref().and_then(|p| p.button_rects(sl.is_save).into_iter().nth(1)) {
+                                                let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
+                                                sub_actions.extend(sl.click_at(mid, &texts));
+                                            }
+                                        }
+                                        r if r.starts_with("row") => {
+                                            if let Ok(idx) = r[3..].parse::<usize>() {
+                                                if idx < SL_LIST_ROWS {
+                                                    let rect = sl_list_row_rect(idx);
+                                                    let mid = [0.5 * (rect[0] + rect[2]) as f32, 0.5 * (rect[1] + rect[3]) as f32];
+                                                    sub_actions.extend(sl.click_at(mid, &texts));
+                                                }
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
                 MenuScreen::Credits => {
                     if matches!(sub.as_str(), "escape" | "close" | "credits:escape") {
                         sub_actions.push(SubmenuAction::ExitCreditsToMain);
                     }
                 }
-                _ => {}
             }
         }
 
@@ -1546,13 +1975,65 @@ pub fn menu_step(
                     }
                 }
             }
+            MenuScreen::LoadGame | MenuScreen::SaveGame => {
+                let texts = menu.submenu_texts.clone();
+                if let Some(sl) = menu.saveload_state.as_mut() {
+                    if keys.just_pressed(KeyCode::ArrowUp) {
+                        sub_actions.extend(sl.move_list(-1));
+                    }
+                    if keys.just_pressed(KeyCode::ArrowDown) {
+                        sub_actions.extend(sl.move_list(1));
+                    }
+                    if keys.just_pressed(KeyCode::ArrowLeft) {
+                        sub_actions.extend(sl.move_button(-1));
+                    }
+                    if keys.just_pressed(KeyCode::ArrowRight) {
+                        sub_actions.extend(sl.move_button(1));
+                    }
+                    if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
+                        sub_actions.extend(sl.activate_button(&texts));
+                    }
+                    if keys.just_pressed(KeyCode::Escape) {
+                        keys.clear_just_pressed(KeyCode::Escape);
+                        sub_actions.extend(sl.press_escape());
+                    }
+                    if keys.just_pressed(KeyCode::Backspace) {
+                        sl.press_backspace();
+                    }
+                    if sl.is_save
+                        && !keys.any_pressed([
+                            KeyCode::ControlLeft,
+                            KeyCode::ControlRight,
+                            KeyCode::AltLeft,
+                            KeyCode::AltRight,
+                        ])
+                    {
+                        for ch in typed_chars {
+                            sl.type_char(ch);
+                        }
+                    }
+                    if buttons.just_pressed(MouseButton::Left) {
+                        if let Some(pos) = cursor_layout {
+                            sub_actions.extend(sl.click_at(pos, &texts));
+                        }
+                    } else if buttons.pressed(MouseButton::Left) && sl.scroll_drag {
+                        if let Some(pos) = cursor_layout {
+                            sub_actions.extend(sl.drag_thumb(pos[1]));
+                        }
+                    } else {
+                        sl.scroll_drag = false;
+                    }
+                    if buttons.just_released(MouseButton::Left) {
+                        sl.scroll_drag = false;
+                    }
+                }
+            }
             MenuScreen::Credits => {
                 if keys.just_pressed(KeyCode::Escape) {
                     keys.clear_just_pressed(KeyCode::Escape);
                     sub_actions.push(SubmenuAction::ExitCreditsToMain);
                 }
             }
-            _ => {}
         }
     }
 
@@ -1611,6 +2092,23 @@ pub fn menu_step(
                     menu.options.not_starting_help
                 );
                 menu.summary(&shared, msg);
+            }
+            MenuAction::OpenSubScreen(item @ (MenuItem::Load | MenuItem::Save)) => {
+                let is_save = item == MenuItem::Save;
+                let entries = menu.scan_saveload_entries();
+                let count = entries.len();
+                menu.saveload_state = Some(SaveLoadState::new(is_save, entries));
+                menu.refresh_saveload_preview();
+                menu.screen = if is_save { MenuScreen::SaveGame } else { MenuScreen::LoadGame };
+                menu.last_drawn_key = None;
+                let preview = menu.sl_preview_rgba.is_some();
+                menu.summary(
+                    &shared,
+                    format!(
+                        "opened {} screen (submenus.md rules 3-9): {count} saved game(s), preview_loaded={preview}",
+                        if is_save { "Save Game" } else { "Load Game" }
+                    ),
+                );
             }
             MenuAction::OpenSubScreen(item) => {
                 menu.summary(
@@ -1736,6 +2234,118 @@ pub fn menu_step(
                     &shared,
                     format!("{target:?} screen selected: coming in next step"),
                 );
+            }
+            SubmenuAction::LoadThumbnail { path } => {
+                menu.sl_preview_rgba = menu.load_thumbnail_from_path(&path);
+                menu.last_drawn_key = None;
+                let ok = menu.sl_preview_rgba.is_some();
+                menu.note(format!(
+                    "loadgame thumbnail decoded after 1.0 s debounce from {} (ok={ok})",
+                    path.display(),
+                ));
+            }
+            SubmenuAction::DeleteSave { slot, path, read_only } => {
+                if read_only {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        menu.hidden_saveload_entries.insert(name.to_ascii_lowercase());
+                    }
+                    menu.summary(
+                        &shared,
+                        format!(
+                            "delete save{slot}.vol: read-only MASK/save file kept untouched on disk and hidden for session (AGENTS.md rule 4)"
+                        ),
+                    );
+                } else {
+                    match std::fs::remove_file(&path) {
+                        Ok(()) => menu.summary(&shared, format!("deleted user save {}", path.display())),
+                        Err(e) => menu.summary(&shared, format!("failed to delete {}: {e}", path.display())),
+                    }
+                }
+                let entries = menu.scan_saveload_entries();
+                menu.state.has_saves = !entries.is_empty();
+                if let Some(sl) = menu.saveload_state.as_mut() {
+                    sl.set_entries(entries);
+                }
+                menu.refresh_saveload_preview();
+                menu.last_drawn_key = None;
+            }
+            SubmenuAction::PerformSave { slot, name } => {
+                let save_dir = user_save_dir();
+                let mut world_kq = change.current.clone();
+                if !world_kq.to_ascii_lowercase().ends_with(".kq") {
+                    world_kq.push_str(".kq");
+                }
+                let saved_name_bytes = format!("{name}\0").into_bytes();
+                let world_name_bytes = format!("{world_kq}\0").into_bytes();
+                let version_bytes = b"1.000000\0".to_vec();
+                let thumb_bytes = menu.current_thumbnail_bin();
+                let difficulty_factor = sim.as_ref().map_or(1.0, |s| s.active.world.combat_level);
+                let game_state_bytes = format!(
+                    "[GameState]\r\nnextNoName=1\r\ndifficultyFactor={difficulty_factor:.2}\r\n"
+                )
+                .into_bytes();
+                let archive = Pvol::build(&[
+                    ("savedGameName", &saved_name_bytes),
+                    ("savedGameVersion", &version_bytes),
+                    ("worldName", &world_name_bytes),
+                    ("current.bin", &thumb_bytes),
+                    ("GameState.kq", &game_state_bytes),
+                ]);
+                let dest = save_dir.join(format!("save{slot}.vol"));
+                let write_res = std::fs::create_dir_all(&save_dir).and_then(|()| std::fs::write(&dest, archive));
+                match write_res {
+                    Ok(()) => menu.summary(
+                        &shared,
+                        format!(
+                            "saved slot {slot} \"{name}\" to {} ({world_kq}); returned to Main Menu (submenus.md rule 10; full world chunks in 4g-4)",
+                            dest.display()
+                        ),
+                    ),
+                    Err(e) => menu.summary(&shared, format!("failed to write {}: {e}", dest.display())),
+                }
+                menu.state.has_saves = true;
+                menu.saveload_state = None;
+                menu.sl_preview_rgba = None;
+                menu.screen = MenuScreen::MainMenu;
+                menu.last_drawn_key = None;
+            }
+            SubmenuAction::PerformLoad { slot, path, name } => {
+                if let Some(snd) = sound.as_mut() {
+                    snd.fade_menu_theme();
+                }
+                let info = std::fs::read(&path)
+                    .ok()
+                    .and_then(|b| Pvol::parse(b).ok())
+                    .map(|p| {
+                        let chunk_str = |k: &str| {
+                            p.find(k)
+                                .and_then(|e| p.data(e).ok())
+                                .map(|d| {
+                                    let end = d.iter().position(|&b| b == 0).unwrap_or(d.len());
+                                    String::from_utf8_lossy(&d[..end]).to_string()
+                                })
+                                .unwrap_or_default()
+                        };
+                        (chunk_str("savedGameVersion"), chunk_str("worldName"))
+                    });
+                menu.summary(
+                    &shared,
+                    format!(
+                        "Load Game chosen: slot {slot} \"{name}\" at {} ({info:?}); theme fading out, full restoreWorld lands in M4 4g-4",
+                        path.display()
+                    ),
+                );
+                menu.saveload_state = None;
+                menu.sl_preview_rgba = None;
+                menu.screen = MenuScreen::MainMenu;
+                menu.last_drawn_key = None;
+            }
+            SubmenuAction::ReturnToMainMenu => {
+                menu.saveload_state = None;
+                menu.sl_preview_rgba = None;
+                menu.screen = MenuScreen::MainMenu;
+                menu.last_drawn_key = None;
+                menu.note("returned to Main Menu from Save/Load");
             }
             SubmenuAction::SaveMoveKeysAndReturnToOptions => {
                 let text = menu.movekeys_state.file.format();
