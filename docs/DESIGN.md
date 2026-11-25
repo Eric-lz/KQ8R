@@ -1176,12 +1176,14 @@ inventory and menus.
     `map-verify` binary `KQMap` support reading all `54` saved maps with
     `0` failures).
   - **4h-2, mid-world state capture & restoration (`kq8-core`,
-    `kq8-viewer`):** door/chest numeric state mapping, `EventQueue`
-    save/restore, `SavedCameraState`, `StartExact` (preserving upper-floor
-    Z), `WorldState::kept_doors` / `kept_chests` / `world_items`,
-    `GameCam::snapshot` / `restore` (without tick-0 snap), `Arrival`
-    world-item/music/door/chest restoration, and running `BeginNow` on
-    restore.
+    `kq8-viewer`)** (**done** 2026-11-25): `DoorState`/`ChestState` numeric
+    mappings, `EventQueue` save/restore (`format_kq_event`/`parse_kq_event`),
+    `Journey::raw_world_flags`, `SavedCameraState`, `ConnorSim::apply_exact_pose`
+    (preserving upper-floor Z and movement/phase), `WorldState::kept_doors`
+    / `kept_chests` / `world_items` / `pending_event_strings` / `set_current_time`,
+    `GameCam::snapshot` / `restore` (clearing start stand-in), `Arrival`
+    world-item / music-stack / door / chest / `animPos` restoration, and
+    running `BeginNow` on restore (guarded by saved `WorldVar.cs`).
   - **4h-3, importing original `Mask.exe` `save<N>.vol` archives:**
     `kq8-core` `save_import.rs` decoding binary `PERS` current-world
     objects (`Connor.kq`, `KQCamera.kq`, `<map>.kq`, `WorldInventory.kq`,

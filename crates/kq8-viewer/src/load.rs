@@ -1679,6 +1679,8 @@ pub struct Objects {
     pub not_starting_help: Option<u8>,
     /// Restored per-interior `useAlternateLightmap` flags on return to a kept world (`object-lighting.md` rule 12).
     pub arrival_alt_lightmaps: BTreeMap<String, bool>,
+    /// Restored `Place::World` items replacing start-up world items (`WorldInventory.kq`, `savefile.md` rule 16).
+    pub restored_world_items: Option<Vec<kq8_core::item::ItemObject>>,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -1781,6 +1783,12 @@ pub struct DoorAssets {
     pub bounds: Option<([f32; 3], [f32; 3])>,
     /// A `KQChest`'s own keys (M3 step 3e-4); `None` for a door.
     pub chest: Option<kq8_core::chest::ChestSettings>,
+    /// Restored `KQDoor::state` from a kept/saved world (`savefile.md` rule 25).
+    pub initial_door_state: Option<kq8_core::door::DoorState>,
+    /// Restored `KQChest` state & remembered item from a kept/saved world (`savefile.md` rule 26).
+    pub initial_chest_state: Option<(kq8_core::chest::ChestState, Option<String>)>,
+    /// Restored `KQChest` hidden flag (`savefile.md` rule 26).
+    pub initial_chest_hidden: Option<bool>,
     /// A scripted animated object (3e-5), not a door.
     pub object: bool,
 }
@@ -1993,6 +2001,18 @@ pub struct Arrival {
     pub rusted_rivers: Vec<String>,
     /// Restored per-interior `useAlternateLightmap` flags (`object-lighting.md` rule 12).
     pub alt_lightmaps: BTreeMap<String, bool>,
+    /// Restored door states by lower-case name (`KQDoor`, `savefile.md` rule 25).
+    pub doors: BTreeMap<String, kq8_core::active::KeptDoorState>,
+    /// Restored chest states by lower-case name (`KQChest`, `savefile.md` rule 26).
+    pub chests: BTreeMap<String, kq8_core::active::KeptChestState>,
+    /// Restored loose/dropped world items (`WorldInventory.kq`, `savefile.md` rule 16).
+    pub world_items: Option<Vec<kq8_core::item::ItemObject>>,
+    /// Restored `KQMusic` tune stack, bottom first (`Music.kq`, `savefile.md` rule 12).
+    pub music_stack: Option<Vec<String>>,
+    /// If `Some`, only non-permanent persistent objects listed here (lower case) are placed (`newWorld.cs`, `savefile.md` rules 39-40).
+    pub present_objects: Option<std::collections::BTreeSet<String>>,
+    /// Additional item `IDName`s carried by Connor or in saved `world_items` to preload models for.
+    pub extra_item_kinds: Vec<String>,
 }
 
 /// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
@@ -2063,10 +2083,18 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
         items.start_no_names_at(a.no_name_from);
         log.summary(format!("world change: NoName counter from {} (world-change.md rule 18); conStart.cs not run (rule 21)", a.no_name_from));
     }
+    let mut extra_item_kinds = arrival.as_ref().map(|a| a.extra_item_kinds.clone()).unwrap_or_default();
+    if let Some(items) = arrival.as_ref().and_then(|a| a.world_items.as_ref()) {
+        extra_item_kinds.extend(items.iter().map(|i| i.kind.clone()));
+    }
     let mut placer = Placer {
         gone: arrival.as_ref().map(|a| a.gone.clone()).unwrap_or_default(),
         gone_skipped: Vec::new(),
         kept_states: arrival.as_ref().map(|a| a.states.clone()).unwrap_or_default(),
+        kept_doors: arrival.as_ref().map(|a| a.doors.clone()).unwrap_or_default(),
+        kept_chests: arrival.as_ref().map(|a| a.chests.clone()).unwrap_or_default(),
+        present_objects: arrival.as_ref().and_then(|a| a.present_objects.clone()),
+        extra_item_kinds,
         kept_applied: Vec::new(),
         arrival_alt_lightmaps: arrival.as_ref().map(|a| a.alt_lightmaps.clone()).unwrap_or_default(),
         portal_movements,
@@ -2324,11 +2352,21 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     objects.aliases = script.aliases;
     // M6 6e-8 (world-change.md rules 13, 14): a kept world's variables over
     // its own start values, before its objects' Init.
-    if let Some(a) = &arrival {
-        for (n, v) in &a.kept_vars {
-            objects.vars.set(n, v.clone());
+    let (arrival_music_stack, restored_world_items) = match arrival {
+        Some(a) => {
+            for (n, v) in &a.kept_vars {
+                objects.vars.set(n, v.clone());
+            }
+            (a.music_stack, a.world_items)
+        }
+        None => (None, None),
+    };
+    if let Some(stack) = arrival_music_stack {
+        if let Some(m) = &mut objects.music {
+            *m = kq8_core::music::Music::new(&m.object, &stack);
         }
     }
+    objects.restored_world_items = restored_world_items;
     objects.items = items;
     objects.item_shapes = item_shapes;
     objects.item_lines = item_lines;
@@ -2400,6 +2438,10 @@ struct Placer<'a> {
     gone_skipped: Vec<String>,
     /// A kept world's object states (K-2), and the names they were put on.
     kept_states: BTreeMap<String, kq8_core::active::KeptState>,
+    kept_doors: BTreeMap<String, kq8_core::active::KeptDoorState>,
+    kept_chests: BTreeMap<String, kq8_core::active::KeptChestState>,
+    present_objects: Option<std::collections::BTreeSet<String>>,
+    extra_item_kinds: Vec<String>,
     kept_applied: Vec<String>,
     arrival_alt_lightmaps: BTreeMap<String, bool>,
     /// Portals' own lists' movements for the Special state (M6 6e-7).
@@ -3344,39 +3386,50 @@ impl Placer<'_> {
         }
     }
 
-    /// A kept object's state put into its section and placement (DESIGN
-    /// K-2): `currAnimName`, `nextAnimName`, `animPos`, `colliderType` (a
-    /// scripted object's) replace the file's; its place and turn as kept,
-    /// with no ground rule applied again (the kept place is the final one).
-    fn apply_kept(&mut self, label: &str, s: &mut kq8_data::kq_text::Section, p: &mut kq8_data::objects::Placement, k: &kq8_core::active::KeptState) {
+    /// A kept object's, door's or chest's state put into its section and
+    /// placement (DESIGN K-2, `savefile.md` rules 25-26): `currAnimName`,
+    /// `nextAnimName`, `animPos`, `colliderType` replace the file's; its place
+    /// and turn as kept, with no ground rule applied again.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_kept_fields(
+        &mut self,
+        label: &str,
+        s: &mut kq8_data::kq_text::Section,
+        p: &mut kq8_data::objects::Placement,
+        movement: &str,
+        waiting: Option<&str>,
+        phase: f32,
+        placement: &kq8_core::collide::Placement,
+        collision_type: Option<u32>,
+    ) {
         let mut set = |key: &str, value: String| {
             s.entries.retain(|(k, _)| !k.eq_ignore_ascii_case(key));
             s.entries.push((key.to_string(), value));
         };
-        set("currAnimName", k.movement.clone());
-        set("nextAnimName", k.waiting.clone().unwrap_or_default());
-        set("animPos", k.phase.to_string());
-        if let Some(t) = k.collision_type {
+        set("currAnimName", movement.to_string());
+        set("nextAnimName", waiting.unwrap_or_default().to_string());
+        set("animPos", phase.to_string());
+        if let Some(t) = collision_type {
             set("colliderType", t.to_string());
         }
-        p.position = k.placement.position;
-        p.angles = kq8_data::objects::angles_of(k.placement.rotation);
+        p.position = placement.position;
+        p.angles = kq8_data::objects::angles_of(placement.rotation);
         p.keep_on_ground = kq8_data::objects::KeepOnGround::Off;
         p.z_on_ground = None;
         p.missing_loc = [false; 3];
         self.log.summary(format!(
             "world change: kept world: {label}[{}] loads as left (rules 12, 15): currAnimName={} nextAnimName={} animPos={:.4} at ({:.0}, {:.0}, {:.0}) angles ({:.3}, {:.3}, {:.3}){}",
             p.name,
-            k.movement,
-            k.waiting.as_deref().unwrap_or(""),
-            k.phase,
+            movement,
+            waiting.unwrap_or(""),
+            phase,
             p.position[0],
             p.position[1],
             p.position[2],
             p.angles[0],
             p.angles[1],
             p.angles[2],
-            k.collision_type.map_or(String::new(), |t| format!(" colliderType={t} ({t:#x})"))
+            collision_type.map_or(String::new(), |t| format!(" colliderType={t} ({t:#x})"))
         ));
         self.kept_applied.push(p.name.clone());
     }
@@ -3489,14 +3542,60 @@ impl Placer<'_> {
         }
         // M6 6e-8 (world-change.md rule 12): it left this world on an
         // earlier visit (deleted, taken, dead): not loaded again.
-        if !unused && self.gone.contains(&p.name.to_ascii_lowercase()) {
+        let key_lc = p.name.to_ascii_lowercase();
+        if !unused && self.gone.contains(&key_lc) {
             self.gone_skipped.push(p.name.clone());
             return;
         }
-        // DESIGN K-2 (world-change.md rules 12, 15): a kept world's object
-        // loads with the values it had when Connor left.
-        if let Some(k) = self.kept_states.get(&p.name.to_ascii_lowercase()).filter(|_| !unused).cloned() {
-            self.apply_kept(&label, &mut file[0], &mut p, &k);
+        if !unused {
+            if let Some(present) = &self.present_objects {
+                let exempt = load.from.to_ascii_lowercase().contains("permwrld")
+                    || key_lc == "terrain"
+                    || key_lc == "kqcamera"
+                    || p.class.as_deref().is_some_and(|c| c.eq_ignore_ascii_case("KQMap"));
+                if !exempt && !present.contains(&key_lc) {
+                    self.gone_skipped.push(p.name.clone());
+                    return;
+                }
+            }
+        }
+        // DESIGN K-2 (world-change.md rules 12, 15) & savefile.md rules 25-26:
+        // a kept/saved object, door, or chest loads with the values it had.
+        if !unused {
+            if let Some(k) = self.kept_doors.get(&key_lc).cloned() {
+                self.apply_kept_fields(
+                    &label,
+                    &mut file[0],
+                    &mut p,
+                    &k.movement,
+                    k.waiting.as_deref(),
+                    k.phase,
+                    &k.placement,
+                    Some(k.collision_type),
+                );
+            } else if let Some(k) = self.kept_chests.get(&key_lc).cloned() {
+                self.apply_kept_fields(
+                    &label,
+                    &mut file[0],
+                    &mut p,
+                    &k.movement,
+                    k.waiting.as_deref(),
+                    k.phase,
+                    &k.placement,
+                    Some(k.collision_type),
+                );
+            } else if let Some(k) = self.kept_states.get(&key_lc).cloned() {
+                self.apply_kept_fields(
+                    &label,
+                    &mut file[0],
+                    &mut p,
+                    &k.movement,
+                    k.waiting.as_deref(),
+                    k.phase,
+                    &k.placement,
+                    k.collision_type,
+                );
+            }
         }
         let s = &file[0];
         let mut character = character_keys.zip(character_list).map(|(keys, list)| {
@@ -4481,6 +4580,12 @@ impl Placer<'_> {
                 empty: remark("Empty"),
             }
         });
+        let key_lc = p.name.to_ascii_lowercase();
+        let is_chest = chest.is_some();
+        let initial_door_state = (!is_chest).then(|| self.kept_doors.get(&key_lc).map(|d| d.state)).flatten();
+        let initial_chest = is_chest.then(|| self.kept_chests.get(&key_lc)).flatten();
+        let initial_chest_state = initial_chest.map(|c| (c.state, c.remembered.clone()));
+        let initial_chest_hidden = initial_chest.map(|c| c.hidden);
         let name_key = |k: &str| s.get(k).map(|v| v.trim().to_string());
         let door = DoorAssets {
             movements: with_index,
@@ -4498,6 +4603,9 @@ impl Placer<'_> {
             bounds: None,
             placement: p,
             chest,
+            initial_door_state,
+            initial_chest_state,
+            initial_chest_hidden,
             object: kind == Mover::Object,
         };
         if let Some(v) = s.get("tooFar") {
@@ -5116,6 +5224,8 @@ impl Placer<'_> {
         }
         // fighting.md rule 31 (M5 5c-8): what the fighters drop.
         named.extend(self.drop_kinds.iter().cloned());
+        // Carried/world item kinds from a restored save or journey.
+        named.extend(self.extra_item_kinds.iter().cloned());
         for (_, text) in &self.all_scripts {
             for line in text.lines() {
                 let w: Vec<&str> = line.split('#').next().unwrap_or("").split_whitespace().collect();
@@ -5559,6 +5669,7 @@ impl Placer<'_> {
             aliases: Vec::new(),
             not_starting_help: crate::talk_view::not_starting_help(self.game),
             arrival_alt_lightmaps: self.arrival_alt_lightmaps,
+            restored_world_items: None,
         }
     }
 }

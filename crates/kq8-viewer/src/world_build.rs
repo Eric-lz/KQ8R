@@ -143,17 +143,31 @@ pub struct WorldChange {
     pub new_game_combat_level: Option<i64>,
     /// Snapshot waiting to be restored by [`WorldChange::restore_save`] (M4 4g-4).
     pub pending_restore: Option<RestoreSave>,
+    /// Target-world pose, camera, time, and events applied right after `build_pending` (M4 4h-2).
+    pub pending_restore_apply: Option<RestoreApply>,
     /// Combat level (`1|2|3`) from a restored save when no `Journey` is attached.
     pub restore_combat_level: Option<i64>,
     /// True while a saved game restore is in progress (`Step::Down` -> `Step::Loading`).
     pub restoring: bool,
 }
 
-/// Cross-world & per-world state prepared from a `save<N>.vol` archive (`submenus.md` rule 11, M4 4g-4).
+/// Cross-world & per-world state prepared from a `save<N>.vol` archive (`submenus.md` rule 11, M4 4g-4, 4h-2).
 pub struct RestoreSave {
     pub journey: Option<Box<Journey>>,
     pub kept: std::collections::BTreeMap<String, KeptWorld>,
     pub combat_level: Option<i64>,
+    pub connor_pos: Option<([f32; 3], f32)>,
+    pub connor_anim: Option<(String, f32)>,
+    pub camera: Option<kq8_core::save_game::SavedCameraState>,
+}
+
+/// Target-world state applied immediately after `build_pending` on save restore (`M4 4h-2`).
+pub struct RestoreApply {
+    pub connor_pos: Option<([f32; 3], f32)>,
+    pub connor_anim: Option<(String, f32)>,
+    pub camera: Option<kq8_core::save_game::SavedCameraState>,
+    pub current_time: Option<f64>,
+    pub pending_events: Vec<String>,
 }
 
 /// What is kept of a world Connor left (6e-8, `world-change.md` rules
@@ -169,6 +183,20 @@ pub struct KeptWorld {
     pub came_in: Vec<String>,
     /// Animated and scripted objects whose state changed (DESIGN K-2).
     pub states: Vec<kq8_core::active::KeptState>,
+    /// Doors whose state/pose/collision changed (`KQDoor`, `savefile.md` rule 25).
+    pub doors: Vec<kq8_core::active::KeptDoorState>,
+    /// Chests whose state/pose/hidden changed (`KQChest`, `savefile.md` rule 26).
+    pub chests: Vec<kq8_core::active::KeptChestState>,
+    /// Loose world items (`WorldInventory.kq`, `savefile.md` rule 16).
+    pub world_items: Option<Vec<kq8_core::item::ItemObject>>,
+    /// World music tune stack (`Music.kq`, `savefile.md` rule 12).
+    pub music_stack: Option<Vec<String>>,
+    /// Saved simulation clock in seconds (`setCurrentTime`, `savefile.md` rule 39).
+    pub current_time: Option<f64>,
+    /// Pending `worldState.kq` timed events (`savefile.md` rule 11).
+    pub pending_events: Vec<String>,
+    /// If `Some`, persistent object names listed in an imported `newWorld.cs` (`savefile.md` rule 39).
+    pub present_objects: Option<std::collections::BTreeSet<String>>,
     /// River controls whose `rustedOne` switch is set (U-10).
     pub rusted_rivers: Vec<String>,
     /// Per-interior `useAlternateLightmap` flags (`object-lighting.md` rule 12).
@@ -192,6 +220,7 @@ impl WorldChange {
     pub fn start_new_game(&mut self, combat_level: i64) {
         self.kept.clear();
         self.pending_restore = None;
+        self.pending_restore_apply = None;
         self.new_game_combat_level = Some(combat_level);
         self.asked = Some(Request {
             world: "Daventry".into(),
@@ -218,6 +247,16 @@ impl WorldChange {
         self.new_game_combat_level = None;
         self.restore_combat_level = restore.combat_level;
         self.restoring = true;
+        let target_kept = restore.kept.get(&world.to_ascii_lowercase());
+        self.pending_restore_apply = Some(RestoreApply {
+            connor_pos: restore.connor_pos,
+            connor_anim: restore.connor_anim.clone(),
+            camera: restore.camera.clone(),
+            current_time: target_kept.and_then(|k| k.current_time),
+            pending_events: target_kept
+                .map(|k| k.pending_events.clone())
+                .unwrap_or_default(),
+        });
         self.pending_restore = Some(restore);
         self.asked = Some(Request {
             world,
@@ -752,12 +791,22 @@ pub fn world_change_step(world: &mut World) {
                 })
             }).flatten();
             // Rules 12-13 (6e-8): the world's variables and what left it.
+            let music_stack = world
+                .get_resource::<sound_view::SoundSim>()
+                .and_then(|s| s.music_stack());
             let kept = (!is_new_game).then(|| {
                 world.get_resource::<crate::door_view::DoorSim>().map(|sim| KeptWorld {
                     vars: sim.active.scripts.vars.iter().filter(|(n, _)| kq8_core::journey::belongs_to_world(n, &from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
                     gone: sim.active.world.gone_names().into_iter().collect(),
                     came_in: sim.active.world.came_in_files(),
                     states: sim.active.world.kept_states(),
+                    doors: sim.active.world.kept_doors(),
+                    chests: sim.active.world.kept_chests(),
+                    world_items: Some(sim.active.world.world_items()),
+                    music_stack,
+                    current_time: Some(sim.active.world.now()),
+                    pending_events: sim.active.world.pending_event_strings(),
+                    present_objects: None,
                     rusted_rivers: sim.active.world.rusted_rivers(),
                     alt_lightmaps: sim.active.world.alt_lightmaps.clone(),
                 })
@@ -856,6 +905,12 @@ pub fn world_change_step(world: &mut World) {
                     kept_maps: Default::default(),
                     rusted_rivers: Vec::new(),
                     alt_lightmaps: Default::default(),
+                    doors: Default::default(),
+                    chests: Default::default(),
+                    world_items: None,
+                    music_stack: None,
+                    present_objects: None,
+                    extra_item_kinds: Vec::new(),
                 })
             } else if journey.is_some() || has_kept || restoring {
                 Some(load::Arrival {
@@ -868,6 +923,15 @@ pub fn world_change_step(world: &mut World) {
                     kept_maps: journey.as_ref().map_or_else(Default::default, |j| j.other_maps.clone()),
                     rusted_rivers: kept.rusted_rivers.clone(),
                     alt_lightmaps: kept.alt_lightmaps.clone(),
+                    doors: kept.doors.iter().map(|d| (d.name.to_ascii_lowercase(), d.clone())).collect(),
+                    chests: kept.chests.iter().map(|c| (c.name.to_ascii_lowercase(), c.clone())).collect(),
+                    world_items: kept.world_items.clone(),
+                    music_stack: kept.music_stack.clone(),
+                    present_objects: kept.present_objects.clone(),
+                    extra_item_kinds: journey
+                        .as_ref()
+                        .map(|j| j.items.iter().map(|i| i.kind.clone()).collect())
+                        .unwrap_or_default(),
                 })
             } else {
                 None
@@ -965,8 +1029,9 @@ pub fn world_change_step(world: &mut World) {
             // the asked one.
             let new_game_lvl = world.resource_mut::<WorldChange>().new_game_combat_level.take();
             let restore_lvl = world.resource_mut::<WorldChange>().restore_combat_level.take();
-            let was_restoring = std::mem::take(&mut world.resource_mut::<WorldChange>().restoring);
-            if new_game_lvl.is_some() {
+            let _was_restoring = std::mem::take(&mut world.resource_mut::<WorldChange>().restoring);
+            let restore_apply = world.resource_mut::<WorldChange>().pending_restore_apply.take();
+            if new_game_lvl.is_some() || restore_apply.as_ref().is_some_and(|a| a.connor_pos.is_some()) {
                 world.resource_mut::<connor_view::StartAt>().0 = None;
             } else if let Some(at) = request.portal.as_ref().and_then(|p| p.on_ground()).or(request.at) {
                 world.resource_mut::<connor_view::StartAt>().0 = Some(at);
@@ -986,10 +1051,38 @@ pub fn world_change_step(world: &mut World) {
             world.resource_mut::<PendingWorld>().0 = Some((read, opts));
             build_pending(world);
             give_journey(world, journey.as_deref(), &request.world, &log);
-            // Rule 9: `Begin` on every normal arrival, not on save restore (`submenus.md` rule 11).
-            if !was_restoring {
-                world.insert_resource(BeginNow(request.world.clone()));
+            if let Some(apply) = restore_apply {
+                if apply.current_time.is_some() || !apply.pending_events.is_empty() {
+                    if let Some(mut sim) = world.get_resource_mut::<crate::door_view::DoorSim>() {
+                        if let Some(t) = apply.current_time {
+                            sim.active.world.set_current_time(t);
+                        }
+                        if !apply.pending_events.is_empty() {
+                            sim.active.world.restore_event_strings(&apply.pending_events);
+                        }
+                    }
+                }
+                if let Some((pos, heading)) = apply.connor_pos {
+                    if let Some(mut c) = world.get_resource_mut::<connor_view::ConnorSim>() {
+                        let anim = apply
+                            .connor_anim
+                            .as_ref()
+                            .map(|(n, p)| (n.as_str(), *p));
+                        c.apply_exact_pose(pos, heading, anim);
+                    }
+                }
+                let connor_base = world
+                    .get_resource::<connor_view::ConnorSim>()
+                    .map(|c| (c.mover.position, c.walker.heading));
+                if let Some(saved_cam) = &apply.camera {
+                    if let Some(mut cam) = world.get_resource_mut::<crate::game_camera::GameCam>() {
+                        cam.restore(saved_cam, connor_base);
+                    }
+                }
             }
+            // `savefile.md` rule 40 & `world-change.md` rule 9: `world.cs <World> Begin`
+            // runs after `RestoreWorld` too; saved `WorldVar.cs` guards prevent cutscenes replaying.
+            world.insert_resource(BeginNow(request.world.clone()));
             if let Some(p) = request.portal {
                 log.lock().unwrap().summary(format!("world change: arriving through {}: ConLoc {:?}, CamLoc {:?}, exitAnim {:?} ({:?}), exitScript {:?} (world-change.md rules 6, 20)", p.portal, p.con_loc, p.cam_loc, p.exit_anim, p.exit_list, p.exit_script));
                 world.insert_resource(crate::portal_view::ArrivalNow::new(*p));

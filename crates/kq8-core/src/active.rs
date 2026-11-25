@@ -67,9 +67,9 @@ use kq8_data::world_script::Vars;
 use crate::chest::{Chest, ChestState};
 use crate::click::{distance_to_box, ray_box, CLICKABLE};
 use crate::collide::{pair_collides, BoxCollider, ColliderKind, Placement, CONNOR_MASK, CONNOR_TYPE};
-use crate::door::{turn_degrees, Door};
+use crate::door::{turn_degrees, Door, DoorState};
 use crate::events::{EventQueue, Pending};
-use crate::item::{Accepts, Items, Place};
+use crate::item::{Accepts, ItemObject, Items, Place};
 use crate::music::MusicRequest;
 use crate::named_anim::{NamedAnimPlayer, Request as AnimRequest, Started};
 use crate::script::{looks_like_number, number_value, ScriptHost, Scripts};
@@ -456,6 +456,32 @@ pub struct KeptState {
     /// Scripted objects only (`objects`); animated objects' collision
     /// type is not tracked.
     pub collision_type: Option<u32>,
+}
+
+/// Saved/kept state of a `KQDoor` (`savefile.md` rule 25, M4 step 4h-2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeptDoorState {
+    pub name: String,
+    pub state: DoorState,
+    pub movement: String,
+    pub phase: f32,
+    pub waiting: Option<String>,
+    pub placement: Placement,
+    pub collision_type: u32,
+}
+
+/// Saved/kept state of a `KQChest` (`savefile.md` rule 26, M4 step 4h-2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeptChestState {
+    pub name: String,
+    pub state: ChestState,
+    pub remembered: Option<String>,
+    pub movement: String,
+    pub phase: f32,
+    pub waiting: Option<String>,
+    pub placement: Placement,
+    pub hidden: bool,
+    pub collision_type: u32,
 }
 
 /// A `KQCueEvent`'s script arguments (`doors.md` rule 23): `Cue`, its first
@@ -1209,6 +1235,76 @@ impl WorldState {
 
     pub fn now(&self) -> f64 {
         self.updates as f64 / crate::UPDATES_PER_SECOND
+    }
+
+    /// Restores the world clock (`setCurrentTime <seconds>` in `newWorld.cs`, `savefile.md` rule 39).
+    pub fn set_current_time(&mut self, secs: f64) {
+        self.updates = (secs.max(0.0) * crate::UPDATES_PER_SECOND).round() as u64;
+    }
+
+    /// Current door states for save/kept-world snapshots (`savefile.md` rule 25).
+    pub fn kept_doors(&self) -> Vec<KeptDoorState> {
+        self.doors
+            .iter()
+            .filter(|d| !d.gone)
+            .map(|d| KeptDoorState {
+                name: d.door.name.clone(),
+                state: d.door.state,
+                movement: d.door.movement_name().to_string(),
+                phase: d.door.player.phase,
+                waiting: d.door.player.waiting.clone(),
+                placement: d.door.player.base,
+                collision_type: d.collision_type,
+            })
+            .collect()
+    }
+
+    /// Current chest states for save/kept-world snapshots (`savefile.md` rule 26).
+    pub fn kept_chests(&self) -> Vec<KeptChestState> {
+        self.chests
+            .iter()
+            .filter(|c| !c.gone)
+            .map(|c| KeptChestState {
+                name: c.chest.name.clone(),
+                state: c.chest.state,
+                remembered: c.chest.remembered.clone(),
+                movement: c.chest.movement_name().to_string(),
+                phase: c.chest.player.phase,
+                waiting: c.chest.player.waiting.clone(),
+                placement: c.chest.player.base,
+                hidden: c.hidden,
+                collision_type: c.collision_type,
+            })
+            .collect()
+    }
+
+    /// All loose/dropped items currently in the world (`WorldInventory.kq`, `savefile.md` rule 16).
+    pub fn world_items(&self) -> Vec<ItemObject> {
+        self.items
+            .objects
+            .iter()
+            .filter(|o| o.in_world())
+            .cloned()
+            .collect()
+    }
+
+    /// Pending timed events in `worldState.kq` string form (`savefile.md` rule 11).
+    pub fn pending_event_strings(&self) -> Vec<String> {
+        self.queue
+            .pending()
+            .iter()
+            .map(crate::events::format_kq_event)
+            .collect()
+    }
+
+    /// Re-queues saved `worldState.kq` event strings (`savefile.md` rule 11).
+    pub fn restore_event_strings(&mut self, events: &[String]) {
+        for raw in events {
+            if let Some((due, target, kind, data)) = crate::events::parse_kq_event(raw) {
+                self.queue
+                    .push_raw(due, target, kind, data, "worldState.kq restore".into());
+            }
+        }
     }
 
     /// `potions.md` rule 26 (M5 5g-6, 5g-9): where the characters are

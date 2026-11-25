@@ -61,6 +61,52 @@ impl EventQueue {
     pub fn is_empty(&self) -> bool {
         self.waiting.is_empty()
     }
+
+    /// Pending events waiting in the queue (`savefile.md` rule 11).
+    pub fn pending(&self) -> &[Pending] {
+        &self.waiting
+    }
+
+    /// Re-queues an event at an exact absolute world time `due`.
+    pub fn push_raw(&mut self, due: f64, target: String, kind: String, data: Vec<String>, from: String) {
+        self.waiting.push(Pending {
+            due,
+            seq: self.next_seq,
+            target,
+            kind,
+            data,
+            from,
+        });
+        self.next_seq += 1;
+    }
+}
+
+/// Formats a pending event in `KQWorldState` `KQEvent` string form
+/// (`savefile.md` rule 6: `"KQCueEvent Connor 308.749695 2300 144 (null)"`).
+pub fn format_kq_event(e: &Pending) -> String {
+    if e.kind.eq_ignore_ascii_case("KQCueEvent") {
+        let a0 = e.data.first().map_or("0", String::as_str);
+        let a1 = e.data.get(1).map_or("0", String::as_str);
+        let a2 = e.data.get(2).map_or("(null)", String::as_str);
+        format!("{} {} {:.6} {} {} {}", e.kind, e.target, e.due, a0, a1, a2)
+    } else if e.data.is_empty() {
+        format!("{} {} {:.6}", e.kind, e.target, e.due)
+    } else {
+        format!("{} {} {:.6} {}", e.kind, e.target, e.due, e.data.join(" "))
+    }
+}
+
+/// Parses a `KQWorldState` `KQEvent` string back into `(due, target, kind, data)`.
+pub fn parse_kq_event(s: &str) -> Option<(f64, String, String, Vec<String>)> {
+    let mut parts = s.split_whitespace();
+    let kind = parts.next()?.to_string();
+    let target = parts.next()?.to_string();
+    let due = parts.next()?.parse::<f64>().ok()?;
+    let mut data: Vec<String> = parts.map(str::to_string).collect();
+    if kind.eq_ignore_ascii_case("KQCueEvent") && data.last().is_some_and(|w| w == "(null)") {
+        data.pop();
+    }
+    Some((due, target, kind, data))
 }
 
 #[cfg(test)]
@@ -81,5 +127,20 @@ mod tests {
         assert_eq!(names(&mut q, 1.0 + 2.0 / 15.0), ["soon"]);
         assert_eq!(names(&mut q, 2.0), ["late"]);
         assert!(q.is_empty());
+    }
+
+    #[test]
+    fn round_trips_kq_event_strings() {
+        let mut q = EventQueue::default();
+        let parsed = parse_kq_event("KQCueEvent Connor 308.749695 2300 144 (null)").unwrap();
+        assert!((parsed.0 - 308.749695).abs() < 1e-6);
+        assert_eq!(parsed.1, "Connor");
+        assert_eq!(parsed.2, "KQCueEvent");
+        assert_eq!(parsed.3, vec!["2300", "144"]);
+        q.push_raw(parsed.0, parsed.1, parsed.2, parsed.3, "restore".into());
+        assert_eq!(
+            format_kq_event(&q.pending()[0]),
+            "KQCueEvent Connor 308.749695 2300 144 (null)"
+        );
     }
 }

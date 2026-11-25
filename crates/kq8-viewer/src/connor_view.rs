@@ -395,6 +395,32 @@ impl ConnorSim {
     fn drawn(&self, name: &str) -> Option<&DrawnMovement> {
         find(&self.movements, self.weapon_set.as_deref(), name).or_else(|| self.movements.iter().find(|m| m.name.eq_ignore_ascii_case(name)))
     }
+
+    /// Snapshot of Connor's current animation movement name and phase (`savefile.md` rule 18).
+    pub fn snapshot_anim(&self) -> (String, f32) {
+        (self.walker.movement.to_string(), self.walker.phase)
+    }
+
+    /// Restores Connor's exact 3D position, heading, and optional animation phase without
+    /// snapping to the lowest floor polygon (`savefile.md` rules 18, 40).
+    pub fn apply_exact_pose(&mut self, pos: [f32; 3], heading: f32, anim: Option<(&str, f32)>) {
+        let balls = self.mover.balls.clone();
+        self.mover = Mover::new(pos, self.mover.use_gravity);
+        self.mover.balls = balls;
+        self.walker = Walker::new(heading);
+        if let Some((name, phase)) = anim {
+            if let Some(m) = (!name.is_empty()).then(|| self.drawn(name)).flatten() {
+                self.walker.movement = kq8_core::connor::intern(&m.name);
+                self.walker.phase = phase.clamp(0.0, 1.0);
+            }
+        }
+        self.previous = (pos, heading, 0.0, 0.0);
+        self.current = self.previous;
+        self.log.detail(format!(
+            "connor restore: exact pose ({:.1}, {:.1}, {:.1}) heading {:.3} anim '{}' phase {:.4}",
+            pos[0], pos[1], pos[2], heading, self.walker.movement, self.walker.phase
+        ));
+    }
 }
 
 #[derive(Component)]

@@ -129,6 +129,72 @@ impl GameCam {
         self.cam.position
     }
 
+    /// Snapshots the camera state for saving (`KQCamera`, `savefile.md` rule 19).
+    pub fn snapshot(&self) -> kq8_core::save_game::SavedCameraState {
+        kq8_core::save_game::SavedCameraState {
+            position: self.cam.position,
+            heading: self.cam.heading,
+            view_tilt: self.cam.view_tilt,
+            tilt: self.cam.tilt,
+            roll: self.view.roll,
+            following: self.following,
+            follow_object: if self.following { Some("Connor".into()) } else { None },
+            range: self.cam.range,
+            mode_fixed: matches!(self.cam.mode, Mode::Fixed { .. }),
+            first_person: false,
+            hold: self.cam.hold,
+            offset: [0.0; 3],
+        }
+    }
+
+    /// Restores the saved camera pose and state directly without running a start-of-world
+    /// stand-in jump behind Connor (`savefile.md` rules 19, 40).
+    pub fn restore(
+        &mut self,
+        s: &kq8_core::save_game::SavedCameraState,
+        connor_base: Option<([f32; 3], f32)>,
+    ) {
+        self.cam.position = s.position;
+        self.cam.heading = wrap(s.heading);
+        self.cam.view_tilt = s.view_tilt;
+        self.cam.tilt = s.tilt;
+        self.view = View {
+            tilt: s.view_tilt,
+            heading: self.cam.heading,
+            roll: s.roll,
+            locked: false,
+        };
+        self.roll_before = s.roll;
+        self.following = s.following;
+        self.places = s.following;
+        self.aims = s.following;
+        self.cam.range = s.range;
+        self.cam.hold = s.hold;
+        self.cam.mode = if s.mode_fixed {
+            let dist = connor_base.map_or(s.range.0, |(b, _)| {
+                let aim = Camera::aim_for(b);
+                ((s.position[0] - aim[0]).powi(2)
+                    + (s.position[1] - aim[1]).powi(2)
+                    + (s.position[2] - aim[2]).powi(2))
+                .sqrt()
+            });
+            Mode::Fixed { distance: dist.clamp(s.range.0, s.range.1) }
+        } else {
+            Mode::Normal
+        };
+        self.cam.placed();
+        self.current = (s.position, s.view_tilt, self.cam.heading);
+        self.previous = self.current;
+        self.flight = None;
+        self.flight_fresh = false;
+        self.pending.clear();
+        self.last_connor = connor_base;
+        self.log.detail(format!(
+            "camera restore: pos ({:.1}, {:.1}, {:.1}) heading {:.3} view_tilt {:+.3} tilt {:+.3} following {} hold {}",
+            s.position[0], s.position[1], s.position[2], self.cam.heading, self.cam.view_tilt, self.cam.tilt, self.following, self.cam.hold
+        ));
+    }
+
     /// `KQCamera::setRange` from a script (M3 step 3d-3); false = refused.
     pub fn set_range(&mut self, min: f32, max: f32) -> bool {
         let old = self.cam.range;

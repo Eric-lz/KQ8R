@@ -44,6 +44,27 @@ impl DoorState {
             DoorState::Closing => "closing",
         }
     }
+
+    /// Binary `PERS` `KQDoor::state` encoding (`savefile.md` rule 25;
+    /// `1` = Opened, `2` = Closed observed across 735 chunks; `0`/`3` = Opening/Closing).
+    pub fn from_pers(v: i32) -> Self {
+        match v {
+            0 => DoorState::Opening,
+            1 => DoorState::Opened,
+            2 => DoorState::Closed,
+            3 => DoorState::Closing,
+            _ => DoorState::Closed,
+        }
+    }
+
+    pub fn to_pers(self) -> i32 {
+        match self {
+            DoorState::Opening => 0,
+            DoorState::Opened => 1,
+            DoorState::Closed => 2,
+            DoorState::Closing => 3,
+        }
+    }
 }
 
 /// `cueN=<phase> <action…>` of a movement.
@@ -386,6 +407,12 @@ impl Door {
     /// whatever that movement is (rule 1).
     pub fn new(name: &str, movements: Vec<DoorMovement>, current: usize, base: Placement) -> Self {
         Door { name: name.to_string(), state: DoorState::Closed, player: NamedAnimPlayer::new(name, movements, current, base) }
+    }
+
+    /// Restores the saved door state (`savefile.md` rule 25).
+    pub fn with_state(mut self, state: DoorState) -> Self {
+        self.state = state;
+        self
     }
 
     pub fn movement(&self) -> Option<&DoorMovement> {

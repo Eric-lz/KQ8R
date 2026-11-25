@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use kq8_data::magic_map::{MapIcon, MapKeys};
 
-use crate::active::KeptState;
+use crate::active::{KeptChestState, KeptDoorState, KeptState};
 use crate::collide::Placement;
 use crate::item::{ItemObject, Place};
 use crate::journey::Journey;
@@ -21,6 +21,23 @@ use crate::weapons::WeaponMode;
 
 const MAGIC_HEADER: &str = "KQ8R_SAVE_V1";
 
+/// Saved camera state (`KQCamera.kq`, `savefile.md` rule 13, M4 step 4h-2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SavedCameraState {
+    pub position: [f32; 3],
+    pub heading: f32,
+    pub view_tilt: f32,
+    pub tilt: f32,
+    pub roll: f32,
+    pub following: bool,
+    pub follow_object: Option<String>,
+    pub range: (f32, f32),
+    pub mode_fixed: bool,
+    pub first_person: bool,
+    pub hold: bool,
+    pub offset: [f32; 3],
+}
+
 /// Serializable snapshot of a visited world (`world_build::KeptWorld`).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct KeptWorldSnapshot {
@@ -28,6 +45,13 @@ pub struct KeptWorldSnapshot {
     pub gone: BTreeSet<String>,
     pub came_in: Vec<String>,
     pub states: Vec<KeptState>,
+    pub doors: Vec<KeptDoorState>,
+    pub chests: Vec<KeptChestState>,
+    pub world_items: Option<Vec<ItemObject>>,
+    pub music_stack: Option<Vec<String>>,
+    pub current_time: Option<f64>,
+    pub pending_events: Vec<String>,
+    pub present_objects: Option<BTreeSet<String>>,
     pub rusted_rivers: Vec<String>,
     pub alt_lightmaps: BTreeMap<String, bool>,
 }
@@ -37,6 +61,9 @@ pub struct KeptWorldSnapshot {
 pub struct SavedWorldSnapshot {
     pub world: String,
     pub connor_at: Option<[f32; 3]>,
+    pub connor_pos: Option<([f32; 3], f32)>,
+    pub connor_anim: Option<(String, f32)>,
+    pub camera: Option<SavedCameraState>,
     pub journey: Journey,
     pub kept_worlds: BTreeMap<String, KeptWorldSnapshot>,
 }
@@ -211,6 +238,37 @@ impl SavedWorldSnapshot {
         if let Some([x, y, h]) = self.connor_at {
             out.push_str(&format!("connor_at\t{}\t{}\t{}\n", x.to_bits(), y.to_bits(), h.to_bits()));
         }
+        if let Some(([x, y, z], h)) = self.connor_pos {
+            out.push_str(&format!(
+                "connor_pos\t{}\t{}\t{}\t{}\n",
+                x.to_bits(),
+                y.to_bits(),
+                z.to_bits(),
+                h.to_bits()
+            ));
+        }
+        if let Some((anim, phase)) = &self.connor_anim {
+            out.push_str(&format!("connor_anim\t{}\t{}\n", esc(anim), phase.to_bits()));
+        }
+        if let Some(cam) = &self.camera {
+            out.push_str(&format!(
+                "camera\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                fmt_f32_slice(&cam.position),
+                cam.heading.to_bits(),
+                cam.view_tilt.to_bits(),
+                cam.tilt.to_bits(),
+                cam.roll.to_bits(),
+                u8::from(cam.following),
+                fmt_opt_str(&cam.follow_object),
+                cam.range.0.to_bits(),
+                cam.range.1.to_bits(),
+                u8::from(cam.mode_fixed),
+                u8::from(cam.first_person),
+                u8::from(cam.hold),
+                fmt_f32_slice(&cam.offset),
+                0u8,
+            ));
+        }
 
         let j = &self.journey;
         out.push_str(&format!(
@@ -234,6 +292,9 @@ impl SavedWorldSnapshot {
             j.shoot_offset[1].to_bits(),
             j.shoot_offset[2].to_bits(),
         ));
+        if let Some(raw_wf) = j.raw_world_flags {
+            out.push_str(&format!("raw_world_flags\t{raw_wf}\n"));
+        }
         if let Some(h) = &j.hand {
             out.push_str(&format!("hand\t{}\n", esc(h)));
         }
@@ -373,6 +434,66 @@ impl SavedWorldSnapshot {
                     col_s,
                 ));
             }
+            for d in &kw.doors {
+                let rot_flat: Vec<f32> = d.placement.rotation.iter().flatten().copied().collect();
+                out.push_str(&format!(
+                    "kw_door\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                    esc(wname),
+                    esc(&d.name),
+                    d.state.to_pers(),
+                    esc(&d.movement),
+                    d.phase.to_bits(),
+                    fmt_opt_str(&d.waiting),
+                    fmt_f32_slice(&d.placement.position),
+                    fmt_f32_slice(&rot_flat),
+                    d.collision_type,
+                ));
+            }
+            for c in &kw.chests {
+                let rot_flat: Vec<f32> = c.placement.rotation.iter().flatten().copied().collect();
+                out.push_str(&format!(
+                    "kw_chest\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                    esc(wname),
+                    esc(&c.name),
+                    c.state.to_pers(),
+                    fmt_opt_str(&c.remembered),
+                    esc(&c.movement),
+                    c.phase.to_bits(),
+                    fmt_opt_str(&c.waiting),
+                    fmt_f32_slice(&c.placement.position),
+                    fmt_f32_slice(&rot_flat),
+                    u8::from(c.hidden),
+                    c.collision_type,
+                ));
+            }
+            if let Some(items) = &kw.world_items {
+                out.push_str(&format!("kw_witems_present\t{}\n", esc(wname)));
+                for item in items {
+                    out.push_str(&format!(
+                        "kw_witem\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                        esc(wname),
+                        esc(&item.name),
+                        esc(&item.kind),
+                        item.quantity,
+                        item.third,
+                        fmt_place(&item.place),
+                        u8::from(item.hidden),
+                        fmt_opt_str(&item.script),
+                        u8::from(item.do_not_point_at),
+                        item.added,
+                    ));
+                }
+            }
+            if let Some(stack) = &kw.music_stack {
+                let joined: Vec<String> = stack.iter().map(|s| esc(s)).collect();
+                out.push_str(&format!("kw_music\t{}\t{}\n", esc(wname), joined.join(",")));
+            }
+            if let Some(t) = kw.current_time {
+                out.push_str(&format!("kw_time\t{}\t{}\n", esc(wname), t.to_bits()));
+            }
+            for ev in &kw.pending_events {
+                out.push_str(&format!("kw_event\t{}\t{}\n", esc(wname), esc(ev)));
+            }
         }
         out
     }
@@ -402,6 +523,9 @@ impl SavedWorldSnapshot {
 
         let mut world = String::new();
         let mut connor_at: Option<[f32; 3]> = None;
+        let mut connor_pos: Option<([f32; 3], f32)> = None;
+        let mut connor_anim: Option<(String, f32)> = None;
+        let mut camera: Option<SavedCameraState> = None;
         let mut journey = Journey {
             from: String::new(),
             stats: None,
@@ -417,6 +541,7 @@ impl SavedWorldSnapshot {
             flags: BTreeMap::new(),
             in_temple4: false,
             immunities: 0,
+            raw_world_flags: None,
             map_marks: ConnorMapMarks::default(),
             map_view: START_VIEW,
             other_maps: BTreeMap::new(),
@@ -448,6 +573,35 @@ impl SavedWorldSnapshot {
                         parse_f32_bits(f[3])?,
                     ]);
                 }
+                "connor_pos" if f.len() >= 5 => {
+                    connor_pos = Some((
+                        [
+                            parse_f32_bits(f[1])?,
+                            parse_f32_bits(f[2])?,
+                            parse_f32_bits(f[3])?,
+                        ],
+                        parse_f32_bits(f[4])?,
+                    ));
+                }
+                "connor_anim" if f.len() >= 3 => {
+                    connor_anim = Some((unesc(f[1]), parse_f32_bits(f[2])?));
+                }
+                "camera" if f.len() >= 14 => {
+                    camera = Some(SavedCameraState {
+                        position: parse_f32_hex_or_dec::<3>(f[1])?,
+                        heading: parse_f32_bits(f[2])?,
+                        view_tilt: parse_f32_bits(f[3])?,
+                        tilt: parse_f32_bits(f[4])?,
+                        roll: parse_f32_bits(f[5])?,
+                        following: parse_bool(f[6]),
+                        follow_object: parse_opt_str(f[7]),
+                        range: (parse_f32_bits(f[8])?, parse_f32_bits(f[9])?),
+                        mode_fixed: parse_bool(f[10]),
+                        first_person: parse_bool(f[11]),
+                        hold: parse_bool(f[12]),
+                        offset: parse_f32_hex_or_dec::<3>(f[13])?,
+                    });
+                }
                 "journey" if f.len() >= 19 => {
                     journey.from = unesc(f[1]);
                     journey.combat_level = parse_f32_bits(f[2])?;
@@ -469,6 +623,9 @@ impl SavedWorldSnapshot {
                         parse_f32_bits(f[17])?,
                         parse_f32_bits(f[18])?,
                     ];
+                }
+                "raw_world_flags" if f.len() >= 2 => {
+                    journey.raw_world_flags = f[1].parse().ok();
                 }
                 "hand" if f.len() >= 2 => journey.hand = Some(unesc(f[1])),
                 "weapon_ready" if f.len() >= 2 => journey.weapon_ready = Some(unesc(f[1])),
@@ -644,6 +801,93 @@ impl SavedWorldSnapshot {
                         collision_type,
                     });
                 }
+                "kw_door" if f.len() >= 10 => {
+                    let state_n: i32 = f[3].parse().map_err(|_| "bad door state")?;
+                    let pos = parse_f32_hex_or_dec::<3>(f[7])?;
+                    let rot_flat = parse_f32_hex_or_dec::<9>(f[8])?;
+                    let rotation = [
+                        [rot_flat[0], rot_flat[1], rot_flat[2]],
+                        [rot_flat[3], rot_flat[4], rot_flat[5]],
+                        [rot_flat[6], rot_flat[7], rot_flat[8]],
+                    ];
+                    let collision_type: u32 = f[9].parse().map_err(|_| "bad door collision_type")?;
+                    kept_worlds.entry(unesc(f[1])).or_default().doors.push(KeptDoorState {
+                        name: unesc(f[2]),
+                        state: crate::door::DoorState::from_pers(state_n),
+                        movement: unesc(f[4]),
+                        phase: parse_f32_bits(f[5])?,
+                        waiting: parse_opt_str(f[6]),
+                        placement: Placement { rotation, position: pos },
+                        collision_type,
+                    });
+                }
+                "kw_chest" if f.len() >= 12 => {
+                    let state_n: i32 = f[3].parse().map_err(|_| "bad chest state")?;
+                    let pos = parse_f32_hex_or_dec::<3>(f[8])?;
+                    let rot_flat = parse_f32_hex_or_dec::<9>(f[9])?;
+                    let rotation = [
+                        [rot_flat[0], rot_flat[1], rot_flat[2]],
+                        [rot_flat[3], rot_flat[4], rot_flat[5]],
+                        [rot_flat[6], rot_flat[7], rot_flat[8]],
+                    ];
+                    let collision_type: u32 = f[11].parse().map_err(|_| "bad chest collision_type")?;
+                    kept_worlds.entry(unesc(f[1])).or_default().chests.push(KeptChestState {
+                        name: unesc(f[2]),
+                        state: crate::chest::ChestState::from_pers(state_n),
+                        remembered: parse_opt_str(f[4]),
+                        movement: unesc(f[5]),
+                        phase: parse_f32_bits(f[6])?,
+                        waiting: parse_opt_str(f[7]),
+                        placement: Placement { rotation, position: pos },
+                        hidden: parse_bool(f[10]),
+                        collision_type,
+                    });
+                }
+                "kw_witems_present" if f.len() >= 2 => {
+                    kept_worlds
+                        .entry(unesc(f[1]))
+                        .or_default()
+                        .world_items
+                        .get_or_insert_with(Vec::new);
+                }
+                "kw_witem" if f.len() >= 11 => {
+                    let item = ItemObject {
+                        name: unesc(f[2]),
+                        kind: unesc(f[3]),
+                        quantity: f[4].parse().map_err(|_| "bad item quantity")?,
+                        third: f[5].parse().map_err(|_| "bad item third")?,
+                        place: parse_place(f[6])?,
+                        hidden: parse_bool(f[7]),
+                        script: parse_opt_str(f[8]),
+                        do_not_point_at: parse_bool(f[9]),
+                        added: f[10].parse().map_err(|_| "bad item added")?,
+                    };
+                    kept_worlds
+                        .entry(unesc(f[1]))
+                        .or_default()
+                        .world_items
+                        .get_or_insert_with(Vec::new)
+                        .push(item);
+                }
+                "kw_music" if f.len() >= 3 => {
+                    let stack = if f[2].is_empty() {
+                        Vec::new()
+                    } else {
+                        f[2].split(',').map(unesc).collect()
+                    };
+                    kept_worlds.entry(unesc(f[1])).or_default().music_stack = Some(stack);
+                }
+                "kw_time" if f.len() >= 3 => {
+                    kept_worlds.entry(unesc(f[1])).or_default().current_time =
+                        Some(parse_f64_bits(f[2])?);
+                }
+                "kw_event" if f.len() >= 3 => {
+                    kept_worlds
+                        .entry(unesc(f[1]))
+                        .or_default()
+                        .pending_events
+                        .push(unesc(f[2]));
+                }
                 other => return Err(format!("unknown record '{other}' in kq8r_state.txt")),
             }
         }
@@ -653,6 +897,9 @@ impl SavedWorldSnapshot {
         Ok(SavedWorldSnapshot {
             world,
             connor_at,
+            connor_pos,
+            connor_anim,
+            camera,
             journey,
             kept_worlds,
         })
@@ -662,6 +909,8 @@ impl SavedWorldSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chest::ChestState;
+    use crate::door::DoorState;
     use crate::magic_map::TELEPORT_MARKS;
 
     #[test]
@@ -682,12 +931,65 @@ mod tests {
             placement: Placement::at([100.0, 200.0, 300.0]),
             collision_type: Some(0x20),
         });
+        kept.doors.push(KeptDoorState {
+            name: "Condoor".into(),
+            state: DoorState::Opened,
+            movement: "opened".into(),
+            phase: 1.0,
+            waiting: None,
+            placement: Placement::at([151450.0, 179125.0, 6220.0]),
+            collision_type: 0x05,
+        });
+        kept.chests.push(KeptChestState {
+            name: "smlchst1".into(),
+            state: ChestState::Open,
+            remembered: Some("INVITEM_Coins".into()),
+            movement: "open".into(),
+            phase: 1.0,
+            waiting: None,
+            placement: Placement::at([150000.0, 180000.0, 6220.0]),
+            hidden: false,
+            collision_type: 0x05,
+        });
+        kept.world_items = Some(vec![ItemObject {
+            name: "NoName9".into(),
+            kind: "INVITEM_Coins".into(),
+            quantity: 5,
+            third: -1,
+            place: Place::World {
+                position: [150000.0, 180000.0, 6220.0],
+                angles: [0.0, 0.0, 0.0],
+            },
+            hidden: false,
+            script: None,
+            do_not_point_at: false,
+            added: 0,
+        }]);
+        kept.music_stack = Some(vec!["Daventry.mid".into()]);
+        kept.current_time = Some(42.5);
+        kept.pending_events.push("KQCueEvent Connor 45.0 2300 144 (null)".into());
         let mut kept_worlds = BTreeMap::new();
         kept_worlds.insert("daventry".into(), kept);
 
         let snap = SavedWorldSnapshot {
             world: "Daventry".into(),
             connor_at: Some([193000.0, 193000.0, 3.1416]),
+            connor_pos: Some(([193000.0, 193000.0, 6220.0], 3.1416)),
+            connor_anim: Some(("stand".into(), 0.25)),
+            camera: Some(SavedCameraState {
+                position: [192500.0, 192200.0, 6600.0],
+                heading: 3.1416,
+                view_tilt: 0.1,
+                tilt: -0.05,
+                roll: 0.0,
+                following: true,
+                follow_object: Some("Connor".into()),
+                range: (300.0, 1500.0),
+                mode_fixed: false,
+                first_person: false,
+                hold: false,
+                offset: [0.0, 0.0, 0.0],
+            }),
             journey: Journey {
                 from: "Daventry".into(),
                 stats: Some(ConnorStats {
@@ -716,6 +1018,7 @@ mod tests {
                 flags,
                 in_temple4: false,
                 immunities: 0x04,
+                raw_world_flags: Some(0x8),
                 map_marks: ConnorMapMarks {
                     visited: [true, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false],
                     teleport_earned: [true; TELEPORT_MARKS],

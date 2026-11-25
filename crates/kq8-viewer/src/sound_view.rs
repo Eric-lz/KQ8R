@@ -55,6 +55,13 @@ impl SoundSim {
         self.output.is_none()
     }
 
+    /// Current world-music tune stack, bottom first (`KQMusic`, `savefile.md` rule 12).
+    pub fn music_stack(&self) -> Option<Vec<String>> {
+        self.music
+            .as_ref()
+            .map(|m| m.tunes.iter().map(|t| t.name.clone()).collect())
+    }
+
     /// Pauses or resumes world sound groups 0, 2, 3, and 5 (`sound.md` rule 54,
     /// `main-menu.md` rules 7.2, 8, 9).
     pub fn set_game_paused(&mut self, paused: bool) {

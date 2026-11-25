@@ -41,6 +41,25 @@ impl ChestState {
             ChestState::Empty => "empty",
         }
     }
+
+    /// Binary `PERS` `KQChest::chestState` encoding (`savefile.md` rule 26;
+    /// `0` = Closed, `2` = Empty observed across 52 chunks; `1` = Open).
+    pub fn from_pers(v: i32) -> Self {
+        match v {
+            0 => ChestState::Closed,
+            1 => ChestState::Open,
+            2 => ChestState::Empty,
+            _ => ChestState::Closed,
+        }
+    }
+
+    pub fn to_pers(self) -> i32 {
+        match self {
+            ChestState::Closed => 0,
+            ChestState::Open => 1,
+            ChestState::Empty => 2,
+        }
+    }
 }
 
 /// A remark's six numbers: `Msg`, `Noun`, `Verb`, `Case`, `Seq`, `End`
@@ -83,6 +102,13 @@ impl Chest {
     /// Closed, showing movement `current` at its start (rule 2).
     pub fn new(name: &str, settings: ChestSettings, movements: Vec<DoorMovement>, current: usize, base: Placement) -> Self {
         Chest { name: name.to_string(), state: ChestState::Closed, settings, remembered: None, player: NamedAnimPlayer::new(name, movements, current, base) }
+    }
+
+    /// Restores the saved chest state and remembered item name (`savefile.md` rule 26).
+    pub fn with_restored(mut self, state: ChestState, remembered: Option<String>) -> Self {
+        self.state = state;
+        self.remembered = remembered;
+        self
     }
 
     pub fn movement_name(&self) -> &str {

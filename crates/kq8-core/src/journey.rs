@@ -77,6 +77,8 @@ pub struct Journey {
     pub god_mode: bool,
     pub ai_off: bool,
     pub allow_shadows: bool,
+    /// Raw `KQConner::worldFlags` preserved from original `Mask.exe` saves (`savefile.md` rule 37, `Q208`).
+    pub raw_world_flags: Option<i32>,
     /// The game-wide script variables (rule 13): name, value.
     pub vars: Vec<(String, String)>,
 }
@@ -123,6 +125,7 @@ impl Journey {
             god_mode: w.god_mode,
             ai_off: w.ai_off,
             allow_shadows: w.allow_shadows,
+            raw_world_flags: None,
             vars: vars.iter().filter(|(n, _)| !belongs_to_world(n, from)).map(|(n, v)| (n.to_string(), v.to_string())).collect(),
         }
     }

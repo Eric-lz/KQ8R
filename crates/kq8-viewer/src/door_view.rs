@@ -615,14 +615,17 @@ pub fn spawn_doors(
         if let Some(settings) = d.chest.clone() {
             // A chest (3e-4).
             let mut chest = Chest::new(&p.name, settings, movements, d.current, base);
-            chest.player = chest.player.with_names_at_load(names.0, names.1);
+            chest.player = chest.player.with_names_at_load(names.0, names.1).with_anim_pos(d.anim_pos);
+            if let Some((state, remembered)) = d.initial_chest_state.clone() {
+                chest = chest.with_restored(state, remembered);
+            }
             let open_turn = chest.player.movements.iter().find(|m| m.name.eq_ignore_ascii_case("open")).map(|m| turn_degrees(&m.turn_at_frame(m.frames() - 1)));
             let c = ActiveChest {
                 bounds: d.bounds,
                 collision_type: d.collider_type,
                 collision_mask: d.collider_mask,
                 // objects.md "Hidden objects".
-                hidden: !p.drawn(),
+                hidden: d.initial_chest_hidden.unwrap_or(!p.drawn()),
                 do_not_point_at: d.do_not_point_at,
                 script: d.script.clone(),
                 chest,
@@ -655,7 +658,10 @@ pub fn spawn_doors(
             continue;
         }
         let mut door = Door::new(&p.name, movements, d.current, base);
-        door.player = door.player.with_names_at_load(names.0, names.1);
+        door.player = door.player.with_names_at_load(names.0, names.1).with_anim_pos(d.anim_pos);
+        if let Some(state) = d.initial_door_state {
+            door = door.with_state(state);
+        }
         let DrawnDoor { body, frames, slots, .. } =
             spawn_body(commands, &door.placement(), &animations, &built, materials, (p.haze_solid, p.haze_multiplier), balls.test_shape(p, &d.shape), &anim_lights, p.turn_off_dyn_lighting, gpu, &p.name);
         let active = ActiveDoor {
@@ -946,6 +952,26 @@ pub fn spawn_doors(
     }
     for o in &active.world.items.objects {
         active.world.known.insert(o.name.to_ascii_lowercase());
+    }
+    if let Some(restored) = objects.restored_world_items.take() {
+        // Saved WorldInventory.kq / KQ8R world_items replace fresh start-up world items
+        // while keeping carried items intact (savefile.md rules 16, 40).
+        active.world.items.objects.retain(|o| !o.in_world());
+        for o in restored {
+            if let Some(n) = o
+                .name
+                .strip_prefix("NoName")
+                .or_else(|| o.name.strip_prefix("noname"))
+                .and_then(|s| s.parse::<usize>().ok())
+            {
+                let next = active.world.items.no_name_counter();
+                if n >= next {
+                    active.world.items.start_no_names_at(n + 1);
+                }
+            }
+            active.world.known.insert(o.name.to_ascii_lowercase());
+            active.world.items.objects.push(o);
+        }
     }
     // fighting.md (M5 5c-4), ranged-weapons.md rules 17, 21: Connor's
     // fight, after the items the start-up scripts gave him (Swamp's

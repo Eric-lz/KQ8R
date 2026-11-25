@@ -2452,6 +2452,7 @@ pub fn menu_step(
                         flags: Default::default(),
                         in_temple4: false,
                         immunities: 0,
+                        raw_world_flags: None,
                         map_marks: ConnorMapMarks::default(),
                         map_view: START_VIEW,
                         other_maps: Default::default(),
@@ -2480,12 +2481,20 @@ pub fn menu_step(
                                 gone: kw.gone.clone(),
                                 came_in: kw.came_in.clone(),
                                 states: kw.states.clone(),
+                                doors: kw.doors.clone(),
+                                chests: kw.chests.clone(),
+                                world_items: kw.world_items.clone(),
+                                music_stack: kw.music_stack.clone(),
+                                current_time: kw.current_time,
+                                pending_events: kw.pending_events.clone(),
+                                present_objects: kw.present_objects.clone(),
                                 rusted_rivers: kw.rusted_rivers.clone(),
                                 alt_lightmaps: kw.alt_lightmaps.clone(),
                             },
                         )
                     })
                     .collect();
+                let music_stack = sound.as_ref().and_then(|s| s.music_stack());
                 if let Some(s) = sim.as_ref() {
                     if !world_base.is_empty() {
                         kept_worlds.insert(
@@ -2495,6 +2504,13 @@ pub fn menu_step(
                                 gone: s.active.world.gone_names().into_iter().collect(),
                                 came_in: s.active.world.came_in_files(),
                                 states: s.active.world.kept_states(),
+                                doors: s.active.world.kept_doors(),
+                                chests: s.active.world.kept_chests(),
+                                world_items: Some(s.active.world.world_items()),
+                                music_stack,
+                                current_time: Some(s.active.world.now()),
+                                pending_events: s.active.world.pending_event_strings(),
+                                present_objects: None,
                                 rusted_rivers: s.active.world.rusted_rivers(),
                                 alt_lightmaps: s.active.world.alt_lightmaps.clone(),
                             },
@@ -2504,6 +2520,11 @@ pub fn menu_step(
                 let connor_at = connor
                     .as_ref()
                     .map(|c| [c.mover.position[0], c.mover.position[1], c.walker.heading]);
+                let connor_pos = connor
+                    .as_ref()
+                    .map(|c| (c.mover.position, c.walker.heading));
+                let connor_anim = connor.as_ref().map(|c| c.snapshot_anim());
+                let camera = game_cam.as_ref().map(|c| c.snapshot());
                 let snap = SavedWorldSnapshot {
                     world: if world_base.is_empty() {
                         "Daventry".to_string()
@@ -2511,6 +2532,9 @@ pub fn menu_step(
                         world_base.clone()
                     },
                     connor_at,
+                    connor_pos,
+                    connor_anim,
+                    camera,
                     journey,
                     kept_worlds,
                 };
@@ -2596,6 +2620,13 @@ pub fn menu_step(
                                             gone: kw.gone,
                                             came_in: kw.came_in,
                                             states: kw.states,
+                                            doors: kw.doors,
+                                            chests: kw.chests,
+                                            world_items: kw.world_items,
+                                            music_stack: kw.music_stack,
+                                            current_time: kw.current_time,
+                                            pending_events: kw.pending_events,
+                                            present_objects: kw.present_objects,
                                             rusted_rivers: kw.rusted_rivers,
                                             alt_lightmaps: kw.alt_lightmaps,
                                         },
@@ -2604,6 +2635,7 @@ pub fn menu_step(
                                 .collect();
                             let world = snap.world.clone();
                             let connor_at = snap.connor_at;
+                            let connor_pos = snap.connor_pos;
                             let items_n = snap.journey.items.len();
                             let kept_n = kept.len();
                             change.restore_save(
@@ -2613,6 +2645,9 @@ pub fn menu_step(
                                     journey: Some(Box::new(snap.journey)),
                                     kept,
                                     combat_level: None,
+                                    connor_pos,
+                                    connor_anim: snap.connor_anim,
+                                    camera: snap.camera,
                                 },
                                 format!("Load Game slot {slot} '{name}'"),
                             );
@@ -2664,6 +2699,9 @@ pub fn menu_step(
                             journey: None,
                             kept,
                             combat_level: lvl_num,
+                            connor_pos: None,
+                            connor_anim: None,
+                            camera: None,
                         },
                         format!("Load Game original slot {slot} '{name}'"),
                     );
