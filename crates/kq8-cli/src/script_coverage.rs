@@ -394,6 +394,18 @@ fn probe(line: &[String]) -> Status {
     }
 }
 
+fn pct(part: usize, total: usize) -> f64 {
+    if total == 0 {
+        100.0
+    } else {
+        part as f64 * 100.0 / total as f64
+    }
+}
+
+fn is_built_status(st: Status) -> bool {
+    matches!(st, Status::Built | Status::StartUpRead)
+}
+
 fn report(found: &mut Found, quoted: &BTreeSet<String>) -> String {
     // The probes print nothing: a crash is a status, not a message.
     let hook = std::panic::take_hook();
@@ -434,28 +446,102 @@ fn report(found: &mut Found, quoted: &BTreeSet<String>) -> String {
     line("- \"loading hint?\": the name looks like a loading or memory instruction with nothing to see; to be confirmed by session A.".into());
     line(String::new());
 
-    // Summary per world.
+    // Overall coverage percentages.
     let status_of: BTreeMap<&str, Status> = commands.iter().map(|(c, s)| (c.as_str(), *s)).collect();
+    let non_hint_cmds: Vec<(&String, Status, usize)> = commands
+        .iter()
+        .filter(|(c, _)| !is_hint(c))
+        .map(|(c, s)| (c, *s, found.commands[c].total()))
+        .collect();
+    let cmd_total = non_hint_cmds.len();
+    let cmd_built = non_hint_cmds.iter().filter(|(_, s, _)| is_built_status(*s)).count();
+    let cmd_uses_total: usize = non_hint_cmds.iter().map(|(_, _, u)| *u).sum();
+    let cmd_uses_built: usize = non_hint_cmds.iter().filter(|(_, s, _)| is_built_status(*s)).map(|(_, _, u)| *u).sum();
+
+    let state_total = states.len();
+    let state_built = states.iter().filter(|(_, s)| *s == Status::Built).count();
+    let state_uses_total: usize = states.iter().map(|(c, _)| found.states[c].total()).sum();
+    let state_uses_built: usize = states.iter().filter(|(_, s)| *s == Status::Built).map(|(c, _)| found.states[c].total()).sum();
+
+    let named_counts = |map: &BTreeMap<String, Seen>| -> (usize, usize, usize, usize) {
+        let total = map.len();
+        let named = map.keys().filter(|k| quoted.contains(&k.to_ascii_lowercase())).count();
+        let uses_total: usize = map.values().map(Seen::total).sum();
+        let uses_named: usize = map.iter().filter(|(k, _)| quoted.contains(&k.to_ascii_lowercase())).map(|(_, s)| s.total()).sum();
+        (named, total, uses_named, uses_total)
+    };
+    let (ev_named, ev_total, ev_u_named, ev_u_total) = named_counts(&found.events);
+    let (call_named, call_total, call_u_named, call_u_total) = named_counts(&found.calls);
+    let (cls_named, cls_total, cls_u_named, cls_u_total) = named_counts(&found.classes);
+
+    line("## Overall coverage".into());
+    line(String::new());
+    line("| Category | Covered / Total (distinct) | Distinct % | Covered / Total (uses) | Uses % |".into());
+    line("| --- | ---: | ---: | ---: | ---: |".into());
+    line(format!(
+        "| Commands (built, excl. loading hints) | {cmd_built} / {cmd_total} | {:.1}% | {cmd_uses_built} / {cmd_uses_total} | {:.1}% |",
+        pct(cmd_built, cmd_total),
+        pct(cmd_uses_built, cmd_uses_total)
+    ));
+    line(format!(
+        "| Connor's states (built) | {state_built} / {state_total} | {:.1}% | {state_uses_built} / {state_uses_total} | {:.1}% |",
+        pct(state_built, state_total),
+        pct(state_uses_built, state_uses_total)
+    ));
+    line(format!(
+        "| Event kinds (named in code) | {ev_named} / {ev_total} | {:.1}% | {ev_u_named} / {ev_u_total} | {:.1}% |",
+        pct(ev_named, ev_total),
+        pct(ev_u_named, ev_u_total)
+    ));
+    line(format!(
+        "| Script calls (`test $2 ==`, named) | {call_named} / {call_total} | {:.1}% | {call_u_named} / {call_u_total} | {:.1}% |",
+        pct(call_named, call_total),
+        pct(call_u_named, call_u_total)
+    ));
+    line(format!(
+        "| Object classes (`classType=`, named) | {cls_named} / {cls_total} | {:.1}% | {cls_u_named} / {cls_u_total} | {:.1}% |",
+        pct(cls_named, cls_total),
+        pct(cls_u_named, cls_u_total)
+    ));
+    line(String::new());
+
+    // Summary per world.
     line("## Summary per world".into());
     line(String::new());
-    line("| World | Scripts | Commands used | Missing (uses) | Stub (uses) | Connor states not built |".into());
-    line("| --- | ---: | ---: | --- | --- | --- |".into());
+    line("| World | Scripts | Commands used | Built (excl. hints) | Missing (uses) | Stub (uses) | Connor states not built |".into());
+    line("| --- | ---: | ---: | ---: | --- | --- | --- |".into());
     for w in ORDER.iter().chain([&COMMON]) {
         let used: Vec<(&String, usize)> = found.commands.iter().filter_map(|(c, s)| s.uses.get(w).map(|n| (c, *n))).collect();
+        let non_hint: Vec<(&String, usize)> = used.iter().copied().filter(|(c, _)| !is_hint(c)).collect();
+        let built_here = non_hint.iter().filter(|(c, _)| status_of.get(c.as_str()).is_some_and(|st| is_built_status(*st))).count();
+        let total_here = non_hint.len();
         let count = |st: Status| {
             let hits: Vec<usize> = used.iter().filter(|(c, _)| status_of.get(c.as_str()) == Some(&st) && !is_hint(c)).map(|(_, n)| *n).collect();
             format!("{} ({})", hits.len(), hits.iter().sum::<usize>())
         };
         let open_states: Vec<&str> = states.iter().filter(|(st, s)| *s != Status::Built && found.states[st].uses.contains_key(w)).map(|(st, _)| st.as_str()).collect();
         line(format!(
-            "| {w} | {} | {} | {} | {} | {} |",
+            "| {w} | {} | {} | {built_here}/{total_here} ({:.1}%) | {} | {} | {} |",
             found.scripts_per_world.get(w).copied().unwrap_or(0),
             used.len(),
+            pct(built_here, total_here),
             count(Status::Missing),
             count(Status::Stub),
             if open_states.is_empty() { "—".to_string() } else { open_states.join(", ") }
         ));
     }
+    let total_scripts: usize = found.scripts_per_world.values().sum();
+    let total_missing_uses: usize = non_hint_cmds.iter().filter(|(_, s, _)| *s == Status::Missing).map(|(_, _, u)| *u).sum();
+    let total_missing_cnt = non_hint_cmds.iter().filter(|(_, s, _)| *s == Status::Missing).count();
+    let total_stub_uses: usize = non_hint_cmds.iter().filter(|(_, s, _)| *s == Status::Stub).map(|(_, _, u)| *u).sum();
+    let total_stub_cnt = non_hint_cmds.iter().filter(|(_, s, _)| *s == Status::Stub).count();
+    let all_open_states: Vec<&str> = states.iter().filter(|(_, s)| *s != Status::Built).map(|(st, _)| st.as_str()).collect();
+    line(format!(
+        "| **Total (unique)** | **{total_scripts}** | **{}** | **{cmd_built}/{cmd_total} ({:.1}%)** | **{total_missing_cnt} ({total_missing_uses})** | **{total_stub_cnt} ({total_stub_uses})** | {} |",
+        found.commands.len(),
+        pct(cmd_built, cmd_total),
+        if all_open_states.is_empty() { "—".to_string() } else { all_open_states.join(", ") }
+    ));
     line(String::new());
     line(format!(
         "Not counted as commands: {} calls of other scripts by name, {} lines starting with a variable. Loading hints are left out of the summary's counts.",
@@ -518,4 +604,20 @@ fn is_hint(c: &str) -> bool {
 fn typo(c: &str) -> bool {
     let l = c.to_ascii_lowercase();
     l.starts_with(';') || ["endif", "else", "echo"].iter().any(|k| l.starts_with(k) && l != *k)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn percentage_and_built_status_rules() {
+        assert_eq!(pct(0, 0), 100.0);
+        assert!((pct(3, 4) - 75.0).abs() < 1e-6);
+        assert!(is_built_status(Status::Built));
+        assert!(is_built_status(Status::StartUpRead));
+        assert!(!is_built_status(Status::Missing));
+        assert!(!is_built_status(Status::Stub));
+        assert!(!is_built_status(Status::StartUpSkipped));
+    }
 }

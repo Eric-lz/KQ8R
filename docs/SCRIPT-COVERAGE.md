@@ -9,23 +9,34 @@ What the game's scripts (`.cs`) and object files (`.kq`) ask of the program, fro
 - **Start-up scripts** (`newWorld.cs` and the scripts it names, e.g. `permwrld.cs`, `worldvar.cs`) are read by our world loader, which acts on a few commands (`loadKQ`, `set`, `move`, items, …) and only counts the rest; a command used only there is marked *start-up only*. A command also used during play was probed as above.
 - "loading hint?": the name looks like a loading or memory instruction with nothing to see; to be confirmed by session A.
 
+## Overall coverage
+
+| Category | Covered / Total (distinct) | Distinct % | Covered / Total (uses) | Uses % |
+| --- | ---: | ---: | ---: | ---: |
+| Commands (built, excl. loading hints) | 122 / 136 | 89.7% | 15958 / 15987 | 99.8% |
+| Connor's states (built) | 8 / 10 | 80.0% | 245 / 251 | 97.6% |
+| Event kinds (named in code) | 6 / 7 | 85.7% | 1860 / 1863 | 99.8% |
+| Script calls (`test $2 ==`, named) | 28 / 30 | 93.3% | 1656 / 1658 | 99.9% |
+| Object classes (`classType=`, named) | 34 / 62 | 54.8% | 2403 / 3325 | 72.3% |
+
 ## Summary per world
 
-| World | Scripts | Commands used | Missing (uses) | Stub (uses) | Connor states not built |
-| --- | ---: | ---: | --- | --- | --- |
-| Daventry | 174 | 92 | 1 (1) | 0 (0) | — |
-| CastleD | 17 | 29 | 0 (0) | 0 (0) | — |
-| DeadCity | 281 | 97 | 1 (1) | 0 (0) | — |
-| Swamp | 93 | 82 | 1 (1) | 0 (0) | — |
-| Gnome | 111 | 79 | 0 (0) | 0 (0) | — |
-| Barren | 118 | 84 | 0 (0) | 0 (0) | Tile3 |
-| IceWorld | 78 | 82 | 2 (6) | 0 (0) | — |
-| Snowexit | 13 | 34 | 1 (1) | 0 (0) | — |
-| temple1 | 59 | 51 | 1 (2) | 0 (0) | — |
-| temple2 | 37 | 55 | 0 (0) | 0 (0) | — |
-| temple3 | 30 | 45 | 1 (2) | 0 (0) | — |
-| temple4 | 17 | 68 | 6 (10) | 0 (0) | Die |
-| Common | 30 | 14 | 1 (1) | 0 (0) | — |
+| World | Scripts | Commands used | Built (excl. hints) | Missing (uses) | Stub (uses) | Connor states not built |
+| --- | ---: | ---: | ---: | --- | --- | --- |
+| Daventry | 174 | 92 | 81/83 (97.6%) | 1 (1) | 0 (0) | — |
+| CastleD | 17 | 29 | 26/26 (100.0%) | 0 (0) | 0 (0) | — |
+| DeadCity | 281 | 97 | 87/89 (97.8%) | 1 (1) | 0 (0) | — |
+| Swamp | 93 | 82 | 75/76 (98.7%) | 1 (1) | 0 (0) | — |
+| Gnome | 111 | 79 | 72/72 (100.0%) | 0 (0) | 0 (0) | — |
+| Barren | 118 | 84 | 77/77 (100.0%) | 0 (0) | 0 (0) | Tile3 |
+| IceWorld | 78 | 82 | 73/75 (97.3%) | 2 (6) | 0 (0) | — |
+| Snowexit | 13 | 34 | 30/31 (96.8%) | 1 (1) | 0 (0) | — |
+| temple1 | 59 | 51 | 45/46 (97.8%) | 1 (2) | 0 (0) | — |
+| temple2 | 37 | 55 | 48/48 (100.0%) | 0 (0) | 0 (0) | — |
+| temple3 | 30 | 45 | 40/41 (97.6%) | 1 (2) | 0 (0) | — |
+| temple4 | 17 | 68 | 57/63 (90.5%) | 6 (10) | 0 (0) | Die |
+| Common | 30 | 14 | 13/14 (92.9%) | 1 (1) | 0 (0) | — |
+| **Total (unique)** | **1058** | **145** | **122/136 (89.7%)** | **12 (25)** | **0 (0)** | Die, Tile3 |
 
 Not counted as commands: 139 calls of other scripts by name, 0 lines starting with a variable. Loading hints are left out of the summary's counts.
 
@@ -210,7 +221,6 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 
 | Word | In our code | Uses | Worlds | First seen in |
 | --- | --- | ---: | --- | --- |
-| `Load` | **not named** | 12 | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
 | `INVITEM_StoneOrder` | **not named** | 1 | Barren 1 | `Barren/Altarboy.cs` |
 | `Preload` | **not named** | 1 | IceWorld 1 | `IceWorld/icelord.cs` |
 | `ConnorAction` | named | 431 | Daventry 103, CastleD 8, DeadCity 100, Swamp 42, Gnome 51, Barren 53, IceWorld 34, Snowexit 2, temple1 13, temple2 13, temple3 8, temple4 4 | `Daventry/Alchdoor.cs` |
@@ -225,6 +235,7 @@ Not counted as commands: 139 calls of other scripts by name, 0 lines starting wi
 | `ProjImmune` | named | 23 | Daventry 3, Swamp 7, Gnome 1, Barren 8, IceWorld 1, temple1 2, temple4 1 | `Daventry/Alchdoor.cs` |
 | `Open` | named | 15 | Daventry 1, CastleD 1, DeadCity 1, Gnome 6, Barren 3, IceWorld 3 | `Daventry/OUTDOOR.CS` |
 | `Reveal` | named | 15 | Daventry 3, DeadCity 2, Barren 7, IceWorld 1, temple1 2 | `Daventry/keepwall.cs` |
+| `Load` | named | 12 | Daventry 1, CastleD 1, DeadCity 1, Swamp 1, Gnome 1, Barren 1, IceWorld 1, Snowexit 1, temple1 1, temple2 1, temple3 1, temple4 1 | `Daventry/WORLD.CS` |
 | `ConnorCollision` | named | 11 | Daventry 1, DeadCity 4, Swamp 4, Gnome 2 | `Daventry/WATERFAL.CS` |
 | `Close` | named | 9 | CastleD 1, DeadCity 1, Gnome 6, Barren 1 | `CastleD/firedor.cs` |
 | `Exit` | named | 5 | CastleD 1, DeadCity 1, Barren 1, IceWorld 1, temple1 1 | `CastleD/casport.cs` |
