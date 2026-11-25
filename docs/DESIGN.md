@@ -1194,12 +1194,17 @@ inventory and menus.
     embedded ASCII kept-world `PVOL` archives (`worldVolumes`) & maps (`maps`),
     wired into `PerformLoad` in `menu_view.rs`; added `Q208` in
     `docs/behaviour/QUESTIONS.md`.
-  - **4h-4, writing standard `save<N>.vol` archives:** fixing `PVOL`
-    metadata chunks (no trailing `\0` on `savedGameName`/`worldName`/
-    `savedGameVersion`, empty `worldVolumes`/`maps` as 0 bytes), writing
-    all current-world binary `PERS` chunks + `newWorld.cs` + embedded
-    ASCII kept-world `.vol`/`.kq` + `kq8r_meta.txt`, and unifying load
-    through `import_original_save`.
+  - **4h-4, writing standard `save<N>.vol` archives** (**done** 2026-11-25):
+    `kq8-core` `save_export.rs` (`export_save_vol` & `apply_kq8r_meta`), fixing
+    `PVOL` metadata chunks (no trailing `\0` on `savedGameName`/`worldName`/
+    `savedGameVersion`, empty `worldVolumes`/`maps` as 0 bytes), writing all
+    current-world binary `PERS` chunks (`GameState`, `KQCamera`, `Connor`,
+    `WorldInventory`, `worldState`, `Music`, current-world `KQMap`, doors,
+    chests, states, alt interiors, rusted rivers), `newWorld.cs`
+    `setCurrentTime`, embedded ASCII kept-world `.vol` archives & other-world
+    ASCII `.kq` maps, plus `kq8r_meta.txt` for KQ8R-specific extras; wired
+    into `PerformSave`/`PerformLoad` in `menu_view.rs` with legacy
+    `kq8r_state.txt` load fallback kept intact.
   - **4h-5, final hand-over docs & test instructions.**
 
 ### M5 — Fight

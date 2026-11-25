@@ -43,6 +43,7 @@ pub mod panels;
 pub mod portal;
 pub mod potions;
 pub mod rope;
+pub mod save_export;
 pub mod save_game;
 pub mod save_import;
 pub mod script;

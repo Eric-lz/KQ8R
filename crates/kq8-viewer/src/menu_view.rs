@@ -25,9 +25,7 @@ use kq8_core::main_menu::{
     POPUP_BG_PICTURE, POPUP_BG_RECT, POPUP_BTN_PICTURE, POPUP_FONT, POPUP_HI_BTN_PICTURE,
     THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH, TITLE_FONT, TITLE_LINE_RECT, TITLE_RECTS,
 };
-use kq8_core::save_game::{
-    format_world_var_cs, KeptWorldSnapshot, SavedWorldSnapshot,
-};
+use kq8_core::save_game::{KeptWorldSnapshot, SavedWorldSnapshot};
 use kq8_core::submenus::{
     brightness_factor, decode_thumbnail_bin, move_label_rect, move_value_rect, scan_save_entries,
     sl_hilite_rect, sl_list_row_rect, CreditsState, GraphicsState, MenuScreen, MoveKeysFile,
@@ -2396,17 +2394,9 @@ pub fn menu_step(
                 } else {
                     format!("{world_base}.kq")
                 };
-                let saved_name_bytes = format!("{name}\0").into_bytes();
-                let world_name_bytes = format!("{world_kq}\0").into_bytes();
-                let version_bytes = b"1.000000\0".to_vec();
-                let empty_z = b"\0".to_vec();
                 let thumb_bytes = menu.current_thumbnail_bin();
                 let difficulty_factor = sim.as_ref().map_or(1.0, |s| s.active.world.combat_level);
                 let next_no_name = sim.as_ref().map_or(1, |s| s.active.world.items.no_name_counter());
-                let game_state_bytes = format!(
-                    "[GameState]\r\nnextNoName={next_no_name}\r\ndifficultyFactor={difficulty_factor:.2}\r\n"
-                )
-                .into_bytes();
 
                 let cur_world_vars: Vec<(String, String)> = sim
                     .as_ref()
@@ -2420,7 +2410,6 @@ pub fn menu_step(
                             .collect()
                     })
                     .unwrap_or_default();
-                let world_var_bytes = format_world_var_cs(&cur_world_vars).into_bytes();
 
                 let mut journey = sim
                     .as_ref()
@@ -2537,19 +2526,17 @@ pub fn menu_step(
                     journey,
                     kept_worlds,
                 };
-                let kq8r_state_bytes = snap.format_kq8r_state().into_bytes();
-
-                let archive = Pvol::build(&[
-                    ("savedGameName", &saved_name_bytes),
-                    ("savedGameVersion", &version_bytes),
-                    ("worldName", &world_name_bytes),
-                    ("WorldVar.cs", &world_var_bytes),
-                    ("current.bin", &thumb_bytes),
-                    ("GameState.kq", &game_state_bytes),
-                    ("worldVolumes", &empty_z),
-                    ("maps", &empty_z),
-                    ("kq8r_state.txt", &kq8r_state_bytes),
-                ]);
+                let itl = menu
+                    .game
+                    .find("GAME/Kq/Invinfo.itl")
+                    .and_then(|p| std::fs::read(p).ok())
+                    .map(|b| kq8_data::items::ItemTypes::parse(&b).0);
+                let archive = kq8_core::save_export::export_save_vol(
+                    &snap,
+                    &name,
+                    &thumb_bytes,
+                    itl.as_ref(),
+                );
                 let dest = save_dir.join(format!("save{slot}.vol"));
                 let write_res = std::fs::create_dir_all(&save_dir).and_then(|()| std::fs::write(&dest, archive));
                 match write_res {
@@ -2605,8 +2592,10 @@ pub fn menu_step(
                     continue;
                 }
 
-                let snapshot_res = if let Some(state_bytes) = chunk_bytes("kq8r_state.txt") {
-                    SavedWorldSnapshot::parse_kq8r_state(&state_bytes)
+                let meta_bytes = chunk_bytes("kq8r_meta.txt");
+                let legacy_state = chunk_bytes("kq8r_state.txt");
+                let snapshot_res = if let Some(state_bytes) = legacy_state.as_deref() {
+                    SavedWorldSnapshot::parse_kq8r_state(state_bytes)
                 } else {
                     let itl = menu
                         .game
@@ -2615,8 +2604,14 @@ pub fn menu_step(
                         .map(|b| kq8_data::items::ItemTypes::parse(&b).0);
                     let raw = std::fs::read(&path).map_err(|e| e.to_string());
                     raw.and_then(|b| kq8_core::save_import::import_original_save(&b, itl.as_ref()))
+                        .and_then(|mut s| {
+                            if let Some(meta) = meta_bytes.as_deref() {
+                                kq8_core::save_export::apply_kq8r_meta(&mut s, meta)?;
+                            }
+                            Ok(s)
+                        })
                 };
-                let is_original = chunk_bytes("kq8r_state.txt").is_none();
+                let is_original = legacy_state.is_none() && meta_bytes.is_none();
                 match snapshot_res {
                     Ok(snap) => {
                         let kept: std::collections::BTreeMap<String, KeptWorld> = snap

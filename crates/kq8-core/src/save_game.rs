@@ -133,7 +133,7 @@ pub fn parse_game_state_kq(bytes: &[u8]) -> Option<(usize, f32)> {
     None
 }
 
-fn esc(s: &str) -> String {
+pub(crate) fn esc(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
         match ch {
@@ -147,7 +147,7 @@ fn esc(s: &str) -> String {
     out
 }
 
-fn unesc(s: &str) -> String {
+pub(crate) fn unesc(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars();
     while let Some(ch) = chars.next() {
@@ -170,22 +170,22 @@ fn unesc(s: &str) -> String {
     out
 }
 
-fn fmt_opt_str(v: &Option<String>) -> String {
+pub(crate) fn fmt_opt_str(v: &Option<String>) -> String {
     match v {
         Some(s) => format!("S:{}", esc(s)),
         None => "-".into(),
     }
 }
 
-fn parse_opt_str(s: &str) -> Option<String> {
+pub(crate) fn parse_opt_str(s: &str) -> Option<String> {
     s.strip_prefix("S:").map(unesc)
 }
 
-fn fmt_f32_slice(vals: &[f32]) -> String {
+pub(crate) fn fmt_f32_slice(vals: &[f32]) -> String {
     vals.iter().map(|v| v.to_bits().to_string()).collect::<Vec<_>>().join(",")
 }
 
-fn parse_f32_hex_or_dec<const N: usize>(s: &str) -> Result<[f32; N], String> {
+pub(crate) fn parse_f32_hex_or_dec<const N: usize>(s: &str) -> Result<[f32; N], String> {
     let parts: Vec<&str> = s.split(',').collect();
     if parts.len() != N {
         return Err(format!("expected {N} floats, got {}", parts.len()));

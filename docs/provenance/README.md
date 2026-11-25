@@ -4456,6 +4456,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `import_original_save` parsing `PVOL` `worldName`, `WorldVar.cs`, `newWorld.cs` (`setCurrentTime` + `loadKQ`), `GameState.kq` (`KQGameState`), `Connor.kq` (`KQConner` 3D pose, stats, inventory numeric `itemType` via `Invinfo.itl`, potions, `doMode`), `KQCamera.kq` (`KQCamMover` `loc`/`dir`/`camera_rotation`/range), `<map>.kq`, `WorldInventory.kq`, `worldState.kq`, `Music.kq`, doors/chests/animated objects/monsters/interiors/river controls, plus embedded ASCII `worldVolumes` and `maps`; added `Q208` (`worldFlags`, `KQDoor::state` `0`/`3`, `doMode`) | `savefile.md` rules 1–40; `KQCamMover::dir` vs `cameraRotation` observed in `MASK/save/save1.vol` & `save18.vol` | unit tests `imports_synthetic_pers_save_archive`, `imports_real_mask_saves_1_and_18_if_present` (`cargo test --workspace`: `846` passed); headless loads of `MASK/save/save18.vol` (`Swamp`, `update 73509`, `15` items, `4` maps, camera `heading -1.100`, `RESULT: PASS`) and `MASK/save/save1.vol` (`Daventry`, `update 4595`, `5` items, `world.cs Daventry Begin` without cutscene replay, `RESULT: PASS`) |
 
+## M4 4h-4 2026-11-25: Exporting standard `save<N>.vol` archives & unified load — core `save_export.rs`, `save_game.rs`, `lib.rs`; viewer `menu_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `export_save_vol` building `PVOL` archives with non-NUL metadata strings, `WorldVar.cs`, `newWorld.cs` (`setCurrentTime`), `current.bin`, binary `PERS` chunks (`GameState.kq`, `KQCamera.kq`, `Connor.kq` + `KQConnerInventory`, `WorldInventory.kq`, `worldState.kq`, `Music.kq`, current-world `KQMap`, `KQDoor`, `KQChest`, `KQAnimObject`, `KQInterior`, `RiverControl`), embedded ASCII kept-world `.vol` archives (`worldVolumes`), ASCII other-world `.kq` maps (`maps`), and `kq8r_meta.txt` (`apply_kq8r_meta`), wired into `PerformSave` / `PerformLoad` | `savefile.md` rules 1–40; `MAP_WORLDS` palette/folder names observed in `MASK/` | unit test `exported_save_has_valid_pvol_and_pers_and_round_trips` (`cargo test --workspace`: `847` passed); `kq8 save-verify --file kq8-artifacts/user/save/save26.vol` (`26` binary `PERS` across `8` classes, `11` ASCII `.kq`, `0` failures); headless Daventry reload restoring `Condoor` (`opened`), `smlchst3` (`open`), `NoName22` crystal, exact Connor & camera pose, and `world.cs Daventry Begin` (`RESULT: PASS`) |
+
 
 
 
