@@ -532,31 +532,47 @@ the rock is in hand (`INVITEM_Rock` taken from the bar):
   character killed by a kind-4 hit never finishes dying in the
   original.
 
-**8d. The pressure plates** (traced, Q186 d):
+**8d. The pressure plates** (corrected 2026-11-24, Q202; replaces the
+earlier Q186 d reading):
 - The plates themselves (`trip2` …) have `colliderType=0`: the rock
   passes through them. What matters is the **trap box** on each plate
-  (`triptrp2` …, mask 519 = types 1, 2, 4, 0x200).
-- The flying rock is type 1, so when its path touches the trap box the
-  trap is told and the rock enters it: **`On`** (the script plays the
-  plate's `down`).
+  (`triptrp1` in Gnome mask `517` = types `1, 4, 0x200`; `triptrp2`–`5` in
+  Dead City mask `519` = types `1, 2, 4, 0x200`).
+- The flying rock (`Prrock.kq`) is type `1`, so when its path touches the
+  trap box the trap is told and the rock enters it: **`On`** (the script
+  plays the plate's `down`).
 - **The rock is not stopped by the trap box** (the user's check in the
   original, 2026-11-01: the rock lies on the plate, at most a little
   above it, and the plate stays down). It flies on through the box and
-  ends on the floor grid as usual. (The first version of this note
-  read the code as the box stopping it 500 up; the touch that tells the
-  trap evidently doesn't reach the rock's own touch rule. Why exactly:
-  not traced. Build it as seen: traps never stop projectiles.)
-- A trap only lets a visitor go when that visitor reports a move. The
-  rock is deleted at `Die` without one, so it **stays on the trap's
-  list for good**: no `Off` is ever sent for it. Everything that enters
-  later (Connor, a rock item that moves) only gives `Cue 301` / `Cue
-  302`, which the plate scripts ignore. **So once a thrown rock has
-  touched a plate's trap, the plate stays down for the rest of the
-  visit**, and picking the rock up again changes nothing. (After a world
-  change or a reload the trap starts with an empty list; what the plate
-  does then is not traced.)
-- `dropItem` places the new rock **still**, with no throw (8f), so the
-  dropped item never sets a trap off by itself.
+  ends on the floor grid as usual. (Why the trap touch does not stop the
+  rock's own flight: not traced. Build it as seen: traps never stop
+  projectiles.)
+- **Handoff from flying rock to dropped rock item at `Die`:**
+  1. `Die` runs `rockHit.cs` **before** deleting `Prrock.kq`.
+  2. `rockHit.cs` calls `KQMonster::dropItem Connor INVITEM_Rock
+     $KQObject::loc`, which spawns a new `INVITEM_Rock` (`colliderType`
+     `0x220`, matching bit `0x200` of the plate masks) in world inventory
+     at the landing point. Activating its collision shape runs an
+     immediate overlap scan (`traps.md` rule 8b), so if it lands inside
+     the plate's trap box it **enters the trap at once** (`Cue 301`, since
+     `Prrock.kq` is still on the visitor list; visitor count = 2).
+  3. Immediately afterward, `Prrock.kq` is deleted. Deletion triggers the
+     trap's delete-notify handler (`traps.md` rule 8a), which removes
+     `Prrock.kq` from the visitor list. Because the new `INVITEM_Rock` is
+     already on the list, `Prrock.kq` leaving drops the count from 2 to 1
+     and sends **`Cue 302`** (not `Off`), so the plate stays down without
+     flickering. (If Connor had no rocks left so `dropItem` created
+     nothing, or the landing point was outside the box, deleting
+     `Prrock.kq` empties the list and sends `Off`.)
+- **Picking the rock back up raises the plate** (confirmed by user in the
+  original, 2026-11-22; traced 2026-11-24, Q202 c): clicking the
+  `INVITEM_Rock` on the plate adds it to Connor's inventory. Either it
+  merges into Connor's existing rock stack and is **deleted**
+  (delete-notify → leave), or (if Connor carried 0 rocks) it is moved to
+  `(0, 0, 0)` with an immediate **move notification** and its collision
+  disabled (move-notify → leave). Either way the trap removes the rock
+  from its visitor list and, if nothing else is on the plate, sends
+  **`Off`** so the plate pops back up (`traps.md` rule 8b).
 
 **8e. `Tile2` (Swamp)** (traced, Batch 3, `tile-puzzle.md` rules 35 and 37):
 a rock click in `Tile2` — whether clicking a `KQSwampTile` or anywhere

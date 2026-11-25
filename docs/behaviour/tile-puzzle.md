@@ -570,6 +570,162 @@ damage, and Reveal highlights.
     code (rules 39–40, raising the health loss from 0.2 to `damFactor`
     0.48).
 
+### Barren Region's lava tile puzzle (Connor's `Tile3` state and `KQLavaTile`, traced 2026-11-25, Batch 5)
+
+Barren Region's lava bridge is a 5 × 7 grid of rising and sinking lava
+tiles (`tile00`–`tile46`, all `KQLavaTile`) over a lava river, entered
+from either the south bridge (`tiletps.cs`) or the north bridge
+(`tiletpn.cs`). Connor must jump across the tiles in **prime-number
+order** (`3 → 5 → 7 → 11 → 13 → 17 → 19`) to form a permanent bridge
+along column 3. (`Tile3` is **state number 65,536** in `StateChange`
+messages.)
+
+42. **The `KQLavaTile` class (`Barren/lavatile.kq`, traced):** a
+    subclass of `KQAnimObject` with 8 animations in two sets: normal
+    bobbing (`stop`, `down`, `up`, `stopup` using `lvtiledn.kqs` /
+    `lvtileup.kqs`) and locked/alternate (`stop1`, `down1`, `up1`,
+    `stopup1` using `lvtiled2.kqs` / `lvtileu2.kqs`). It starts
+    `hidden=1` at `z = -700`.
+    - **Four `KQCueEvent` cues (`2400`–`2403`)**:
+      - **`Cue 2400 [<bmp>]`** (lock up and optionally swap texture):
+        sets the tile's mode to `1` (locked). If a bitmap name is
+        supplied (e.g. `lvtile03.bmp` or `lvtile01.bmp`), switches to the
+        `*1` animation set: `stop` → `up1`; `stopup` → `stopup1`; `up` →
+        `up1` at the same phase plus a relative move of `(0, 0, +50)`;
+        `down` → `down1` at the same phase with negated playback speed
+        and a `reversing` flag so it rises back up. Then swaps texture
+        `lvtile01.bmp` to `<bmp>` and sets `useAltAnim = 1`.
+      - **`Cue 2401`** (sink permanently): sets mode to `2` (sunk). If
+        playing `stopup`/`stopup1`, starts `down`/`down1`; if playing
+        `up`/`up1`, negates playback speed and sets `reversing = 1`.
+      - **`Cue 2402`** (decrement active count / sink when 0):
+        decrements `activeCount`; when it reaches `0`, sets
+        `forceDown = 1` and sinks (`stopup` → `down`, `stopup1` →
+        `down1`, `up`/`up1` → negate speed and `reversing = 1`).
+      - **`Cue 2403`** (increment active count / rise): increments
+        `activeCount`; when `activeCount == 1` **or** the tile is named
+        `tile43`, unhides the tile (`setHidden 0`), plays `up` (or `up1`
+        if `useAltAnim`), and clears `forceDown = 0`. (`tiletps.cs` sends
+        `Cue 2403` to 32 tiles with staggered delays `0.7..11.4 s` when
+        Connor first approaches the unsolved puzzle — omitting `tile42`,
+        `tile43`, and `tile44`.)
+    - **End-of-loop transitions (`onEndLoop`):**
+      - `down` ends → plays `stop`; if mode ≠ `2` and `forceDown == 0`,
+        schedules an internal delayed play of `up` in **`0.1 s`**;
+        otherwise hides (`setHidden 1`).
+      - `up` ends → if `reversing == 0`, plays `stopup` and schedules an
+        internal delayed play of `down` in **`7.0 s`**. If `reversing !=
+        0`, clears `reversing`, plays `stop`, restores positive speed,
+        applies relative move `(0, 0, -50)`, and hides (`setHidden 1`).
+      - `up1` ends → if `reversing == 0`, plays `stopup1` (**stays up
+        permanently**, no 7 s timer). If `reversing != 0`, clears
+        `reversing`, plays `stop1`, restores positive speed, applies
+        relative move `(0, 0, -50)`, and hides (`setHidden 1`).
+      - `down1` ends → if `reversing != 0`, clears `reversing`, restores
+        positive speed, applies relative move `(0, 0, +50)`, and plays
+        `stopup1`. Otherwise plays `stop1`, and if mode == `2` or
+        `forceDown != 0`, hides (`setHidden 1`).
+    - The delayed `0.1 s` / `7.0 s` internal play event only fires if
+      mode == `0` and `forceDown == 0`.
+43. **The 5 × 7 grid and bridge spots (`Tile3`, traced + data):**
+    `newworld.cs` places `tile<r><c>` (rows `0..4` south-to-north,
+    columns `0..6` west-to-east) at `x = 86,640 + 2,000·c`,
+    `y = 151,943 + 2,000·r`, `z = -700`.
+    - Cell index = `row * 10 + col` inside the area `[tile00.x − 1,000,
+      tile46.x + 1,000] × [tile00.y − 1,000, tile46.y + 1,000]`. Outside:
+      `300` = south (south bridge), `400` = north (north bridge), `100` =
+      west, `200` = east.
+    - Two bridge landing spots are computed from `tile03` and `tile43`:
+      south bridge = `tile03 − (0, 2,000, 0)`, north bridge =
+      `tile43 + (0, 2,000, 0)`.
+44. **Entering, leaving, and music (`Tile3`, traced):**
+    - On entry: reads all 35 tile positions (same missing-tile crash
+      warning as rule 2), sets `tileExit 0`, sheaths any drawn weapon
+      (plays `away` and requests empty hands — same refusal line
+      `0/0/37/23` as `Tile` rule 7), and schedules pushing **`mlava.aud`**
+      after **`0.2 s`**.
+    - While `tileExit == 0`, refuses every state change **except `Die`
+      (state 8)**; weapon-swap requests (`0x20`) speak the standard
+      refusal line (`0/0/37/23`, rule 18).
+    - On leaving the state: schedules popping **`mlava.aud`** after
+      **`0.2 s`**, and if Connor has **not** yet solved the puzzle
+      (`solvedTile3 == 0`), sends **`Cue 2402`** to all 35 tiles
+      (`tile00`–`tile46`) so they sink back into the lava.
+45. **Controls, jumping, and blocked cells (`Tile3`, traced):**
+    - Same turn-in-place (`left`/`right`), forward/back jump animations
+      (`tilejump1`, `tilejump2`, `tilebackjump`, `tilebackjump2`), lit
+      forward-target tile (`unlit` flag on tiles `0..46`), and jump
+      physics (gravity and `keepOnGround` off during the jump, restored
+      on landing, step up/down unchanged at 325) as `Tile` (rules 8–11).
+    - **Blocked cells** (penalized by `+π` in the angle search so Connor
+      cannot jump onto them):
+      - While unsolved (`solvedTile3 == 0`): row `4`, columns `2, 3, 4`
+        (`tile42`, `tile43`, `tile44`) are blocked.
+      - Once solved (`solvedTile3 != 0`): all columns other than column
+        `3` are blocked, so Connor only jumps along the column-3 bridge.
+    - **Bridge entry and exit jumps:**
+      - From the **south bridge** (`300`): chooses among `tile02`,
+        `tile03`, `tile04` (straight for `tile03`, diagonal for `02`/`04`)
+        and the south exit point `(92,640, 144,000, 1,000)` (straight,
+        marks `exiting = 1`).
+      - From the **north bridge** (`400`): chooses between `tile43`
+        (straight) and the north exit point `(92,640, 162,000, 1,000)`
+        (straight, marks `exiting = 1`).
+      - From **row 0, columns `2, 3, 4`**: facing south can jump onto the
+        south bridge spot (straight from col 3, diagonal from cols 2/4;
+        marks `exiting = 1`).
+      - From **row 4** (only when `solvedTile3 != 0`): facing north can
+        jump onto the north bridge spot (straight; marks `exiting = 1`).
+      - When an `exiting = 1` jump finishes: calls `tileExit 1`, and if
+        Connor is alive (`health > 0`), runs **`tiletps2.cs StartExit`**
+        (if `cell == 300`, south) or **`tiletpn2.cs StartExit`**
+        (otherwise, north), which runs Connor off the bridge and restores
+        controls.
+46. **The prime-number puzzle (`Tile3` landing check, traced):** each
+    time Connor finishes a non-exiting jump, his grid cell is tested:
+    - If `solvedTile3 != 0` and `pendingDrop24 != 0` and he is no longer
+      on `tile24` (cell `24`): clears `pendingDrop24` and sends **`Cue
+      2401`** to `tile24` so the last prime tile sinks behind him.
+    - Otherwise, if he landed on one of the **7 prime tiles**, the state
+      tracks `lastPrime` and `inOrder` (stepping on any non-prime tile
+      leaves them untouched):
+
+      | Order | Tile (cell) | Prime | Required `lastPrime` | Sound (plain one-shot, if in order) | Locked texture (`Cue 2400`, once per visit) |
+      | ---: | --- | ---: | ---: | --- | --- |
+      | 1 | `tile12` (`12`) | 3 | *(any — resets `inOrder = 1`)* | `T3.aud` | `lvtile03.bmp` |
+      | 2 | `tile41` (`41`) | 5 | `3` | `T5.aud` | `lvtile05.bmp` |
+      | 3 | `tile36` (`36`) | 7 | `5` | `T7.aud` | `lvtile07.bmp` |
+      | 4 | `tile05` (`5`) | 11 | `7` | `T11.aud` | `lvtile11.bmp` |
+      | 5 | `tile20` (`20`) | 13 | `11` | `T13.aud` | `lvtile13.bmp` |
+      | 6 | `tile45` (`45`) | 17 | `13` | `T17.aud` | `lvtile17.bmp` |
+      | 7 | `tile24` (`24`) | 19 | `17` | `T19.aud` | `lvtile19.bmp` |
+
+    - Stepping on prime 5–19 out of order (or with `inOrder == 0`) sets
+      `inOrder = 0` and plays no sound, but still locks that tile up with
+      its prime bitmap (once) and updates `lastPrime`. Stepping back on
+      `tile12` (prime 3) restarts the sequence (`inOrder = 1`,
+      `lastPrime = 3`).
+    - **Solving the puzzle** (landing on `tile24` with `lastPrime == 17`
+      and `inOrder != 0`):
+      1. Plays `T19.aud`.
+      2. Sends **`Cue 2403`** to `tile43` (raising it) and **`Cue 2400
+         lvtile01.bmp`** to all 5 column-3 tiles (`tile03`, `tile13`,
+         `tile23`, `tile33`, `tile43`), locking the centre bridge up.
+      3. Sends **`Cue 2401`** to all other tiles in the 5 × 7 grid
+         **except** column 3 and `tile24` (where Connor stands), sinking
+         them permanently; sets `pendingDrop24 = 1` so `tile24` sinks as
+         soon as Connor jumps off it.
+      4. Sets `Connor.solvedTile3 = 1` (persisted in `Connor.kq`),
+         awards **50,000 XP** (`KQStatsChangeRequestEvent 0 0 0 0 50000`),
+         sets console variable `Barren::Tile::Complete = true`, and adds
+         map icon **`ba_Order.bmp`** at `(155, 177)`.
+47. **Barren script-coverage note (`Altarboy.cs`, data):** line 16 of
+    `Barren/Altarboy.cs` (`if test $2 == INVITEM_StoneOrder`, nested
+    inside `if test $2 == ConnorAction`) is a typo in the original script
+    for `$4` (line 28 correctly checks `else if test $4 ==
+    INVITEM_StoneOrder`). It is **not** a script call sent by the engine
+    and can never be true.
+
 ## Numbers and units
 
 - Stone spacing 2,000 (x and y), rise 500 per row; spot margin 1,000.
@@ -700,10 +856,6 @@ damage, and Reveal highlights.
    answered 2026-11-01 (Q189), rule 26a.
 4. ~~The camera flight speed after a teleport~~: answered 2026-10-30,
    rule 13 ("The camera flight").
-5. ~~**Tile2 (Swamp)**~~ and **Tile3 (Barren) are separate states**, not
-   the same one with other numbers (`Tile2` answered 2026-11-20, Batch 3,
-   rules 28–41; `Tile3` still open): `Tile3` shares the stone jump
-   movements (`tilejump1/2`, `tilebackjump/2`), `stop`, `away`, `jump`,
-   and `out`, has no teleports, and uses Barren's own puzzle rules
-   (`KQLavaTile`, `lvtile*.bmp`, `Barren::Tile::Complete`, `tiletpn2.cs`
-   / `tiletps2.cs`); to be studied with the Barren batch.
+5. ~~**Tile2 (Swamp)** and **Tile3 (Barren)**~~: both answered (`Tile2`
+   2026-11-20, Batch 3, rules 28–41; `Tile3` & `KQLavaTile` 2026-11-25,
+   Batch 5, rules 42–47).

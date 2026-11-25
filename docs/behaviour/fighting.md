@@ -828,6 +828,90 @@ Ten Mandragore trios appear in Swamp (`mand3`, `mand4`, `mand5`, `mand7`,
   `Die` state**, sinking (`r_sink.kqs`) and removing itself permanently (0
   experience).
 
+### 7c. The Ice Dragon (`KQDragonHead` and `KQDragonBody`, traced 2026-11-25, Batch 6)
+
+The two-headed Ice Dragon boss in IceWorld consists of one body
+(`dragbody`, `KQDragonBody`, `dragbody.kq`, `dragbody.anm`) and two
+independent heads (`draglhed` and `dragrhed`, both `KQDragonHead`,
+`draglhed.kq` / `dragrhed.kq`, `draglhed.anm` / `dragrhed.anm`), blocking
+a cave wall (`dragwall`).
+
+**Stats and keys (`Monstats.mtl`, `.kq`):**
+- **`dragonbody` (`dragbody.kq`):** 300 health, 25 damage, **100
+  protection** (immune to direct attacks), **50,000 experience**,
+  `deadDts=db_dead.KQS`, `noTurn=1`, `monUseGravity=0`, `colliderType=1`,
+  `colliderMask=0`.
+- **`dragonheadleft` / `dragonheadright` (`draglhed.kq` / `dragrhed.kq`):**
+  600 health, **200 short damage**, 25 protection, **0 experience**,
+  alarm radius 6,000, attack distance **6,000** (fire breath reach),
+  `noTurn=1`, `colliderMask=0`. Extra `.kq` keys: `deadPause` (seconds
+  before a non-cauterized head regrows; data: `3`), `biteRad` (melee bite
+  reach; data: `3000`), and `fireFile` (particle emitter `.kq` loaded
+  when breathing fire; data: `draglfir.kq` / `dragrfir.kq`, `KQEmitter`
+  following the head's `fire` mesh).
+
+**`KQDragonHead` combat and attacks:**
+- Whenever a head changes state or finishes an animation loop, it snaps
+  back to its home position (so animations never cause the head to drift
+  off the body).
+- **Attacking (state `2`):** while the current movement is interruptable
+  (or finished), the head chooses **50/50** at random between:
+  - **`Attack`** (`dl_atk1` / `dr_atk1`, bite): at the `Do` cue (Cue 2),
+    if 3D distance to target ≤ `biteRad` (`3,000`), sends a **Normal
+    (kind 0)** attack event for `shortDamage` (`200`).
+  - **`Attack2`** (`dl_atk2` / `dr_atk2`, fire breath): immediately loads
+    `fireFile` (`draglfir.kq` / `dragrfir.kq`) into the world; at the
+    `Do` cue (Cue 2), if 3D distance to target ≤ `attackDist` (`6,000`),
+    sends a **Fire (kind 2)** attack event for `shortDamage` (`200`).
+  - After starting either attack, the head's next-attack timer is set to
+    **`now + 5.0 s`** (and chase distance cleared).
+
+**`KQDragonHead` death, cauterizing with the Flame Sword, and regrowth:**
+- When a head's health reaches 0 and it enters `Die` (state `8`):
+  1. Collision (`colliderType` and `colliderMask`) and gravity are turned
+     off.
+  2. It checks whether Connor is in **melee mode** (`doMode == 0`) **and**
+     carrying **`INVITEM_FlameSword`** (ID `1110`):
+     - **With Flame Sword (cauterized):** marks the head as cauterized
+       (`1`), plays `synge` (`dl_synge.KQS` / `dr_synge.KQS`), and on the
+       first cauterized head Connor speaks `6000.msg` `(noun 35, verb 14,
+       case 106, seq 1)`.
+     - **Without Flame Sword (not cauterized):** plays `lopt`
+       (`dl_lopt.KQS` / `dr_lopt.KQS`).
+  3. Either way, it spawns a temporary `KQAnimOnce` at the head's
+     transform playing the head's `die` movement (`dl_cut.KQS` /
+     `dr_cut.KQS`, sound `Dl_cut.aud` / `Dr_cut.aud`), which notifies the
+     head with `Cue 300` when the cut animation finishes.
+- **When the `die` cut animation finishes (`Cue 300`):**
+  - **If NOT cauterized:** sets a regrowth timer for **`now + deadPause`**
+    (`3.0 s`). Once that timer expires:
+    - The first time any head regrows, Connor speaks `6000.msg` `(noun
+      35, verb 12, case 105, seq 1)` (once per visit).
+    - The head plays **`rebirth`** (`dl_morph.KQS` / `dr_morph.KQS`,
+      sound `Dl_morph.aud`) and restores its full starting health (`600`).
+    - When `rebirth` finishes, collision is restored (`colliderType =
+      0x42`, `colliderMask = 0x201f`) and the head returns to attack
+      state (`2`).
+  - **If cauterized:** increments the cauterized-head counter. When
+    **both heads** are cauterized (count reaches `2`):
+    1. Adds map icon **`ic_cave.bmp`** at `(48, 42)`.
+    2. Puts **`dragbody`** into state **`8` (`Die`)**.
+    3. Loads **`dragdbox.kq`** (the dead dragon's clickable corpse box,
+       with `dragwall.cs`) into the world.
+    4. Deletes **`draglhed`**, **`dragrhed`**, and **`dragwall`** (if it
+       exists).
+- On loading a saved game, any head already saved as cauterized
+  increments the cauterized counter on load so killing the second head
+  still kills the dragon.
+
+**`KQDragonBody` behaviour:**
+- On activation (`setActive(1)`), marks any material named `chains.bmp`
+  with cutout transparency (material flag `0x1000`).
+- Uses the ordinary monster `Die` state (state `8`) when triggered by the
+  second cauterized head: plays `db_die.KQS` + `Db_die.aud`, awards
+  **50,000 experience** (`Monstats.mtl` type `dragonbody`), and swaps to
+  its corpse `db_dead.KQS`.
+
 ### 8. Ranged characters (`doMode=1`)
 
 34. **Who is ranged** (traced and data): a character that holds a

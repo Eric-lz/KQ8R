@@ -300,6 +300,25 @@ and listed squares of Daventry's animators have material 15 in
 (The counts are all squares with those materials; only
 `AnimatedRiver3` has excluded squares among them, so it animates 57.)
 
+### `KQPuzzleCommand` on ground animators (traced 2026-11-25, Batch 6)
+
+`sendEvent <delay> <animator> KQPuzzleCommand <cmd> [arg]` (two integers,
+second optional/unused here) controls a `KQTerrainAnimator` directly:
+
+- **`0` (start):** starts the animator's timed loop (same as `startNow=1`:
+  schedules the next frame change after `delay` seconds).
+- **`1` (stop):** stops the animator's timed loop (`running = 0`).
+- **`2` (step once):** increments `frameCount` by 1 and immediately
+  applies `materialIndex[frameCount]` to all chosen squares without
+  starting the timer.
+
+Data: `IceWorld/pond.cs` uses `pond.kq` (`repeatflag=0`, `startNow=0`,
+`delay=0.3`, 10 materials `194, 198..206`): each of the first three
+thrown rocks sends `KQPuzzleCommand 2` to crack the ice one frame at a
+time (`198 → 199 → 200`), and dropping `INVITEM_FireGem` sends
+`KQPuzzleCommand 0` to play the remaining melt frames (`201..206`) at
+0.3 s intervals.
+
 ### `terAnimSwitch <animator> [repeatFlag]` (traced 2026-10-28, batch 2)
 
 - Swaps the animator's two material cycles (the list and list II). The

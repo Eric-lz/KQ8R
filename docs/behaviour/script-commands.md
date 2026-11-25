@@ -198,6 +198,28 @@ hints with no visible gameplay effect.
 
 ### Loading, cache, timing, and persistence hints
 
+12f. **`KQObject::setGroupsActive3D <object> <flags>` and
+    `KQObject::setGroupsActive3DFar <object> <flags>` (traced 2026-11-25,
+    Batch 6):** sets the object's near (`groupsActive3D`) or far
+    (`groupsActive3DFar`) active-group bitmask (integer parsed with
+    `atoi`), and returns `0`. If the object is currently active (and far,
+    for `setGroupsActive3DFar`), its live active groups are updated
+    immediately (`groupsAlways | (groupsForced != 0 ? groupsForced :
+    near | [far])`). Wrong argument count prints the usage line and
+    returns `0`. Used by `IceWorld/snowmane.cs` (3 uses each) to make
+    the invisible Snowmane visible (`1097` / `1088`) during a Reveal
+    potion or on death, and invisible again (`9` / `0`) when Reveal ends.
+12g. **`playAvi <filename>` (traced 2026-11-25, Batch 6):** plays a
+    full-screen movie file from `<game>/<filename>` through the same
+    movie player as `Replay Intro` (`submenus.md` section 8), with
+    skipping disabled (`allowSkip = false`). Wrong argument count prints
+    `usage:  playAvi filename`. Used by `Snowexit/PORTAL4.CS`
+    (`w32mdl_1.dll`) and `temple4` (`w32ndg_1.dll`).
+12h. **IceWorld `Preload` script call (data, Batch 6):** `Preload` in
+    `IceWorld/icelord.cs` is **not** an engine script call — `icelord.cs`
+    calls itself directly on line 88 (`icelord.cs Icelord Preload`) as a
+    script subroutine.
+
 13. **Pure memory/timing hints (confirmed safe no-ops for rendering and
     logic, aside from save tracking / loading bar):**
 

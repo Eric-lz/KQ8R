@@ -20,7 +20,8 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
    - `6`: Save Game (`savegame.kq` -> `Savegame.gui`)
    - `7`: Remap Move Keys (`movekeys.kq` -> `movekey.gui`)
    - `8`: Credits (`credits.kq` -> `credits.gui`)
-2. **Activation lifecycle.** Switching to a screen deactivates the previous screen and activates the target screen. While any menu screen (`0`, `2`, `4`, `5`, `6`, `7`, `8`) is active, the menu theme `theme.aud` keeps playing in the background unless explicitly faded out (when loading a save, leaving Credits, or playing the intro movie).
+2. **Activation lifecycle and palette override.** Switching to a screen deactivates the previous screen and activates the target screen. While any menu screen (`0`, `2`, `4`, `5`, `6`, `7`, `8`) is active, the menu theme `theme.aud` keeps playing in the background unless explicitly faded out (when loading a save, leaving Credits, or playing the intro movie).
+   - **Palette override (Q206 d, traced 2026-11-25):** Even though `loadgame.kq`, `savegame.kq`, and `credits.KQ` all list `palette=Menus.ppl`, `KQLoadScreen`, `KQSaveScreen`, and `KQCreditsScreen` each hardcode loading **`saveload.ppl`** (`GAME/Resource/Saveload.ppl`) into the display palette on activation, overriding `Menus.ppl`. (All `Loadgame`/`Savegame`/`Credits` art, `slcurgui.pba`, `kqteam08.pbm`, and `current.bin` with `pal_id = 999` are indexed to `Saveload.ppl`.)
 
 ---
 
@@ -57,7 +58,7 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
    - Pressing **Escape** (or activating **Cancel**) resets `activeButton` to `1` and returns to the Main Menu (`screen 0`).
 7. **Thumbnail preview (`160 × 120`, `(428, 316)`).**
    - Each save stores a 19,204-byte raw thumbnail (`current.bin`): a 4-byte little-endian palette ID followed by `160 × 120 = 19,200` bytes of 8-bit pixels.
-   - If the 4-byte palette ID is `999` (captured in 24-bit Direct3D/3Dfx mode, where pixels were already quantized against `Menus.ppl`), the 19,200 indices are copied directly into the thumbnail bitmap. Otherwise (captured in 8-bit DirectDraw mode), the indices are remapped from that world's palette ID to `Menus.ppl`.
+   - If the 4-byte palette ID is `999` (captured in 24-bit Direct3D/3Dfx mode, where pixels were already quantized against `Saveload.ppl`), the 19,200 indices are copied directly into the thumbnail bitmap. Otherwise (captured in 8-bit DirectDraw mode), the indices are remapped from that world's palette ID to `Saveload.ppl`.
    - On **Load Game**:
      - On initial screen open, the selected row's thumbnail is loaded immediately from `current.bin` inside `save/<file>.vol`.
      - When the player changes the selected row (via mouse click, Up/Down, or scrollbar), the save name box (`IDCTL_LOAD_NAME`) updates at once, and a **1.0-second (1000 ms) debounce timer** starts. Only after the selection has settled for 1000 ms does the game open `save/<file>.vol` and decode `current.bin`.
@@ -105,7 +106,7 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
          - `worldName`: `<World>.kq` (e.g. `Daventry.kq`)
          - `savedGameVersion`: `"1.000000"`
          - Every persistent object `<name>.kq` in the current world
-         - `worldState.kq`: current world flags (`firstTime`, `frozen`, `teleported`, `justLoaded`, camera mode)
+         - `worldState.kq`: pending timed `KQEvent` queue (`nEvents` + event strings; camera state is in `KQCamera.kq`, cross-world flags in `Connor.kq`; full binary `PERS` format in [savefile.md](savefile.md))
          - `WorldVar.cs`: current world console variables
          - `newWorld.cs`: generated script that re-Execution-loads every saved `.kq` object on restore
       3. `current.bin`: the 19,204-byte screenshot thumbnail.
@@ -148,8 +149,9 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
       - On `0` (Graphics), `1` (Remap Move Keys), or `7` (Credits), plays `intrface.aud` and switches to that submenu.
       - On `5` (Subtitles) or `6` (Starting Help) (clicking either the label or the Yes/No value text), toggles `Yes`/`No` and plays `intrface.aud`.
       - On `8` (Back to Main Menu), or pressing **Escape** from any row, writes `Options.cs`, plays `intrface.aud` (when triggered via button/Enter), and returns to Main Menu (`screen 0`).
-14. **Volume sliders (`0..100` -> `0.0..1.0`).**
+14. **Volume sliders (`0..100` -> `0.0..1.0`) and slider drawing (`slider.pba`, Q206 b).**
     - On screen open, each slider position is initialized to `round(volume * 100.0)`.
+    - **Drawing (`KQSliderControl`, traced 2026-11-25):** both Options and Graphics sliders use a single 2-frame `.pba` (`slider.pba`, two `10×10` frames): **frame 0** (diagonal stripe track) is stretched across the full slider control rectangle `(x, y, w, h)`, and **frame 1** (gold circular knob) is drawn at its native size (`10×10`) at `x = rect.x + ((rect.w - knob_w) * val) / 100`, `y = rect.y`.
     - Dragging or clicking the 200-pixel slider track (`x = 330..530`) or pressing Left/Right updates the integer slider value `val` in `0..100`.
     - **Low-volume floor**: when converting `val` back to a float volume, if `0 < val < 10`, the game clamps `val` to `10` before multiplying by `0.01` (so any non-zero slider position produces a volume in `0.10..1.00`, while `0` produces `0.0` mute).
     - Moving a volume slider updates the corresponding audio group live (`Music` group `0x30`, `SFX` group `0x07`, `Speech` group `0x08`).
@@ -193,7 +195,7 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
 18. **Renderer availability and feature restrictions.**
     - Renderers not supported by the system (e.g. `3Dfx` when no Glide driver is present, or `DirectDraw` when running in 800×600) are disabled and drawn greyed out.
     - In **DirectDraw (Software)** mode:
-      - `800x600` (`4`), `Character Shadows` (`8`, bit `0x02`), and `Object Shadows` (`9`, bit `0x08`) are disabled (greyed out), and bits `0x02` and `0x08` are cleared from `shadowMask`.
+      - `800x600` (`4`), `Monster Shadows` (`7`, bit `0x02`), and `Object Shadows` (`9`, bit `0x08`) are disabled (greyed out), and bits `0x02` and `0x08` are cleared from `shadowMask` (`shadowMask &= ~0x0A`, traced 2026-11-25, Q206 d).
       - Switching from Direct3D to DirectDraw opens a confirmation popup (`IDCTL_GRA_POP_BKGND`, `#169`, buttons `Yes` `#29` / `Cancel` `#35`, default `Cancel`). Confirming `Yes` writes `Options.cs` with `assignGModeName Software` and `set800mode 0` and exits the executable (`PostQuitMessage(0)`), because the original engine could not switch from Direct3D back to DirectDraw in-process.
     - In **3Dfx (Glide)** mode:
       - `Dynamic Lights` (`5`) is forced on, its row is disabled (greyed out), and its value displays `#137` (`0x455`) instead of `On`/`Off`.
@@ -227,35 +229,37 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
       - `13`: **Back to Options Menu** (`#31` `IDCTL_MOVEKEYS_TO_MAIN` at `y = 432`) -> saves `movekeys.kq` and returns to Options (`screen 2`).
 21. **Rebinding a key and conflict resolution.**
     - Pressing **Enter** on row `0..12` or left-clicking row `0..12` enters **key-capture mode** for that row:
-      - The row's key label changes to `500.MSG` `#112` (`"???"`).
+      - The row's key label changes to `500.MSG` `#112` (`"Press Desired Key"`).
       - While key-capture mode is active, normal menu navigation (`Up`/`Down`, `Escape`, clicking `Back to Options Menu`) is locked out until a valid key is bound.
     - When the player presses a key in key-capture mode:
-      - **Reserved keys rejected**: `F2` (`0x71`), `F11` (`0x7A`), `F12` (`0x7B`), `Escape` (`0x1B`), `Enter` (`0x0D`), `Page Up` (`0x21`), `Page Down` (`0x22`), top-row digits `'1'..'8'` (`0x31..0x38`), numpad `'1'..'9'` (`0x61..0x69`), and any key not in the game's bindable key table are rejected. Pressing a rejected key sets the row's right-hand label to `500.MSG` `#67` (`"Invalid Key"`) and stays in key-capture mode waiting for another key.
+      - **Reserved keys rejected**: `F2` (`0x71`), `F11` (`0x7A`), `F12` (`0x7B`), `Escape` (`0x1B`), `Enter` (`0x0D`), `Page Up` (`0x21`), `Page Down` (`0x22`), top-row digits `'1'..'8'` (`0x31..0x38`), numpad `'1'..'9'` (`0x61..0x69`), and any key not in the game's bindable key table are rejected. Pressing a rejected key sets the row's right-hand label to `500.MSG` `#67` (`"Key in use, TRY AGAIN"`) and stays in key-capture mode waiting for another key.
       - **Duplicate key displacement**: if the pressed key is valid, the game checks whether any of the other 12 actions (`0..12`) already uses that virtual key code:
         - If no other action uses it, the key is bound to the current row, its display name and `.sae` action binding are updated, and key-capture mode ends.
-        - If another action `otherRow` already uses that key, the new key is bound to the current row, **`otherRow` is unbound** (`KeyChar = 99`, label set to `#112` `"???"`), the selection and spinning mask cursors immediately jump to `otherRow`, and **key-capture mode stays active on `otherRow`** so the player must choose a replacement key for the displaced action before they can leave the screen.
+        - If another action `otherRow` already uses that key, the new key is bound to the current row, **`otherRow` is unbound** (`KeyChar = 99`, label set to `#112` `"Press Desired Key"`), the selection and spinning mask cursors immediately jump to `otherRow`, and **key-capture mode stays active on `otherRow`** so the player must choose a replacement key for the displaced action before they can leave the screen.
 22. **Persisting `movekeys.kq`.**
     - Activating `Back to Options Menu` (`13`) or pressing **Escape** (when not in key-capture mode) writes `KeyChar0..12`, `KeyName0..12`, `KeyWord0..12`, `moveSound`, and `selectSound` to `<game>/movekeys.kq`, plays `intrface.aud`, and switches to Options (`screen 2`).
 
 ---
 
-### 7. Credits Screen (`credits.gui`)
+### 7. Credits Screen (`credits.gui`, corrected 2026-11-25, Q206 a)
 
-23. **26 timed pages from `500.MSG`.**
-    - Opening Credits (`screen 8`) starts at page `0` and steps through **26 pages (`0..25`)**, reading `500.MSG` entry `(noun = 0, verb = 0, case = page + 1, seq = 1)` (cases `1..26`).
-    - On the final page (`page 25`, `500.MSG` case `26`), `%d` in the message text is formatted with Connor's current experience/score (`0` if no game is loaded).
+23. **25 timed pages from `400.MSG`.**
+    - Opening Credits (`screen 8`) switches the GUI manager's message file to **`400.MSG`** (restoring `500.MSG` on exit), starts at `page = 1`, and steps through **25 pages (`1..25`)**, reading `400.MSG` entry `(noun = 0, verb = 0, case = page, seq = 1)` (cases `1..25`).
+    - On the final page (`page 25`, `400.MSG` case `25`), `%d` in the message text is formatted with Connor's cumulative total score (`0` if no game is loaded):
+      - for `level < 16`: `((10 << (level - 1)) - 10) + current_xp`
+      - for `level >= 16`: `(level * 150,000 - 2,086,170) + current_xp`
     - Each page's string is split on `'\n'` into lines:
-      - Lines starting with `'*'` strip the leading `'*'` and render in the **small font** (`20sl.pft`, control slots `IDCTL_1135..1150`, up to 16 lines, **17 px** line height).
-      - All other lines render in the **large font** (`27sl.pft`, control slots `IDCTL_1122..1134`, up to 13 lines, **30 px** line height).
-    - The active lines on a page are vertically centered on the screen (starting at `top_y = (screen_height - total_text_height) / 2`, where `screen_height` is `480` in 640×480 or `600` in 800×600).
+      - Lines starting with `'*'` strip the leading `'*'` and render in the **small font** (`20sl.pft`, control slots `IDCTL_1135..1150`, up to 16 lines).
+      - All other lines render in the **large font** (`27sl.pft`, control slots `IDCTL_1122..1134`, up to 13 lines).
+    - **Vertical centering (no `+145` shift):** every page computes `avail_h = screen_h - 50` (`430` in 640×480, `550` in 800×600), `line_step = min(36, avail_h / line_count)`, `total_h = line_step * line_count`, and `top_y = screen_h / 2 - total_h / 2`. Line `k` (`0..line_count - 1`) is placed at `y = top_y + k * line_step` (`y2 = y + 30`). Unused slots are parked off-screen at `y = 900`.
 24. **Page timing and final team photo (`kqteam08.pbm`).**
-    - Pages `0..24` stay on screen for:
+    - Pages `1..24` stay on screen for:
       $$\text{duration} = 2000 + 500 \times \text{line\_count}\text{ ms}$$
-    - The final page (`page 25`, case `26`) displays the 400×300 team photograph `kqteam08.pbm` (`IDCTL_1162`, at `(120, 10)-(520, 310)`), shifts its text block down by `+145` px (`0x91`) so it sits below the photo, and stays on screen for:
+    - On screen open, the 400×300 team photograph `kqteam08.pbm` (`IDCTL_1162`) is parked off-screen at `y = 900`. On the final page (`page 25`, case `25`), it is moved to `y = 10` (`y2 = 10 + height`), where `400.MSG` case `25`'s 8 leading blank lines naturally push `"Team Mask of Eternity"` and the score line below the photo, and the page stays on screen for:
       $$\text{duration} = 14000 + 500 \times \text{line\_count}\text{ ms}$$
       (`4000` ms base + `500` ms per line + `10000` ms extra hold).
 25. **Exiting Credits.**
-    - Pressing **Escape** at any time during the credits, or letting page `25` finish its timer, fades out `theme.aud` over 1 second and returns to the **Main Menu (`screen 0`)**.
+    - Pressing **Escape** at any time during the credits, or letting page `25` finish its timer, restores `500.MSG`, fades out `theme.aud` over 1 second, and returns to the **Main Menu (`screen 0`)**.
 
 ---
 
@@ -272,8 +276,8 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
       1. Fades out the main menu music `theme.aud` over 1 second.
       2. Calls `playMovie("w32opn_1.dll", allowSkip = true)`.
       3. Clears the menu music playing flag and sets the music restart timer to `now + 200 ms`, so `theme.aud` starts playing again from the beginning 200 ms after the movie ends or is skipped, remaining on the Main Menu (`screen 0`).
-    - **Script command `playMovie <filename>`**:
-      - Used by world cutscenes (e.g. `W32mdl_1.dll`, `W32ndg_1.dll`). Calls `playMovie(filename, allowSkip = false)` (Wait: in the original engine, the script command passes `allowSkip = 0`, whereas startup and Replay Intro pass `allowSkip = 1`).
+    - **Script command `playAvi <filename>`**:
+      - Used by world cutscenes (e.g. `Snowexit/PORTAL4.CS` `w32mdl_1.dll`, `temple4` `w32ndg_1.dll`). Calls the movie player with `allowSkip = false` (whereas startup and Replay Intro pass `allowSkip = true`). Wrong argument count prints `usage:  playAvi filename`.
 28. **Playback and skipping behavior.**
     - If the movie file does not exist on disk (`fopen` fails), `playMovie` returns immediately without error.
     - Before opening the movie, the game suspends its sound engine, switches out of 3Dfx/800×600 into a 640×480 window if needed, creates an MCI video window (`MCIWndCreateA`), reduces the MCI volume slightly (`current_vol - 10`), drains up to 20 pending Windows messages, and starts playback.
@@ -301,22 +305,22 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
 | Brightness slider range and formula | `0..100` (default `50`) | `brightness = 0.3 + (val / 100.0) * 1.4` (range `0.3..1.7`) |
 | Shadow mask bits (`setShadowMask`) | `0x01..0x0F` | bit `0x01` Connor, `0x02` Monster, `0x04` Character, `0x08` Object |
 | Configurable move keys | `13` | actions `0..12` in `movekeys.kq` (plus row `13` Back to Options) |
-| Credits page count | `26` | pages `0..25` (`500.MSG` cases `1..26`) |
-| Credits line heights | `30` / `17` | pixels (`27sl.pft` large lines / `20sl.pft` `'*'`-prefixed small lines) |
-| Credits page duration (`0..24`) | `2000 + 500 * lines` | ms |
-| Credits final page duration (`25`) | `14000 + 500 * lines` | ms (with `kqteam08.pbm` 400×300 at `(120, 10)`) |
+| Credits page count | `25` | pages `1..25` (`400.MSG` cases `1..25`) |
+| Credits line spacing | `min(36, (screen_h - 50) / lines)` | pixels (`30` px slot height; `27sl.pft` large / `20sl.pft` `'*'`-prefixed small) |
+| Credits page duration (`1..24`) | `2000 + 500 * lines` | ms |
+| Credits final page duration (`25`) | `14000 + 500 * lines` | ms (with `kqteam08.pbm` 400×300 moved to `y = 10`) |
 | AVI movie format (`W32*.dll`) | `640×480`, `15.0` fps | Intel Indeo Video 5.0 (`iv50`) AVI container |
 | Replay Intro music restart delay | `200` | ms after movie ends before `theme.aud` restarts |
 
 ## Data used
 
 - **Archive `GAME/Kq/KqGui.kq`** (and `MASK/movekeys.kq`, `MASK/Options.cs`, `MASK/save/save<N>.vol`):
-  - **Load Game**: `Loadgame.kq`, `Loadgame.gui`, `save4x6.pbm` (`640×480`, or `saveload.pbm` `800×600`), `sl_hilite.pba`, `sl_buton.pba`, `sl_hibtn.pba`, `sl_scton.pba`, `sl_scbon.pba`, `sl_scbox.pba`, `sl_notmb.pbm`, `sl_win2.pbm`, `s_ybtn.pba`, `s_yhibtn.pba`, fonts `20sl.pft`, `27sl.pft`, `consoles.pft`, palette `Saveload.ppl`.
+  - **Load Game**: `Loadgame.kq`, `Loadgame.gui`, `save4x6.pbm` (`640×480`, or `saveload.pbm` `800×600`), `sl_hilite.pba`, `sl_buton.pba`, `sl_hibtn.pba`, `sl_scton.pba`, `sl_scbon.pba`, `sl_scbox.pba`, `sl_notmb.pbm`, `sl_win2.pbm`, `s_ybtn.pba`, `s_yhibtn.pba`, fonts `20sl.pft`, `27sl.pft`, `consoles.pft`, palette `Saveload.ppl` (loaded by code on show).
   - **Save Game**: `Savegame.kq`, `Savegame.gui`, plus `savebar.pba` and `savered.pbm` (progress bar), and `<game>/current.bin` (live 19,204-byte thumbnail).
-  - **Options**: `Options.kq`, `Options.gui`, `options.pbm` (`opt4x6.pbm` / `opt6x8.pbm`), `Mskicng.pba` (two spinning mask cursors), `sldrbar.pba`, `sldrtab.pba`, `20o.pft`, `27o.pft`, `27oh.pft`, `<game>/Options.cs`.
-  - **Graphics**: `Graphics.kq`, `Graphics.gui`, `options.pbm`, `Mskicng.pba`, `sldrbar.pba`, `sldrtab.pba`, `sl_win2.pbm`.
-  - **Remap Move Keys**: `<game>/movekeys.kq`, `movekey.gui`, `options.pbm`, `Mskicng.pba`, `15m.pft`, `15mh.pft`, `20o.pft`, `27o.pft`, `27oh.pft`.
-  - **Credits**: `credits.KQ`, `credits.gui`, `options.pbm`, `kqteam08.pbm` (400×300 team photo), `20sl.pft`, `27sl.pft`, `500.MSG` cases `1..26`.
+  - **Options**: `Options.kq`, `Options.gui`, `blkbkgd.pbm`, `Mskicng.pba` (two spinning mask cursors), `slider.pba` (2-frame track + knob), fonts `20.pft`, `27.pft`, `45.pft`, `<game>/Options.cs`.
+  - **Graphics**: `Graphics.kq`, `Graphics.gui`, `blkbkgd.pbm`, `Mskicng.pba`, `slider.pba`, `sl_win2.pbm`.
+  - **Remap Move Keys**: `<game>/movekeys.kq`, `movekey.gui`, `blkbkgd.pbm`, `Mskicng.pba`, fonts `20.pft`, `27.pft`, `45.pft`.
+  - **Credits**: `credits.KQ`, `credits.gui`, `4black.pbm`, `kqteam08.pbm` (400×300 team photo), `20sl.pft`, `27sl.pft`, `400.MSG` cases `1..25`, palette `Saveload.ppl` (loaded by code on show).
   - **Movies**: `<game>/W32opn_1.dll`, `<game>/W32mdl_1.dll`, `<game>/W32ndg_1.dll`.
 
 ## Edge cases

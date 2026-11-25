@@ -125,14 +125,38 @@ never blocks anything.
    empty, the script runs with `$2` = `Off`, `$3` = the object's name.
    Otherwise `$2` = `Cue`, `$3` = `302`, `$4` = the name. While the world
    is being shut down, no `Off` is sent.
-8a. **A visitor that is deleted never leaves** (traced 2026-11-01,
-   Q186 d): a trap only checks a visitor when that visitor reports a
-   move. An object removed from the world while inside (a projectile at
-   its `Die`, for instance) reports nothing, so it stays on the list:
-   no `Off`, and later visitors only give `Cue 301` / `Cue 302`. In the
-   data this is how a thrown rock keeps a Dead City plate down
-   (`ranged-weapons.md` 8d). Build it the same way (or a "removed"
-   list entry that never counts as leaving) so the plates behave.
+8a. **Deleted visitors do leave** (corrected 2026-11-24, Q202 a; replaces
+   the earlier Q186 d reading): when a visitor enters a trap, the trap
+   registers **both** a move notification and a **delete notification** on
+   that object. If the visitor is deleted while still inside (such as a
+   thrown rock projectile at `Die`, or a world item merged into an
+   existing inventory stack on pickup), the delete notification calls the
+   trap's normal leave path (rule 8): the visitor is removed from the
+   list, both notifications are cleared, a sticky trap shrinks back, and
+   (unless the world is shutting down) the trap sends **`Off`** if the
+   list is now empty or **`Cue 302`** if other visitors remain.
+8b. **Objects placed in or picked up from a trap** (traced 2026-11-24,
+   Q202 b–c):
+   - **Entering on placement:** whenever any object's collision shape is
+     added to the collision world (including a `KQInventoryItem` placed
+     still by `KQMonster::dropItem` / `KQMonster::inventory world` when it
+     activates within range of Connor), the collision manager immediately
+     tests it for overlap against all other active colliders whose
+     `(new.mask & other.type) != 0` or `(other.mask & new.type) != 0`. If
+     it overlaps a matching trap box (such as `INVITEM_Rock`, type
+     `0x220`, inside `triptrp1`–`5`, mask `517`/`519` with bit `0x200`),
+     the trap receives a collision event and the object enters at once
+     (`On` if the list was empty, else `Cue 301`).
+   - **Leaving on pickup:** picking up a world `KQInventoryItem` removes
+     it from the trap in both cases:
+     - if it **merges** into an existing stack in Connor's inventory, the
+       picked-up object is **deleted**, firing delete-notify → rule 8;
+     - if it **does not merge** (first rock, or a non-stacking item),
+       adding it to Connor's inventory moves its transform to the world
+       origin `(0, 0, 0)`, immediately sends a **move notification** to
+       watching traps, and disables its collision shape; the trap sees
+       `(0, 0, 0)` is outside its box and calls rule 8 (`Off` or `Cue
+       302`).
 9. So `On` comes when he first **touches** the box, and `Off` only once
    he is **out of touch and his middle is outside** it.
 

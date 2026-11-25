@@ -5,16 +5,31 @@ Hand-over in case the chat is lost. Brought up to date 2026-11-24 after
 fixes **`4g-F1`/`4g-F2`**) and the user confirmed the main menu submenus,
 `Replay Intro`, `Dynamic Lights`, and `Save/Load` UI live by eye and ear (`839`
 unit tests and headless viewer runs also pass).
-**Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:**
-- **`Q202`:** Pressure plates popping back up when picking up a thrown rock.
-- **`Q206`:** Minor submenu resource discrepancies (`400.MSG` vs `500.MSG` for Credits, missing `sldrbar.pba`/`sldrtab.pba` vs `slider.pba`, `Saveload.ppl` vs `Menus.ppl`, `0x02` Monster / `0x04` Character shadow bits, and exact `.gui`/`500.MSG` tag numbering).
-- **`Q207`:** Binary `PERS` save format (`Connor.kq`, `<object>.kq`, `worldState.kq`, `<map>.kq`, `newWorld.cs`, `GameState.kq`, `cur/<World>.vol`) for two-way original save compatibility and full mid-world camera/door/chest/drop persistence.
+**Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:** none.
 
 Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md`
 (newest entries at the top). The short public summary is `README.md`; the
 detailed "what works" list is `docs/FEATURES.md`.
 
-## Where we are (2026-11-24)
+## Where we are (2026-11-25)
+
+- **2026-11-25 (A): Script Coverage Batch 6 (IceWorld & Snowexit) studied** (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not checked by hand in the running original**; no Rust code written):
+  - **Commands & events (`script-commands.md` rules 12f–12h, `emitters.md`, `submenus.md` rule 27):** `KQObject::setGroupsActive3D`/`setGroupsActive3DFar` update near/far active-group masks live (`snowmane.cs`); `playAvi <filename>` calls the movie player with `allowSkip = false`; `Preload` in `icelord.cs` is a self-called script subroutine (`icelord.cs Icelord Preload`), not an engine call; `KQPuzzleCommand` `0`/`1`/`2` on `KQTerrainAnimator` starts, stops, or single-steps `frameCount` (`pond.cs`).
+  - **Ice Dragon (`fighting.md` section 7c):** `KQDragonHead` (600 HP, 200 dmg, `biteRad` 3,000 Normal / `attackDist` 6,000 Fire + `fireFile` emitter, 5 s cooldown) regrows after `deadPause` (3 s) unless killed in melee with `INVITEM_FlameSword` (ID `1110`, `synge` vs `lopt` + `KQAnimOnce` `die`); cauterizing both heads adds `ic_cave.bmp` `(48, 42)`, kills `dragbody` (50,000 XP, `db_die.KQS` → `db_dead.KQS`, cutout alpha on `chains.bmp`), loads `dragdbox.kq`, and deletes `draglhed`/`dragrhed`/`dragwall`.
+  - **Next:** Batches 5 & 6 (Barren, IceWorld & Snowexit), `Q202`, `Q206`, and `Q207` are all ready for Implementation Session (B); **Batch 7 (Temples `temple1`–`temple4` & stragglers)** is the last script-coverage batch for Study Session (A) when requested.
+
+- **2026-11-25 (A): Script Coverage Batch 5 (Barren) & `Q206` studied** (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not checked by hand in the running original**; no Rust code written):
+  - **Batch 5 (Barren, `docs/behaviour/tile-puzzle.md` rules 42–47):** documented `KQLavaTile` (`Cue 2400`–`2403`, `0.1 s` / `7.0 s` normal rise/sink cycle, `*1` permanent-up animations) and Connor's `Tile3` state (`65,536`, 5 × 7 grid, `mlava.aud`, south/north bridge jumps, blocked cells, prime sequence `3 → 5 → 7 → 11 → 13 → 17 → 19` on `tile12`/`41`/`36`/`05`/`20`/`45`/`24` with `T3`–`T19.aud` and `lvtile03`–`19.bmp`, column-3 bridge lock + 50,000 XP + `Barren::Tile::Complete` + `ba_Order.bmp`). Confirmed `Altarboy.cs` line 16 (`test $2 == INVITEM_StoneOrder`) is an original-script typo for `$4`.
+  - **`Q206` (`docs/behaviour/submenus.md`, `QUESTIONS.md`):** confirmed Credits loads `400.MSG` for 25 pages (`1..25`) with `line_step = min(36, (screen_h - 50) / lines)` and no `+145` px shift (`kqteam08.pbm` moved to `y = 10` on page `25`), `KQSliderControl` stretches `slider.pba` frame 0 and draws frame 1 at `x = rect.x + ((rect.w - knob_w) * val) / 100`, Load/Save/Credits hardcode `saveload.ppl` on show, and Graphics shadow bits are `0x01` Connor, `0x02` Monster, `0x04` Character, `0x08` Object (DirectDraw clears `0x02 | 0x08`).
+  - **Next:** Batch 5 (Barren), `Q202` (pressure plates), `Q206` (minor Credits/slider polish), and `Q207` (binary `PERS` saves) are all ready for Implementation Session (B); **Batch 6 (IceWorld & Snowexit)** is next for Study Session (A) when requested.
+
+- **2026-11-24 (A): Pressure plates & trap visitor lifecycle (`Q202`) studied** (traced in `Mask.exe` via Ghidra; user already verified the behaviour in the running original 2026-11-22; no Rust code written):
+  - Corrected `docs/behaviour/traps.md` rule `8a` (added `8b`), `docs/behaviour/ranged-weapons.md` section `8d`, and answered `Q202` in `docs/behaviour/QUESTIONS.md`.
+  - Key findings: `KQTrap` registers both move-notify and **delete-notify** on every visitor (deleted visitors *do* leave via `onDeleteNotify` → `onLeave` → `Off`/`Cue 302`). Placing `INVITEM_Rock` (`colliderType=0x220`) via `dropItem` / `WorldInventory` activates its collision and runs an immediate collision-world overlap scan, entering the plate trap (`Cue 301` before `Prrock.kq` is deleted and leaves with `Cue 302`). Picking up the rock either deletes it on stack merge (delete-notify → `Off`) or moves it to `(0, 0, 0)` with an immediate `notifyMoved` and disables collision (move-notify → `Off`).
+
+- **2026-11-24 (A): Save file & binary `PERS` format (`Q207`) studied** (traced in `Mask.exe` via Ghidra and verified byte-for-byte against all `9,686` binary `PERS` chunks in `MASK/save/save1.vol`–`save24.vol` with `0` failures; **not checked by hand in the running original**; no Rust code written):
+  - Documented the complete `PVOL` + binary `PERS` / ASCII `.kq` save format in `docs/behaviour/savefile.md` and answered `Q207` in `docs/behaviour/QUESTIONS.md` (also corrected `worldState.kq` in `docs/behaviour/submenus.md` rule 10.2).
+  - Key findings: every persistent class uses one unified serializer for both binary `PERS` (2-byte aligned blocks, even-padded class names and strings, raw LE primitives) and ASCII `.kq` INI; `save<N>.vol` stores the current world in binary `PERS` while embedded kept worlds (`cur/<World>.vol` and `cur/<map>.kq`) are ASCII `.kq` INI, and `Mask.exe`'s loader transparently accepts either format for any `.kq` file. `worldState.kq` holds the pending timed `KQEvent` queue, `KQCamera.kq` holds full camera pose/follow/1st-person state, `WorldInventory.kq` holds loose/dropped world items, and `world.cs <World> Begin` still runs after `RestoreWorld` with `WorldVar.cs` variables suppressing first-time cutscenes.
 
 - **2026-11-24 (B): M4 step 4g-F2 — Re-check fixes (`839` unit tests + headless Tests 1/2/3 pass; confirmed live by eye and ear 2026-11-24) + `Q207`:**
   - **`Replay Intro` window tracking:** Installed `SetWinEventHook` (`EVENT_OBJECT_LOCATIONCHANGE`, `EVENT_SYSTEM_MINIMIZESTART..=MINIMIZEEND`) with `GetClientRect` + `ClientToScreen` + `IsIconic` so the owned borderless MCI overlay moves, resizes, and minimizes live with the game window.
