@@ -238,6 +238,15 @@ impl NamedAnimPlayer {
         if let Some(pos) = pos.filter(|p| self.movement().is_some_and(|m| *p > m.start)) {
             self.phase = pos;
         }
+        if pos.is_some()
+            && self.movement().is_some_and(|m| {
+                !m.repeat
+                    && ((m.speed > 0.0 && self.phase >= 1.0 - 1e-6)
+                        || (m.speed < 0.0 && self.phase <= 1e-6))
+            })
+        {
+            self.playing = false;
+        }
         self
     }
 
@@ -960,5 +969,53 @@ pub(crate) mod tests {
         let mut q = object().with_names_at_load(Some("stop"), Some("spin"));
         assert_eq!(q.advance(DT).started, None);
         assert_eq!(q.movement_name(), "stop");
+    }
+
+    #[test]
+    fn finished_play_once_movement_at_anim_pos_1_stays_open_across_updates() {
+        let base_player = crate::chest::tests::test_chest(Some("INVITEM_Crystal")).player;
+        let open_idx = base_player
+            .movements
+            .iter()
+            .position(|m| m.name == "open")
+            .unwrap();
+        let mut chest3 = NamedAnimPlayer::new(
+            "smlchst3",
+            base_player.movements.clone(),
+            open_idx,
+            base_player.base,
+        )
+        .with_names_at_load(Some("open"), None)
+        .with_anim_pos(Some(1.0));
+        assert_eq!(chest3.movement_name(), "open");
+        assert!(!chest3.playing);
+        let end_frame = chest3.frame();
+        for _ in 0..5 {
+            let step = chest3.advance(DT);
+            assert_eq!(step.finished, None);
+            assert_eq!(step.started, None);
+            assert_eq!(chest3.movement_name(), "open");
+            assert_eq!(chest3.frame(), end_frame);
+            assert!((chest3.phase - 1.0).abs() < 1e-6);
+        }
+
+        let mut chest1 = NamedAnimPlayer::new(
+            "smlchst1",
+            base_player.movements,
+            open_idx,
+            base_player.base,
+        )
+        .with_names_at_load(Some("open"), Some(""))
+        .with_anim_pos(Some(1.0));
+        assert_eq!(chest1.movement_name(), "open");
+        assert_eq!(chest1.waiting, None);
+        assert!(!chest1.playing);
+        for _ in 0..5 {
+            let step = chest1.advance(DT);
+            assert_eq!(step.finished, None);
+            assert_eq!(step.started, None);
+            assert_eq!(chest1.movement_name(), "open");
+            assert!((chest1.phase - 1.0).abs() < 1e-6);
+        }
     }
 }

@@ -12,17 +12,20 @@ use kq8_data::pvol::Pvol;
 use kq8_data::save_pers::{
     write_pers, KqAnimObject, KqBase, KqCamMover, KqChest, KqConner, KqDoor, KqGameState,
     KqInterior, KqInventory, KqInventoryItem, KqMap, KqMonster, KqMoverInline, KqMusic, KqObject,
-    KqRiverControl, KqVisibleBase, KqWorldState, MoverData, PersObject, TMat3F,
+    KqRiverControl, KqState, KqStateKind, KqVisibleBase, KqWorldState, MoverData, PersObject,
+    TMat3F,
 };
 
 use crate::collide::Placement;
 use crate::item::{ItemObject, Place};
 use crate::magic_map::{View, TELEPORT_MARKS};
 use crate::potions::{Effect, Running};
+use crate::rope::{Climb, End, Rope, Stage, Status as RopeStatus};
 use crate::save_game::{
     esc, fmt_f32_slice, fmt_opt_str, format_world_var_cs, parse_f32_hex_or_dec, parse_opt_str,
     unesc, SavedWorldSnapshot,
 };
+use crate::weapons::WeaponMode;
 
 const META_HEADER: &str = "KQ8R_META_V1";
 
@@ -233,18 +236,60 @@ fn build_connor_pers(snap: &SavedWorldSnapshot, item_types: Option<&ItemTypes>) 
             .map_or(0, |(r, _)| r.left.max(0) as i32)
     };
 
+    let state = snap.rope_climb.as_ref().map(|cl| {
+        (
+            "KQStateConnerHookRope".to_string(),
+            Box::new(PersObject::KqState(KqState {
+                base: kq_base("KQStateConnerHookRope"),
+                from_state: 0,
+                kind: KqStateKind::ConnerHookRope {
+                    done_roping: i32::from(cl.done),
+                    reached_top: 0,
+                    do_mode_before: cl.hand_before.number() as i32,
+                    old_cam_pos: snap.camera.as_ref().map_or([0.0; 3], |c| c.position),
+                    con_pos: cl.aim,
+                    on_rope: i32::from(cl.stage == Stage::Hanging),
+                    hide_icon: i32::from(cl.stage == Stage::Hanging),
+                    first_to_third: i32::from(cl.first_to_third),
+                    bottom_cam_limit: cl.range.0,
+                    top_cam_limit: cl.range.1,
+                    con_cam_bottom_limit: cl.bottom_limit,
+                    con_cam_top_limit: cl.top_limit,
+                    rope_cam_loc1: cl.cam[0].unwrap_or([0.0; 3]),
+                    rope_cam_loc2: cl.cam[1].unwrap_or([0.0; 3]),
+                    orig_step_up: cl.saved_steps.map_or(0.0, |s| s.0),
+                    orig_step_down: cl.saved_steps.map_or(0.0, |s| s.1),
+                },
+            })),
+        )
+    });
+
     let monster = KqMonster {
         anim_object,
+        state,
         do_mode: j.weapon_mode.number() as i32,
         active: 1,
         inventory,
         ..Default::default()
     };
 
+    let r = snap.rope.as_ref();
+    let (rope_cam_ang, rope_cam_range) = r.and_then(|r| r.angle).unwrap_or((0.0, 0.0));
+
     PersObject::KqConner(Box::new(KqConner {
         monster,
         allow_shadows_in_game: u32::from(j.allow_shadows),
         first_person: i32::from(snap.camera.as_ref().is_some_and(|c| c.first_person)),
+        rope_status: r.map_or(0, |r| r.status.to_pers()),
+        rope_loc: r.map_or([0.0; 3], |r| r.place),
+        rope_dir: r.map_or([0.0; 3], |r| r.dir),
+        rope_cam_loc1: r.and_then(|r| r.cam[0]).unwrap_or([0.0; 3]),
+        rope_cam_loc2: r.and_then(|r| r.cam[1]).unwrap_or([0.0; 3]),
+        rope_cam2_loc: r.and_then(|r| r.top_cam).unwrap_or([0.0; 3]),
+        rope_cam_ang,
+        rope_cam_range,
+        rope_cam_top_limit: r.map_or(0.0, |r| r.top_limit),
+        rope_cam_bottom_limit: r.map_or(0.0, |r| r.bottom_limit),
         start_help: i32::from(j.not_starting_help),
         world_flags: j.raw_world_flags.unwrap_or(0),
         was_in_bow_mode: i32::from(j.last_away_ranged),
@@ -551,6 +596,56 @@ fn format_kq8r_meta(snap: &SavedWorldSnapshot) -> Vec<u8> {
             h.to_bits()
         ));
     }
+    if let Some(r) = &snap.rope {
+        let fmt_opt3 = |v: Option<[f32; 3]>| {
+            v.map_or_else(|| "-".into(), |a| fmt_f32_slice(&a))
+        };
+        let ang_s = r.angle.map_or_else(
+            || "-".into(),
+            |(a, b)| format!("{},{}", a.to_bits(), b.to_bits()),
+        );
+        let at_s = r.changed_at.map_or_else(|| "-".into(), |t| t.to_bits().to_string());
+        out.push_str(&format!(
+            "rope\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            r.status.to_pers(),
+            fmt_f32_slice(&r.place),
+            fmt_f32_slice(&r.dir),
+            fmt_opt3(r.cam[0]),
+            fmt_opt3(r.cam[1]),
+            fmt_opt3(r.top_cam),
+            ang_s,
+            r.top_limit.to_bits(),
+            r.bottom_limit.to_bits(),
+            at_s,
+        ));
+    }
+    if let Some(cl) = &snap.rope_climb {
+        let fmt_opt3 = |v: Option<[f32; 3]>| {
+            v.map_or_else(|| "-".into(), |a| fmt_f32_slice(&a))
+        };
+        let steps_s = cl.saved_steps.map_or_else(
+            || "-".into(),
+            |(a, b)| format!("{},{}", a.to_bits(), b.to_bits()),
+        );
+        out.push_str(&format!(
+            "rope_climb\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            cl.from.as_str(),
+            cl.stage.as_str(),
+            fmt_f32_slice(&cl.place),
+            fmt_f32_slice(&cl.dir),
+            fmt_opt3(cl.cam[0]),
+            fmt_opt3(cl.cam[1]),
+            cl.top_limit.to_bits(),
+            cl.bottom_limit.to_bits(),
+            cl.hand_before.number(),
+            fmt_opt_str(&cl.weapon_before),
+            u8::from(cl.first_to_third),
+            fmt_f32_slice(&cl.aim),
+            format!("{},{}", cl.range.0.to_bits(), cl.range.1.to_bits()),
+            steps_s,
+            u8::from(cl.done),
+        ));
+    }
 
     for (wname, kw) in &snap.kept_worlds {
         for g in &kw.gone {
@@ -751,6 +846,74 @@ pub fn apply_kq8r_meta(snap: &mut SavedWorldSnapshot, bytes: &[u8]) -> Result<()
                 let h = parse_f32_bits(f[4])?;
                 snap.connor_pos = Some((p, h));
                 snap.connor_at = Some([p[0], p[1], h]);
+            }
+            "rope" if f.len() >= 11 => {
+                let status = RopeStatus::from_pers(f[1].parse().unwrap_or(0));
+                let opt3 = |s: &str| -> Result<Option<[f32; 3]>, String> {
+                    if s == "-" {
+                        Ok(None)
+                    } else {
+                        Ok(Some(parse_f32_hex_or_dec::<3>(s)?))
+                    }
+                };
+                let angle = if f[7] == "-" {
+                    None
+                } else {
+                    let (a, b) = f[7].split_once(',').ok_or("bad rope angle")?;
+                    Some((parse_f32_bits(a)?, parse_f32_bits(b)?))
+                };
+                let changed_at = if f[10] == "-" {
+                    None
+                } else {
+                    Some(parse_f64_bits(f[10])?)
+                };
+                snap.rope = Some(Rope {
+                    status,
+                    place: parse_f32_hex_or_dec::<3>(f[2])?,
+                    dir: parse_f32_hex_or_dec::<3>(f[3])?,
+                    cam: [opt3(f[4])?, opt3(f[5])?],
+                    top_cam: opt3(f[6])?,
+                    angle,
+                    top_limit: parse_f32_bits(f[8])?,
+                    bottom_limit: parse_f32_bits(f[9])?,
+                    changed_at,
+                });
+            }
+            "rope_climb" if f.len() >= 16 => {
+                let from = End::from_str(f[1]).ok_or_else(|| format!("bad rope end '{}'", f[1]))?;
+                let stage =
+                    Stage::from_str(f[2]).ok_or_else(|| format!("bad rope stage '{}'", f[2]))?;
+                let opt3 = |s: &str| -> Result<Option<[f32; 3]>, String> {
+                    if s == "-" {
+                        Ok(None)
+                    } else {
+                        Ok(Some(parse_f32_hex_or_dec::<3>(s)?))
+                    }
+                };
+                let (r0, r1) = f[13].split_once(',').ok_or("bad rope range")?;
+                let saved_steps = if f[14] == "-" {
+                    None
+                } else {
+                    let (a, b) = f[14].split_once(',').ok_or("bad rope steps")?;
+                    Some((parse_f32_bits(a)?, parse_f32_bits(b)?))
+                };
+                snap.rope_climb = Some(Climb {
+                    from,
+                    stage,
+                    place: parse_f32_hex_or_dec::<3>(f[3])?,
+                    dir: parse_f32_hex_or_dec::<3>(f[4])?,
+                    cam: [opt3(f[5])?, opt3(f[6])?],
+                    top_limit: parse_f32_bits(f[7])?,
+                    bottom_limit: parse_f32_bits(f[8])?,
+                    hand_before: WeaponMode::from_number(f[9].parse().unwrap_or(4))
+                        .unwrap_or(WeaponMode::None),
+                    weapon_before: parse_opt_str(f[10]),
+                    first_to_third: parse_bool(f[11]),
+                    aim: parse_f32_hex_or_dec::<3>(f[12])?,
+                    range: (parse_f32_bits(r0)?, parse_f32_bits(r1)?),
+                    saved_steps,
+                    done: parse_bool(f[15]),
+                });
             }
             "kw_gone" if f.len() >= 3 => {
                 snap.kept_worlds
@@ -1276,6 +1439,33 @@ mod tests {
                 hold: false,
                 offset: [0.0, -300.0, 200.0],
             }),
+            rope: Some(Rope {
+                status: RopeStatus::Bottom,
+                place: [200000.0, 260000.0, 8200.0],
+                dir: [0.0, 0.0, 1.57],
+                cam: [Some([198000.0, 260000.0, 12000.0]), None],
+                top_cam: Some([198500.0, 260000.0, 15000.0]),
+                angle: Some((1.5, 0.5)),
+                top_limit: 16000.0,
+                bottom_limit: 7000.0,
+                changed_at: Some(10.0),
+            }),
+            rope_climb: Some(Climb {
+                from: End::Bottom,
+                stage: Stage::Hanging,
+                place: [200000.0, 260000.0, 8200.0],
+                dir: [0.0, 0.0, 1.57],
+                cam: [Some([198000.0, 260000.0, 12000.0]), None],
+                top_limit: 16000.0,
+                bottom_limit: 7000.0,
+                hand_before: WeaponMode::Hand,
+                weapon_before: Some("Sword".into()),
+                first_to_third: false,
+                aim: [200000.0, 260000.0, 11000.0],
+                range: (11000.0, 15500.0),
+                saved_steps: Some((325.0, 325.0)),
+                done: false,
+            }),
             journey: Journey {
                 from: "Daventry".into(),
                 stats: Some(ConnorStats {
@@ -1391,6 +1581,9 @@ mod tests {
         // Round-trip through import_original_save + apply_kq8r_meta.
         let mut imported =
             import_original_save(&bytes, Some(&item_types)).expect("import_original_save");
+        assert!(imported.rope.is_some());
+        assert!(imported.rope_climb.is_some());
+        assert_eq!(imported.rope_climb.as_ref().unwrap().stage, Stage::Hanging);
         let meta = pvol.find("kq8r_meta.txt").expect("kq8r_meta.txt");
         apply_kq8r_meta(&mut imported, pvol.data(meta).unwrap()).expect("apply_kq8r_meta");
 
@@ -1398,6 +1591,8 @@ mod tests {
         assert_eq!(imported.connor_pos, snap.connor_pos);
         assert_eq!(imported.connor_anim, snap.connor_anim);
         assert_eq!(imported.camera, snap.camera);
+        assert_eq!(imported.rope, snap.rope);
+        assert_eq!(imported.rope_climb, snap.rope_climb);
         assert_eq!(imported.journey.next_no_name, 23);
         assert!((imported.journey.combat_level - 1.5).abs() < 1e-6);
         assert_eq!(imported.journey.stats, snap.journey.stats);

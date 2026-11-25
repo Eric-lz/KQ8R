@@ -196,7 +196,14 @@ fn apply_connor_pers(
     world_base: &str,
     types: Option<&ItemTypes>,
     world_vars: &[(String, String)],
-) -> (Option<[f32; 3]>, Option<([f32; 3], f32)>, Option<(String, f32)>, Journey) {
+) -> (
+    Option<[f32; 3]>,
+    Option<([f32; 3], f32)>,
+    Option<(String, f32)>,
+    Journey,
+    Option<crate::rope::Rope>,
+    Option<crate::rope::Climb>,
+) {
     let placement = placement_from_object(&c.monster.anim_object.object);
     let pos = placement.position;
     let heading = angles_of(placement.rotation)[2];
@@ -334,7 +341,84 @@ fn apply_connor_pers(
         allow_shadows: c.allow_shadows_in_game != 0,
         vars,
     };
-    (connor_at, connor_pos, connor_anim, journey)
+
+    let nonzero3 = |v: [f32; 3]| v.iter().any(|x| *x != 0.0).then_some(v);
+    let rope_status = crate::rope::Status::from_pers(c.rope_status);
+    let has_rope_info = rope_status != crate::rope::Status::None
+        || c.rope_cam_top_limit != 0.0
+        || c.rope_cam_bottom_limit != 0.0
+        || nonzero3(c.rope_cam_loc1).is_some()
+        || nonzero3(c.rope_cam_loc2).is_some()
+        || nonzero3(c.rope_cam2_loc).is_some()
+        || c.rope_cam_ang != 0.0
+        || c.rope_cam_range != 0.0
+        || nonzero3(c.rope_loc).is_some()
+        || nonzero3(c.rope_dir).is_some();
+    let rope = has_rope_info.then_some(crate::rope::Rope {
+        status: rope_status,
+        place: c.rope_loc,
+        dir: c.rope_dir,
+        cam: [nonzero3(c.rope_cam_loc1), nonzero3(c.rope_cam_loc2)],
+        top_cam: nonzero3(c.rope_cam2_loc),
+        angle: (c.rope_cam_ang != 0.0 || c.rope_cam_range != 0.0)
+            .then_some((c.rope_cam_ang, c.rope_cam_range)),
+        top_limit: c.rope_cam_top_limit,
+        bottom_limit: c.rope_cam_bottom_limit,
+        changed_at: None,
+    });
+
+    let rope_climb = match c.monster.state.as_ref().map(|(_, o)| o.as_ref()) {
+        Some(PersObject::KqState(kq8_data::save_pers::KqState {
+            kind:
+                kq8_data::save_pers::KqStateKind::ConnerHookRope {
+                    done_roping: 0,
+                    do_mode_before,
+                    con_pos,
+                    on_rope,
+                    first_to_third,
+                    bottom_cam_limit,
+                    top_cam_limit,
+                    con_cam_bottom_limit,
+                    con_cam_top_limit,
+                    rope_cam_loc1,
+                    rope_cam_loc2,
+                    orig_step_up,
+                    orig_step_down,
+                    ..
+                },
+            ..
+        })) => Some(crate::rope::Climb {
+            from: if c.rope_status == 1 {
+                crate::rope::End::Top
+            } else {
+                crate::rope::End::Bottom
+            },
+            stage: if *on_rope != 0 {
+                crate::rope::Stage::Hanging
+            } else if c.rope_status == 1 {
+                crate::rope::Stage::Drawdown
+            } else {
+                crate::rope::Stage::Btoss
+            },
+            place: c.rope_loc,
+            dir: c.rope_dir,
+            cam: [nonzero3(*rope_cam_loc1), nonzero3(*rope_cam_loc2)],
+            top_limit: *con_cam_top_limit,
+            bottom_limit: *con_cam_bottom_limit,
+            hand_before: WeaponMode::from_number(i64::from(*do_mode_before))
+                .unwrap_or(WeaponMode::None),
+            weapon_before: None,
+            first_to_third: *first_to_third != 0,
+            aim: nonzero3(*con_pos).unwrap_or(pos),
+            range: (*bottom_cam_limit, *top_cam_limit),
+            saved_steps: (*orig_step_up != 0.0 || *orig_step_down != 0.0)
+                .then_some((*orig_step_up, *orig_step_down)),
+            done: false,
+        }),
+        _ => None,
+    };
+
+    (connor_at, connor_pos, connor_anim, journey, rope, rope_climb)
 }
 
 fn parse_kept_vol(
@@ -706,6 +790,8 @@ pub fn import_original_save(
     let mut connor_pos = None;
     let mut connor_anim = None;
     let mut journey_opt: Option<Journey> = None;
+    let mut rope: Option<crate::rope::Rope> = None;
+    let mut rope_climb: Option<crate::rope::Climb> = None;
     let mut camera: Option<SavedCameraState> = None;
     let mut extra_maps: Vec<(String, MapKeys)> = Vec::new();
 
@@ -726,12 +812,14 @@ pub fn import_original_save(
         if lower == "connor.kq" {
             if is_pers {
                 if let Ok(PersObject::KqConner(c)) = parse_pers(data) {
-                    let (at, pos, anim, j) =
+                    let (at, pos, anim, j, r, rc) =
                         apply_connor_pers(&c, &world, item_types, &world_vars);
                     connor_at = at;
                     connor_pos = pos;
                     connor_anim = anim;
                     journey_opt = Some(j);
+                    rope = r;
+                    rope_climb = rc;
                 }
             }
             continue;
@@ -849,6 +937,8 @@ pub fn import_original_save(
         connor_pos,
         connor_anim,
         camera,
+        rope,
+        rope_climb,
         journey,
         kept_worlds,
     })

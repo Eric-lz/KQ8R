@@ -1789,6 +1789,8 @@ pub struct DoorAssets {
     pub initial_chest_state: Option<(kq8_core::chest::ChestState, Option<String>)>,
     /// Restored `KQChest` hidden flag (`savefile.md` rule 26).
     pub initial_chest_hidden: Option<bool>,
+    /// True when this door/chest/animated object came from a kept or saved snapshot.
+    pub from_kept: bool,
     /// A scripted animated object (3e-5), not a door.
     pub object: bool,
 }
@@ -4034,8 +4036,9 @@ impl Placer<'_> {
             && s.get("script").is_some_and(|v| !v.trim().is_empty())
             && collider_value(s, "colliderType", kq8_core::collide::DEFAULT_TYPE).0 & kq8_core::click::CLICKABLE != 0;
         if !unused && scripted {
+            let kept = self.kept_states.contains_key(&p.name.to_ascii_lowercase());
             match &animation {
-                Some(c) if c.speed == 0.0 => {
+                Some(c) if c.speed == 0.0 || kept => {
                     self.place_door(&label, &file, p, Mover::Object);
                     return;
                 }
@@ -4586,6 +4589,9 @@ impl Placer<'_> {
         let initial_chest = is_chest.then(|| self.kept_chests.get(&key_lc)).flatten();
         let initial_chest_state = initial_chest.map(|c| (c.state, c.remembered.clone()));
         let initial_chest_hidden = initial_chest.map(|c| c.hidden);
+        let from_kept = self.kept_doors.contains_key(&key_lc)
+            || self.kept_chests.contains_key(&key_lc)
+            || self.kept_states.contains_key(&key_lc);
         let name_key = |k: &str| s.get(k).map(|v| v.trim().to_string());
         let door = DoorAssets {
             movements: with_index,
@@ -4606,6 +4612,7 @@ impl Placer<'_> {
             initial_door_state,
             initial_chest_state,
             initial_chest_hidden,
+            from_kept,
             object: kind == Mover::Object,
         };
         if let Some(v) = s.get("tooFar") {

@@ -1,11 +1,11 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-25 after
-**Implementation Session (B)** finished **M4 step `4h`** (`4h-1`..`4h-5`) for
-saved games and binary `PERS` support (`Q207`; `847` workspace unit tests,
-`kq8 save-verify`, and headless save/reload checks pass; live interactive
-`cargo play` eye check and loading a KQ8R save inside original `Mask.exe` are
-**not tested**).
+**Implementation Session (B)** finished **M4 step `4h`** (`4h-1`..`4h-5` + fix
+**`4h-F1`**) for saved games and binary `PERS` support (`Q207`; `848` workspace
+unit tests, `kq8 save-verify`, and headless save/reload checks including
+scripted chest `smlchst1` pass; live interactive `cargo play` eye checks and
+loading a KQ8R save inside original `Mask.exe` are **not tested**).
 **Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:** **`Q208`** (`worldFlags` bit layout, `KQDoor::state` `0`/`3`, `KQConner::doMode` enum mapping).
 
 Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md`
@@ -19,8 +19,9 @@ detailed "what works" list is `docs/FEATURES.md`.
   - **`4h-2` (mid-world save/restore):** `DoorState`/`ChestState::from_pers`/`to_pers`, `EventQueue` save/restore, `SavedCameraState`, `apply_exact_pose`, loose world-item/music-stack/`current_time` restoration, and `BeginNow` on restore guarded by `WorldVar.cs`.
   - **`4h-3` (`save_import.rs`):** imports original `Mask.exe` `save1.vol`–`save24.vol` directly from `MASK/save/` or user folder (verified headlessly on `save18.vol` Swamp and `save1.vol` Daventry); opened **`Q208`** in `docs/behaviour/QUESTIONS.md` (`worldFlags`, `KQDoor::state` `0`/`3`, `KQConner::doMode`).
   - **`4h-4` (`save_export.rs`):** writes standard `PVOL` `save<N>.vol` archives (`savedGameName`/`worldName`/`savedGameVersion` without trailing `\0`, `WorldVar.cs`, `newWorld.cs` `setCurrentTime`, binary `PERS` current world, embedded ASCII kept `.vol` worlds & `.kq` maps, `current.bin`, and `kq8r_meta.txt` with `apply_kq8r_meta`, plus legacy `kq8r_state.txt` load fallback).
-  - **Verified:** `cargo test --workspace` (`847` passed, `0` failed), `cargo build --release -p kq8-viewer -p kq8-cli`, `kq8 save-verify --file kq8-artifacts/user/save/save26.vol` (`26` binary `PERS` across `8` classes, `11` ASCII `.kq`, `0` failures), and headless Daventry save + reload (`Condoor` `opened`, `smlchst3` `open`, `NoName22` crystal, exact Connor & camera pose, `world.cs Daventry Begin` with `FirstTime == 0` and no cutscene replay).
-  - **Not tested:** live interactive `cargo play` eye check and loading a KQ8R-written `save<N>.vol` inside original `Mask.exe`.
+  - **`4h-F1` (opened chests & mid-climb rope fixes):** fixed `NamedAnimPlayer::with_anim_pos` (`playing = false` at finished `animPos = 1.0`), routed kept clickable `KQAnimObject`s (`smlchst1`/`smlchst2`) back to `place_door` with `with_names_at_load` instead of `anim_view` (`with_stop_names`), and added full `Rope` + `Climb` (`KQConner` rope fields + `KQStateConnerHookRope` + `kq8r_meta.txt`) save and restore (`use_gravity = false`, `step_up/down = 0`, `rope_hang_at`, `connor_on_rope` / `connor_roping`, `rope_lock`).
+  - **Verified:** `cargo test --workspace` (`848` passed, `0` failed), `cargo build --release -p kq8-viewer -p kq8-cli`, `kq8 save-verify --file kq8-artifacts/user/save/save26.vol` (`27` binary `PERS` across `9` classes, `11` ASCII `.kq`, `0` failures), and headless Daventry saves + reloads (`Condoor` `opened`, `smlchst3` `open`, `smlchst1` `open` at `animPos=1.0000`, `NoName22` crystal, exact Connor & camera pose, `world.cs Daventry Begin` with `FirstTime == 0` and no cutscene replay).
+  - **Not tested:** live interactive `cargo play` eye checks (including mid-climb rope reload in-viewer) and loading a KQ8R-written `save<N>.vol` inside original `Mask.exe` (KQ8R writes to `kq8-artifacts/user/save/`, not `MASK/save/`, and writes dynamic delta chunks rather than full-world `newWorld.cs`/`Terrain.kq`/static object chunks).
   - **Next:** User live eye/game checks on M4 `4h` (and `Mask.exe` interoperability check if desired), or Session B implementing Script Coverage Batches 5–7 / `Q202` / `Q206`.
 
 - **2026-11-25 (A): Script Coverage Batch 7 (Temples & stragglers) studied — ALL 7 study batches complete** (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not checked by hand in the running original**; no Rust code written):

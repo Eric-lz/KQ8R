@@ -2513,6 +2513,8 @@ pub fn menu_step(
                     .map(|c| (c.mover.position, c.walker.heading));
                 let connor_anim = connor.as_ref().map(|c| c.snapshot_anim());
                 let camera = game_cam.as_ref().map(|c| c.snapshot());
+                let rope = sim.as_ref().map(|s| s.active.world.rope.clone());
+                let rope_climb = connor.as_ref().and_then(|c| c.rope.clone());
                 let snap = SavedWorldSnapshot {
                     world: if world_base.is_empty() {
                         "Daventry".to_string()
@@ -2523,6 +2525,8 @@ pub fn menu_step(
                     connor_pos,
                     connor_anim,
                     camera,
+                    rope,
+                    rope_climb,
                     journey,
                     kept_worlds,
                 };
@@ -2655,6 +2659,8 @@ pub fn menu_step(
                                 connor_pos,
                                 connor_anim: snap.connor_anim,
                                 camera: snap.camera,
+                                rope: snap.rope,
+                                rope_climb: snap.rope_climb,
                             },
                             format!("Load Game {kind_label} slot {slot} '{name}'"),
                         );

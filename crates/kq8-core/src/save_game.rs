@@ -64,6 +64,8 @@ pub struct SavedWorldSnapshot {
     pub connor_pos: Option<([f32; 3], f32)>,
     pub connor_anim: Option<(String, f32)>,
     pub camera: Option<SavedCameraState>,
+    pub rope: Option<crate::rope::Rope>,
+    pub rope_climb: Option<crate::rope::Climb>,
     pub journey: Journey,
     pub kept_worlds: BTreeMap<String, KeptWorldSnapshot>,
 }
@@ -900,6 +902,8 @@ impl SavedWorldSnapshot {
             connor_pos,
             connor_anim,
             camera,
+            rope: None,
+            rope_climb: None,
             journey,
             kept_worlds,
         })
@@ -990,6 +994,8 @@ mod tests {
                 hold: false,
                 offset: [0.0, 0.0, 0.0],
             }),
+            rope: None,
+            rope_climb: None,
             journey: Journey {
                 from: "Daventry".into(),
                 stats: Some(ConnorStats {

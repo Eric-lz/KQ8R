@@ -159,6 +159,8 @@ pub struct RestoreSave {
     pub connor_pos: Option<([f32; 3], f32)>,
     pub connor_anim: Option<(String, f32)>,
     pub camera: Option<kq8_core::save_game::SavedCameraState>,
+    pub rope: Option<kq8_core::rope::Rope>,
+    pub rope_climb: Option<kq8_core::rope::Climb>,
 }
 
 /// Target-world state applied immediately after `build_pending` on save restore (`M4 4h-2`).
@@ -166,6 +168,8 @@ pub struct RestoreApply {
     pub connor_pos: Option<([f32; 3], f32)>,
     pub connor_anim: Option<(String, f32)>,
     pub camera: Option<kq8_core::save_game::SavedCameraState>,
+    pub rope: Option<kq8_core::rope::Rope>,
+    pub rope_climb: Option<kq8_core::rope::Climb>,
     pub current_time: Option<f64>,
     pub pending_events: Vec<String>,
 }
@@ -252,6 +256,8 @@ impl WorldChange {
             connor_pos: restore.connor_pos,
             connor_anim: restore.connor_anim.clone(),
             camera: restore.camera.clone(),
+            rope: restore.rope.clone(),
+            rope_climb: restore.rope_climb.clone(),
             current_time: target_kept.and_then(|k| k.current_time),
             pending_events: target_kept
                 .map(|k| k.pending_events.clone())
@@ -1077,6 +1083,66 @@ pub fn world_change_step(world: &mut World) {
                 if let Some(saved_cam) = &apply.camera {
                     if let Some(mut cam) = world.get_resource_mut::<crate::game_camera::GameCam>() {
                         cam.restore(saved_cam, connor_base);
+                    }
+                }
+                if apply.rope.is_some() || apply.rope_climb.is_some() {
+                    let is_hanging = apply
+                        .rope_climb
+                        .as_ref()
+                        .is_some_and(|cl| cl.stage == kq8_core::rope::Stage::Hanging);
+                    if let Some(mut sim) = world.get_resource_mut::<crate::door_view::DoorSim>() {
+                        if let Some(saved_rope) = apply.rope {
+                            sim.active.world.rope = saved_rope;
+                        }
+                        if apply.rope_climb.is_some() {
+                            sim.active.world.connor_roping = true;
+                            if is_hanging {
+                                sim.active.world.connor_on_rope = true;
+                                kq8_core::connor_inventory::rope_lock(
+                                    &mut sim.active.world,
+                                    true,
+                                    "saved rope climb restore",
+                                );
+                            }
+                        }
+                    }
+                    if let Some(cl) = apply.rope_climb {
+                        if let Some(mut c) = world.get_resource_mut::<connor_view::ConnorSim>() {
+                            c.mover.use_gravity = false;
+                            if cl.saved_steps.is_some() {
+                                c.mover.step_up = 0.0;
+                                c.mover.step_down = 0.0;
+                            }
+                            let phase = apply
+                                .connor_anim
+                                .as_ref()
+                                .map_or(0.5, |(_, p)| p.clamp(0.0, 1.0));
+                            if cl.stage == kq8_core::rope::Stage::Hanging {
+                                if let Some(name) =
+                                    c.rope_movement(kq8_core::rope::Anim::Rope("climb"))
+                                {
+                                    c.walker.rope_hang_at(name, phase);
+                                }
+                                c.hands_off = false;
+                            } else if cl.stage == kq8_core::rope::Stage::RopeModel {
+                                c.hands_off = true;
+                                if let Some(name) =
+                                    c.rope_movement(kq8_core::rope::Anim::Rope("rope"))
+                                {
+                                    c.rope_model = Some((name, phase, phase));
+                                }
+                            } else {
+                                if let Some(a) = kq8_core::rope::Climb::anim(cl.stage) {
+                                    if let Some(name) = c.rope_movement(a) {
+                                        c.walker.rope_play(name);
+                                        c.walker.phase = phase;
+                                    }
+                                }
+                                c.hands_off = true;
+                            }
+                            c.rope = Some(cl);
+                            c.redraw_from_walker();
+                        }
                     }
                 }
             }

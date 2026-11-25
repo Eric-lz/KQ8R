@@ -4468,6 +4468,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | Closed M4 `4h` (`4h-1`..`4h-5`, `Q207`), updated feature/status docs and `kq8 save-verify` CLI docs, recorded open `Q208` | Steps `4h-1`–`4h-4` test results and `docs/behaviour/QUESTIONS.md` (`Q208`) | Live interactive `cargo play` eye check and loading a KQ8R save inside original `Mask.exe` explicitly marked **not tested** |
 
+## M4 4h-F1 2026-11-25: Chest open-state fix & mid-climb rope save/restore — core `named_anim.rs`, `rope.rs`, `save_game.rs`, `save_import.rs`, `save_export.rs`; viewer `load.rs`, `door_view.rs`, `menu_view.rs`, `world_build.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Keep finished non-repeating chest/object animations (`animPos = 1.0`, `currAnimName = open`, `nextAnimName = None`) in `door_view` and stopped (`playing = false`) across save reloads (`KQChest` + kept clickable `KQAnimObject`s like `smlchst1`) | `savefile.md` rules 25–26; `objects.md` "Animated objects at load" rule 4; user live check 2026-11-25 | unit test `named_anim::tests::finished_play_once_movement_at_anim_pos_1_stays_open_across_updates`; headless Daventry `smlchst1` save + `kq8 save-verify` (`27` binary `PERS` chunks, `0` failures) + reload (`viewer.log`: `shows 'open'`, `animPos=1.0000`, `RESULT: PASS`) |
+| Save and restore `Rope` settings and active `Climb` (`KQConner` rope fields + `KQStateConnerHookRope` + `kq8r_meta.txt`), restoring `use_gravity = false`, `step_up/down = 0`, `rope_hang_at`, `connor_on_rope` / `connor_roping`, and `rope_lock` | `savefile.md` rules 37–38; `ropeandhook.md` rules 1–26; user live check 2026-11-25 | unit test `save_export::tests::exported_save_has_valid_pvol_and_pers_and_round_trips` (`cargo test --workspace`: `848` passed); live viewer mid-climb test **not tested** |
+
 
 
 

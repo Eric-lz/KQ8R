@@ -62,6 +62,22 @@ impl Status {
             Status::Bottom => "bottom",
         }
     }
+
+    pub fn from_pers(v: i32) -> Self {
+        match v {
+            1 => Status::Top,
+            2 => Status::Bottom,
+            _ => Status::None,
+        }
+    }
+
+    pub fn to_pers(self) -> i32 {
+        match self {
+            Status::None => 0,
+            Status::Top => 1,
+            Status::Bottom => 2,
+        }
+    }
 }
 
 /// The two hook icons (rule 7), shown in the status icon places.
@@ -287,6 +303,23 @@ pub enum End {
     Top,
 }
 
+impl End {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            End::Bottom => "Bottom",
+            End::Top => "Top",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.trim() {
+            "Bottom" => Some(End::Bottom),
+            "Top" => Some(End::Top),
+            _ => None,
+        }
+    }
+}
+
 /// Where the rope state is (rules 13–26): the movement playing, or what
 /// it waits for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -307,6 +340,47 @@ pub enum Stage {
     Boff,
     Baway,
     Out,
+}
+
+impl Stage {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Stage::Away => "Away",
+            Stage::Draw => "Draw",
+            Stage::Btoss => "Btoss",
+            Stage::RopeModel => "RopeModel",
+            Stage::Bon => "Bon",
+            Stage::Drawdown => "Drawdown",
+            Stage::Ttoss => "Ttoss",
+            Stage::Ton => "Ton",
+            Stage::Hanging => "Hanging",
+            Stage::Toff => "Toff",
+            Stage::Taway => "Taway",
+            Stage::Boff => "Boff",
+            Stage::Baway => "Baway",
+            Stage::Out => "Out",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        Some(match s.trim() {
+            "Away" => Stage::Away,
+            "Draw" => Stage::Draw,
+            "Btoss" => Stage::Btoss,
+            "RopeModel" => Stage::RopeModel,
+            "Bon" => Stage::Bon,
+            "Drawdown" => Stage::Drawdown,
+            "Ttoss" => Stage::Ttoss,
+            "Ton" => Stage::Ton,
+            "Hanging" => Stage::Hanging,
+            "Toff" => Stage::Toff,
+            "Taway" => Stage::Taway,
+            "Boff" => Stage::Boff,
+            "Baway" => Stage::Baway,
+            "Out" => Stage::Out,
+            _ => return None,
+        })
+    }
 }
 
 /// Rule 23: where he is put when the climb reaches the foot, in his own
@@ -575,7 +649,7 @@ impl Climb {
     }
 
     /// The movement of `stage`, if it plays one.
-    fn anim(stage: Stage) -> Option<Anim> {
+    pub fn anim(stage: Stage) -> Option<Anim> {
         Some(match stage {
             Stage::Away => Anim::Own("away"),
             Stage::Out => Anim::Own("out"),
