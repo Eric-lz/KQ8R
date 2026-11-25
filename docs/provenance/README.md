@@ -4437,6 +4437,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `SL_BG_PICTURE` uses `save4x6.pbm` (640×480 matching `Loadgame.gui`/`Savegame.gui`); `render_saveload` composites at native `ScreenFrame` pixels (`MenuDrawKey::target_px`) so `sl_hilite` draws a smooth 1:1 checkerboard behind `LIST0..LIST9` | `MASK/GAME/8Gui/save4x6.pbm` & `sl_hilite.pba` inspected (`640×480`, `[128, 0]` 1-px checkerboard); user live check 2026-11-24 | headless Test 3 (`menu.log`: `Load Game` opened with `25` saves, moved row, `RESULT: PASS`) |
 | `SetWinEventHook` (`EVENT_OBJECT_LOCATIONCHANGE`, `EVENT_SYSTEM_MINIMIZESTART..=MINIMIZEEND`) + `GetClientRect` / `ClientToScreen` / `IsIconic` live tracking for the `Replay Intro` / `playMovie` MCI overlay while dragging, resizing, or minimizing | `submenus.md` rules 26–28; user live check 2026-11-24 | headless Test 2 (`menu.log`: `w32opn_1.avi` started frame `25`, skipped frame `60`, `theme.aud` restarted at `+200 ms`, `RESULT: PASS`) |
 
+## M4 4h-1 2026-11-25: Binary `PERS` saved-game parser/writer and `kq8 save-verify` — data `save_pers.rs`; cli `save_verify.rs`, `map_verify.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| Saved-game `"PERS"` / `"DICT"` block framing (no version field, `u16` class-name length up to `128`, even-padded class names & strings, `u32(0)` null vs `u32(2)` empty strings, `TMat3F`, 2-byte block alignment) and all 28+ persistent classes (`KQGameState`, `KQWorldState`, `KQMusic`, `KQCamMover`, `KQMap`, `KQTerrain`, `KQWorldInventory`/`KQConnerInventory`/`KQInventory`, `KQObject`, `KQInventoryItem`, `KQInterior`, `KQAudibleObject`, `KQSwampTile`, `RiverControl`, `KQAnimLoopList`, `KQAnimObject`, `KQAnimOnce`, `KQDoor`, `KQChest`, `KQPortal`, `KQBoulder`, `KQLavaTile`, `KQTrap`, `KQSpiriTrap`, `KQHazer`, `KQPointLight`, `KQTerrainAnimator`, `KQLips`, `KQConversation`, `KQTalk`, `KQMonster`/`KQGeometryTalker`/`KQDeath`, `KQTowerSkeleton`, `KQMandragorRoot`, `KQMandragorTree`, `KQConAnimList`, `KQSkinList`, `KQConner`, `KQState*`) | `savefile.md` rules 4–38; observed `MASK/save/save1.vol`..`save24.vol` (`KQState` & `KQStateDie` have 0 extra fields) | unit tests `game_state_matches_exact_44_byte_layout_and_odd_class_padding`, `strings_distinguish_null_empty_odd_and_even`, `round_trips_camera_map_inventory_door_chest_and_connor`; `kq8 save-verify` (`9,686` binary `PERS` chunks across `28` classes, `0` leftover bytes, `0` failures); `kq8 map-verify` (`54` saved maps, `0` failures) |
+
 
 
 

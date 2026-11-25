@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## 2026-11-25 M4 step 4h-1: Binary `PERS` saved-game parser/writer (`save_pers.rs`) & `kq8 save-verify`
+- **Changed:** `crates/kq8-data/src/save_pers.rs` (new: 2-byte aligned `"PERS"`/`"DICT"` saved-game reader/writer with no version field, even-padded class names and strings, `TMat3F`, `KqMap::to_map_keys`/`from_map_keys`, all 28+ persistent classes from `docs/behaviour/savefile.md` rules 7–38 plus `KQState`/`KQStateDie`, and 3 unit tests), `crates/kq8-data/src/lib.rs`, `crates/kq8-cli/src/save_verify.rs` (new: `kq8 save-verify [--file FILE]` checking all `MASK/save/save*.vol` archives, embedded kept `.vol` archives, `save1.vol`/`save18.vol` spot checks, and door/chest/Connor/event summaries), `crates/kq8-cli/src/main.rs`, `crates/kq8-cli/src/map_verify.rs` (parses binary `PERS` `KQMap` chunks via `save_pers::parse_pers`), `docs/DESIGN.md`, `docs/provenance/README.md`, `MODLOG.md`.
+- **Why:** Implement Step `4h-1` of the saved-games plan (`docs/behaviour/savefile.md`, answering `Q207`) so KQ8R can read and write original `Mask.exe` binary `PERS` saved-game chunks.
+- **Tested how:** `cargo test -p kq8-data`, `cargo run --release -p kq8-cli -- save-verify`, and `cargo run --release -p kq8-cli -- map-verify`.
+- **Result:** All `155` unit tests in `kq8-data` pass; `kq8 save-verify` parsed `9,686` binary `PERS` chunks across `28` classes (`0` leftover bytes), `30` ASCII `.kq` chunks, and `30` kept `.vol` archives across all `24` saves in `MASK/save/` with `0` failures; `kq8 map-verify` verified all `54` saved maps (`24` binary `PERS` + `30` ASCII `.kq`) with `0` failures.
+- **Still broken / not tested:** Mid-world object/camera/door/chest capture & restore (`4h-2`), importing original `MASK/save/*.vol` saves (`4h-3`), and writing standard binary `PERS` saves (`4h-4`) come in the next steps.
+- **Next:** Implement Step `4h-2` (mid-world state capture and restoration in `kq8-core` and `kq8-viewer`).
+
 ## 2026-11-25 Study (A): Script Coverage Batch 7 (Temples & remaining stragglers)
 - **Changed:** `docs/behaviour/script-commands.md` (added rules `12i`–`12n`: `KQObject::setFootStepSound`, `KQCamera::setHeight`/`setHeight2`, `KQConner::reduceHealth`, `killGame`, `doCredits`, `checkSave`, `KQMonster::setState Connor Die [Now]`, `clearstateChangeNotify` alias, `beep` unknown command), `docs/behaviour/pushing.md` (added `KQPushTile` rules `13a`–`13e`), `docs/behaviour/fighting.md` (added section `7d` `KQLucreto`), `STATUS.md`, `MODLOG.md`; scratch notes in `re/batch7-scratch.md` (untracked).
 - **Why:** Complete Study Session A for Script Coverage Batch 7 (Temples `temple1`–`temple4` and the last remaining stragglers), finishing all 7 script-coverage study batches.

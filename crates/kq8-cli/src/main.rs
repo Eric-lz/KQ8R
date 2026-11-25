@@ -18,6 +18,7 @@
 //!   kq8 character-verify [--game DIR]
 //!   kq8 conv-verify [--game DIR]
 //!   kq8 map-verify [--game DIR]
+//!   kq8 save-verify [--file FILE] [--game DIR]
 //!   kq8 text <file> [--game DIR]   (prints a text file, e.g. a script)
 //!   kq8 script-coverage [--out FILE] [--game DIR]   (what the scripts ask of the program)
 //!
@@ -40,6 +41,7 @@ mod lightmap_verify;
 mod log;
 mod map_verify;
 mod msg_verify;
+mod save_verify;
 mod script_coverage;
 mod shape_parts;
 mod shape_verify;
@@ -70,6 +72,7 @@ const USAGE: &str = "usage:
   kq8 character-verify [--game DIR]
   kq8 conv-verify [--game DIR]
   kq8 map-verify [--game DIR]
+  kq8 save-verify [--file FILE] [--game DIR]
   kq8 text <file> [--game DIR]
   kq8 script-coverage [--out FILE] [--game DIR]";
 
@@ -80,6 +83,7 @@ fn main() -> ExitCode {
     let mut palette: Option<String> = None;
     let mut wav: Option<String> = None;
     let mut out: Option<String> = None;
+    let mut file: Option<String> = None;
     let mut positional: Vec<String> = Vec::new();
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -87,6 +91,7 @@ fn main() -> ExitCode {
             "--palette" => palette = args.next(),
             "--wav" => wav = args.next(),
             "--out" => out = args.next(),
+            "--file" => file = args.next(),
             a if a.starts_with("--") => {
                 eprintln!("unknown option: {a}");
                 return usage();
@@ -132,6 +137,7 @@ fn main() -> ExitCode {
         (Some("character-verify"), []) => character_verify::run(&game),
         (Some("conv-verify"), []) => conv_verify::run(&game),
         (Some("map-verify"), []) => map_verify::run(&game),
+        (Some("save-verify"), []) => save_verify::run(&game, file.as_deref()),
         (Some("script-coverage"), []) => script_coverage::run(&game, out.as_deref()),
         (Some("text"), [file]) => match source::load(&game, file) {
             // Printed only (never written into the repo), with line numbers.

@@ -30,6 +30,7 @@ pub mod objects;
 pub mod palette;
 pub mod pers;
 pub mod pvol;
+pub mod save_pers;
 pub mod shape;
 pub mod terrain;
 pub mod vol;

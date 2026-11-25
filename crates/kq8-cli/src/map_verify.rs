@@ -161,15 +161,28 @@ pub fn run(game: &GameDir) -> ExitCode {
                 continue;
             }
             let Ok(data) = archive.data(e) else { continue };
-            if data.starts_with(b"PERS") {
-                log.summary(format!("  {}: {} bytes in the binary form (the current world's map): not read (no note describes it)", e.name, data.len()));
-                continue;
-            }
-            let sections = kq_text::parse(data);
-            let Some(Some(Ok(m))) = sections.first().map(MapKeys::from_section) else {
-                failures += 1;
-                log.summary(format!("  FAIL {}: not a readable KQMap", e.name));
-                continue;
+            let m = if data.starts_with(b"PERS") {
+                match kq8_data::save_pers::parse_pers(data) {
+                    Ok(kq8_data::save_pers::PersObject::KqMap(km)) => km.to_map_keys(),
+                    Ok(other) => {
+                        failures += 1;
+                        log.summary(format!("  FAIL {}: expected KQMap, got {}", e.name, other.class_name()));
+                        continue;
+                    }
+                    Err(err) => {
+                        failures += 1;
+                        log.summary(format!("  FAIL {}: binary PERS KQMap: {err}", e.name));
+                        continue;
+                    }
+                }
+            } else {
+                let sections = kq_text::parse(data);
+                let Some(Some(Ok(m))) = sections.first().map(MapKeys::from_section) else {
+                    failures += 1;
+                    log.summary(format!("  FAIL {}: not a readable KQMap", e.name));
+                    continue;
+                };
+                m
             };
             maps_read += 1;
             let (fog, check) = fog_from_runs(&m.runs);

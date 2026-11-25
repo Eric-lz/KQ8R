@@ -1157,6 +1157,46 @@ inventory and menus.
     audio suspend/resume, key/click skip for `Replay Intro`, and 200 ms
     `theme.aud` restart via main-thread Windows MCI borderless overlay.
 
+- **4h — Saved games & binary `PERS` format (planned 2026-11-25).** From
+  `docs/behaviour/savefile.md` (Session A, 2026-11-24; answers `Q207`),
+  `submenus.md` rules 3–11, and `world-change.md` rules 6–20. Implements
+  full two-way compatibility with original `Mask.exe` `save/save<N>.vol`
+  files and restores full mid-world state (Connor's exact 3D pose,
+  camera pose/angle/mode, doors, chests, dropped/loose items, music
+  stack, clock/timed events, and running `world.cs <World> Begin` while
+  `WorldVar.cs` guards first-time cutscenes). One commit per step:
+  - **4h-1, binary `PERS` game-object reader/writer & `kq8 save-verify`**
+    (**done** 2026-11-25): new `kq8-data` `save_pers.rs` (2-byte aligned
+    `"PERS"`/`"DICT"` framing with no version field, even-padded class
+    names/strings, `TMat3F`, and all 28+ persistent classes from
+    `savefile.md` rules 7–38, plus `KQState`/`KQStateDie`) and `kq8-cli`
+    `save_verify.rs` (verified all `9,686` binary `PERS` chunks across
+    `MASK/save/save1.vol`–`save24.vol` to `0` leftover bytes, `30` ASCII
+    `.kq` chunks, and `30` kept `.vol` archives with `0` failures, plus
+    `map-verify` binary `KQMap` support reading all `54` saved maps with
+    `0` failures).
+  - **4h-2, mid-world state capture & restoration (`kq8-core`,
+    `kq8-viewer`):** door/chest numeric state mapping, `EventQueue`
+    save/restore, `SavedCameraState`, `StartExact` (preserving upper-floor
+    Z), `WorldState::kept_doors` / `kept_chests` / `world_items`,
+    `GameCam::snapshot` / `restore` (without tick-0 snap), `Arrival`
+    world-item/music/door/chest restoration, and running `BeginNow` on
+    restore.
+  - **4h-3, importing original `Mask.exe` `save<N>.vol` archives:**
+    `kq8-core` `save_import.rs` decoding binary `PERS` current-world
+    objects (`Connor.kq`, `KQCamera.kq`, `<map>.kq`, `WorldInventory.kq`,
+    `Music.kq`, `worldState.kq`, `KQDoor`, `KQChest`, `KQAnimObject`,
+    `KQInterior`, `RiverControl`), `newWorld.cs` `setCurrentTime`/object
+    list, and embedded ASCII kept-world `PVOL` archives (`worldVolumes`)
+    & maps (`maps`), wired into `PerformLoad` in `menu_view.rs`.
+  - **4h-4, writing standard `save<N>.vol` archives:** fixing `PVOL`
+    metadata chunks (no trailing `\0` on `savedGameName`/`worldName`/
+    `savedGameVersion`, empty `worldVolumes`/`maps` as 0 bytes), writing
+    all current-world binary `PERS` chunks + `newWorld.cs` + embedded
+    ASCII kept-world `.vol`/`.kq` + `kq8r_meta.txt`, and unifying load
+    through `import_original_save`.
+  - **4h-5, final hand-over docs & test instructions.**
+
 ### M5 — Fight
 
 **You will see:** monsters that move, attack and die; Connor's health and
