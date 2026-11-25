@@ -26,8 +26,7 @@ use kq8_core::main_menu::{
     THUMBNAIL_HEIGHT, THUMBNAIL_WIDTH, TITLE_FONT, TITLE_LINE_RECT, TITLE_RECTS,
 };
 use kq8_core::save_game::{
-    format_world_var_cs, parse_game_state_kq, parse_world_var_cs, KeptWorldSnapshot,
-    SavedWorldSnapshot,
+    format_world_var_cs, KeptWorldSnapshot, SavedWorldSnapshot,
 };
 use kq8_core::submenus::{
     brightness_factor, decode_thumbnail_bin, move_label_rect, move_value_rect, scan_save_entries,
@@ -2606,112 +2605,75 @@ pub fn menu_step(
                     continue;
                 }
 
-                if let Some(state_bytes) = chunk_bytes("kq8r_state.txt") {
-                    match SavedWorldSnapshot::parse_kq8r_state(&state_bytes) {
-                        Ok(snap) => {
-                            let kept: std::collections::BTreeMap<String, KeptWorld> = snap
-                                .kept_worlds
-                                .into_iter()
-                                .map(|(k, kw)| {
-                                    (
-                                        k,
-                                        KeptWorld {
-                                            vars: kw.vars,
-                                            gone: kw.gone,
-                                            came_in: kw.came_in,
-                                            states: kw.states,
-                                            doors: kw.doors,
-                                            chests: kw.chests,
-                                            world_items: kw.world_items,
-                                            music_stack: kw.music_stack,
-                                            current_time: kw.current_time,
-                                            pending_events: kw.pending_events,
-                                            present_objects: kw.present_objects,
-                                            rusted_rivers: kw.rusted_rivers,
-                                            alt_lightmaps: kw.alt_lightmaps,
-                                        },
-                                    )
-                                })
-                                .collect();
-                            let world = snap.world.clone();
-                            let connor_at = snap.connor_at;
-                            let connor_pos = snap.connor_pos;
-                            let items_n = snap.journey.items.len();
-                            let kept_n = kept.len();
-                            change.restore_save(
-                                world.clone(),
-                                connor_at,
-                                RestoreSave {
-                                    journey: Some(Box::new(snap.journey)),
-                                    kept,
-                                    combat_level: None,
-                                    connor_pos,
-                                    connor_anim: snap.connor_anim,
-                                    camera: snap.camera,
-                                },
-                                format!("Load Game slot {slot} '{name}'"),
-                            );
-                            menu.summary(
-                                &shared,
-                                format!(
-                                    "loading slot {slot} \"{name}\" -> {world} (connor_at={connor_at:?}, {items_n} items, {kept_n} kept world(s); submenus.md rule 11)"
-                                ),
-                            );
-                        }
-                        Err(e) => {
-                            menu.summary(&shared, format!("failed to parse kq8r_state.txt in {}: {e}", path.display()));
-                            continue;
-                        }
-                    }
+                let snapshot_res = if let Some(state_bytes) = chunk_bytes("kq8r_state.txt") {
+                    SavedWorldSnapshot::parse_kq8r_state(&state_bytes)
                 } else {
-                    let raw_world = chunk_str("worldName");
-                    let world = raw_world
-                        .trim_end_matches(".kq")
-                        .trim_end_matches(".KQ")
-                        .to_string();
-                    if world.is_empty() {
-                        menu.summary(&shared, format!("save{slot}.vol missing worldName chunk"));
+                    let itl = menu
+                        .game
+                        .find("GAME/Kq/Invinfo.itl")
+                        .and_then(|p| std::fs::read(p).ok())
+                        .map(|b| kq8_data::items::ItemTypes::parse(&b).0);
+                    let raw = std::fs::read(&path).map_err(|e| e.to_string());
+                    raw.and_then(|b| kq8_core::save_import::import_original_save(&b, itl.as_ref()))
+                };
+                let is_original = chunk_bytes("kq8r_state.txt").is_none();
+                match snapshot_res {
+                    Ok(snap) => {
+                        let kept: std::collections::BTreeMap<String, KeptWorld> = snap
+                            .kept_worlds
+                            .into_iter()
+                            .map(|(k, kw)| {
+                                (
+                                    k,
+                                    KeptWorld {
+                                        vars: kw.vars,
+                                        gone: kw.gone,
+                                        came_in: kw.came_in,
+                                        states: kw.states,
+                                        doors: kw.doors,
+                                        chests: kw.chests,
+                                        world_items: kw.world_items,
+                                        music_stack: kw.music_stack,
+                                        current_time: kw.current_time,
+                                        pending_events: kw.pending_events,
+                                        present_objects: kw.present_objects,
+                                        rusted_rivers: kw.rusted_rivers,
+                                        alt_lightmaps: kw.alt_lightmaps,
+                                    },
+                                )
+                            })
+                            .collect();
+                        let world = snap.world.clone();
+                        let connor_at = snap.connor_at;
+                        let connor_pos = snap.connor_pos;
+                        let items_n = snap.journey.items.len();
+                        let maps_n = snap.journey.other_maps.len();
+                        let kept_n = kept.len();
+                        let kind_label = if is_original { "original" } else { "KQ8R" };
+                        change.restore_save(
+                            world.clone(),
+                            connor_at,
+                            RestoreSave {
+                                journey: Some(Box::new(snap.journey)),
+                                kept,
+                                combat_level: None,
+                                connor_pos,
+                                connor_anim: snap.connor_anim,
+                                camera: snap.camera,
+                            },
+                            format!("Load Game {kind_label} slot {slot} '{name}'"),
+                        );
+                        menu.summary(
+                            &shared,
+                            format!(
+                                "loading {kind_label} slot {slot} \"{name}\" -> {world} (connor_pos={connor_pos:?}, {items_n} items, {maps_n} maps, {kept_n} kept world(s); submenus.md rule 11, savefile.md)"
+                            ),
+                        );
+                    }
+                    Err(e) => {
+                        menu.summary(&shared, format!("failed to load {}: {e}", path.display()));
                         continue;
                     }
-                    let world_vars = chunk_bytes("WorldVar.cs")
-                        .map(|b| parse_world_var_cs(&b))
-                        .unwrap_or_default();
-                    let (next_no_name, difficulty_factor) = chunk_bytes("GameState.kq")
-                        .and_then(|b| parse_game_state_kq(&b))
-                        .unwrap_or((1, 1.0));
-                    let lvl_num = main_menu::COMBAT_LEVELS
-                        .iter()
-                        .find(|&&(_, f, _)| (f - difficulty_factor).abs() < 0.05)
-                        .map(|&(lvl, _, _)| lvl);
-                    let mut kept = std::collections::BTreeMap::new();
-                    let var_count = world_vars.len();
-                    kept.insert(
-                        world.to_ascii_lowercase(),
-                        KeptWorld {
-                            vars: world_vars,
-                            ..Default::default()
-                        },
-                    );
-                    change.restore_save(
-                        world.clone(),
-                        None,
-                        RestoreSave {
-                            journey: None,
-                            kept,
-                            combat_level: lvl_num,
-                            connor_pos: None,
-                            connor_anim: None,
-                            camera: None,
-                        },
-                        format!("Load Game original slot {slot} '{name}'"),
-                    );
-                    let _ = next_no_name;
-                    menu.summary(
-                        &shared,
-                        format!(
-                            "loading original save{slot}.vol \"{name}\" -> {world} (WorldVar.cs={var_count} vars, nextNoName={next_no_name}, difficultyFactor={difficulty_factor:.2}; binary PERS Connor/object blobs not parsed)"
-                        ),
-                    );
                 }
 
                 if let Some(snd) = sound.as_mut() {

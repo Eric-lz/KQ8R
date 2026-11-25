@@ -1184,13 +1184,16 @@ inventory and menus.
     `GameCam::snapshot` / `restore` (clearing start stand-in), `Arrival`
     world-item / music-stack / door / chest / `animPos` restoration, and
     running `BeginNow` on restore (guarded by saved `WorldVar.cs`).
-  - **4h-3, importing original `Mask.exe` `save<N>.vol` archives:**
-    `kq8-core` `save_import.rs` decoding binary `PERS` current-world
-    objects (`Connor.kq`, `KQCamera.kq`, `<map>.kq`, `WorldInventory.kq`,
-    `Music.kq`, `worldState.kq`, `KQDoor`, `KQChest`, `KQAnimObject`,
-    `KQInterior`, `RiverControl`), `newWorld.cs` `setCurrentTime`/object
-    list, and embedded ASCII kept-world `PVOL` archives (`worldVolumes`)
-    & maps (`maps`), wired into `PerformLoad` in `menu_view.rs`.
+  - **4h-3, importing original `Mask.exe` `save<N>.vol` archives**
+    (**done** 2026-11-25): `kq8-core` `save_import.rs` decoding binary `PERS`
+    current-world objects (`Connor.kq`, `KQCamera.kq`, `<map>.kq`,
+    `WorldInventory.kq`, `Music.kq`, `worldState.kq`, `KQDoor`, `KQChest`,
+    `KQAnimObject`, `KQAnimOnce`, `KQBoulder`, `KQLavaTile`, `KQPortal`,
+    `KQMonster`/`KQTowerSkeleton`/`KQMandragor*`, `KQInterior`,
+    `RiverControl`), `newWorld.cs` `setCurrentTime`/object list, and
+    embedded ASCII kept-world `PVOL` archives (`worldVolumes`) & maps (`maps`),
+    wired into `PerformLoad` in `menu_view.rs`; added `Q208` in
+    `docs/behaviour/QUESTIONS.md`.
   - **4h-4, writing standard `save<N>.vol` archives:** fixing `PVOL`
     metadata chunks (no trailing `\0` on `savedGameName`/`worldName`/
     `savedGameVersion`, empty `worldVolumes`/`maps` as 0 bytes), writing

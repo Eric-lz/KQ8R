@@ -44,6 +44,7 @@ pub mod portal;
 pub mod potions;
 pub mod rope;
 pub mod save_game;
+pub mod save_import;
 pub mod script;
 pub mod shadow;
 pub mod sound;
