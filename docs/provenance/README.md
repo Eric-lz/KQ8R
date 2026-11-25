@@ -4462,6 +4462,12 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `export_save_vol` building `PVOL` archives with non-NUL metadata strings, `WorldVar.cs`, `newWorld.cs` (`setCurrentTime`), `current.bin`, binary `PERS` chunks (`GameState.kq`, `KQCamera.kq`, `Connor.kq` + `KQConnerInventory`, `WorldInventory.kq`, `worldState.kq`, `Music.kq`, current-world `KQMap`, `KQDoor`, `KQChest`, `KQAnimObject`, `KQInterior`, `RiverControl`), embedded ASCII kept-world `.vol` archives (`worldVolumes`), ASCII other-world `.kq` maps (`maps`), and `kq8r_meta.txt` (`apply_kq8r_meta`), wired into `PerformSave` / `PerformLoad` | `savefile.md` rules 1–40; `MAP_WORLDS` palette/folder names observed in `MASK/` | unit test `exported_save_has_valid_pvol_and_pers_and_round_trips` (`cargo test --workspace`: `847` passed); `kq8 save-verify --file kq8-artifacts/user/save/save26.vol` (`26` binary `PERS` across `8` classes, `11` ASCII `.kq`, `0` failures); headless Daventry reload restoring `Condoor` (`opened`), `smlchst3` (`open`), `NoName22` crystal, exact Connor & camera pose, and `world.cs Daventry Begin` (`RESULT: PASS`) |
 
+## M4 4h-5 2026-11-25: Saved-games documentation & hand-over — `docs/DESIGN.md`, `docs/FEATURES.md`, `README.md`, `STATUS.md`, `MODLOG.md`
+
+| Documentation updated | Source | Notes |
+|---|---|---|
+| Closed M4 `4h` (`4h-1`..`4h-5`, `Q207`), updated feature/status docs and `kq8 save-verify` CLI docs, recorded open `Q208` | Steps `4h-1`–`4h-4` test results and `docs/behaviour/QUESTIONS.md` (`Q208`) | Live interactive `cargo play` eye check and loading a KQ8R save inside original `Mask.exe` explicitly marked **not tested** |
+
 
 
 

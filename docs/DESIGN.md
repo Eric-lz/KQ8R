@@ -1157,7 +1157,7 @@ inventory and menus.
     audio suspend/resume, key/click skip for `Replay Intro`, and 200 ms
     `theme.aud` restart via main-thread Windows MCI borderless overlay.
 
-- **4h — Saved games & binary `PERS` format (planned 2026-11-25).** From
+- **4h — Saved games & binary `PERS` format (**done** 2026-11-25).** From
   `docs/behaviour/savefile.md` (Session A, 2026-11-24; answers `Q207`),
   `submenus.md` rules 3–11, and `world-change.md` rules 6–20. Implements
   full two-way compatibility with original `Mask.exe` `save/save<N>.vol`
@@ -1205,7 +1205,11 @@ inventory and menus.
     ASCII `.kq` maps, plus `kq8r_meta.txt` for KQ8R-specific extras; wired
     into `PerformSave`/`PerformLoad` in `menu_view.rs` with legacy
     `kq8r_state.txt` load fallback kept intact.
-  - **4h-5, final hand-over docs & test instructions.**
+  - **4h-5, final hand-over docs & test instructions** (**done** 2026-11-25):
+    updated `README.md`, `docs/FEATURES.md`, `STATUS.md`, `docs/DESIGN.md`,
+    `MODLOG.md`, and `docs/provenance/README.md` (recording `Q207` complete,
+    `Q208` open, and live `cargo play` / original `Mask.exe` checks as
+    **not tested**).
 
 ### M5 — Fight
 

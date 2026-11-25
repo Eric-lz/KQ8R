@@ -593,9 +593,9 @@ miss, roll, flinch, death, drop and shot is in
   confirmation, and `Easy`/`Normal`/`Hard` difficulty setting combat level
   0.66 / 1.0 / 1.5) use `gm_win2.pbm` with `g_ybtn.pba`/`g_yhibtn.pba`.
   Starting a `New` game clears kept worlds, skips `conStart.cs`, and runs
-  `world.cs Daventry Begin` (playing Daventry's opening scene). (`Load`,
-  `Save`, `Options` and `Replay Intro` sub-screens are not built yet and
-  stay on the menu when clicked.)
+  `world.cs Daventry Begin` (playing Daventry's opening scene). (Sub-screens
+  `Load`, `Save`, `Options`, `Graphics`, `Remap Move Keys`, `Credits`, and
+  `Replay Intro` are built in `4g` and `4h`.)
 - **A 4:3 screen in a wide window (4c-6):** the panels and the caption
   stay in the original's 4:3 shape, centred in the window; the world
   fills the whole window around them.
@@ -666,7 +666,7 @@ perfectly"); logged in `rope.log`. Built from `ropeandhook.md`.
 - **While on the rope:** no damage, no other state (scripts, jumps,
   weapons are ignored), characters lose him; items can still be clicked
   and picked up.
-- **Not yet:** saved games (we have none), first person (not built).
+- **Not yet:** saving mid-climb, first person (not built).
 
 ## Azriel's Hammer (milestone M6, step 6b, 2026-10-21)
 
@@ -1028,8 +1028,36 @@ ear by the user (`2026-11-23`):**
   screen with the red progress meter, sets the chosen combat level (`0.66` /
   `1.0` / `1.5`), and starts Daventry's opening scene (`stngrl.cs`); when Connor
   dies, the menu opens after 2.0 s (`handsOff`) with `New` selected and `Save` /
-  `Back to Game` disabled. (`Load`, `Save`, `Options`, and `Replay Intro` await
-  Study Session A on `Q203`–`Q205`.)
+  `Back to Game` disabled. (`Load`, `Save`, `Options`, `Graphics`,
+  `Remap Move Keys`, `Credits`, and `Replay Intro` are built in `4g`/`4h`.)
+
+## Saved games (milestone M4, step 4h, 2026-11-25; done in tests & logs)
+
+From `docs/behaviour/savefile.md` (A, 2026-11-24; answers `Q207`). **Checked
+via workspace unit tests, `kq8 save-verify`, and headless Save/Load runs;
+live interactive `cargo play` eye check and loading KQ8R saves inside
+original `Mask.exe` are not tested:**
+
+- **Binary `PERS` archives (`kq8-data` `save_pers.rs`, `kq8 save-verify`):**
+  reads and writes 2-byte aligned `"PERS"` / `"DICT"` game-object blocks
+  across all 28+ persistent classes (`KQGameState`, `KQWorldState`, `KQMusic`,
+  `KQCamMover`, `KQMap`, `KQInventory` / `KQInventoryItem`, `KQDoor`,
+  `KQChest`, `KQAnimObject`, `KQConner`, `KQMonster`, interiors, river
+  controls, `KQState*`); `kq8 save-verify` parses all 24 saves in `MASK/save/`
+  (`9,686` binary `PERS` chunks, `30` ASCII `.kq` chunks, `30` kept `.vol`
+  archives) with `0` failures.
+- **Saving and loading (`save_export.rs`, `save_import.rs`):** saving writes
+  `PVOL` `save<N>.vol` archives in `kq8-artifacts/user/save/` with current
+  world binary `PERS` chunks, `WorldVar.cs`, `newWorld.cs` (`setCurrentTime`),
+  embedded ASCII kept `.vol` archives (`worldVolumes`), ASCII maps (`maps`),
+  `current.bin`, and `kq8r_meta.txt` for KQ8R-specific extras; loading reads
+  original `Mask.exe` `save<N>.vol` archives directly (`MASK/save/save1.vol`
+  and `save18.vol` verified headlessly) as well as KQ8R saves (including
+  legacy `4g-4` `kq8r_state.txt` fallback), restoring Connor's exact 3D pose,
+  camera view, doors, chests, loose world items, music stack, clock, timed
+  events, and `world.cs <World> Begin` without replaying first-time cutscenes.
+  (`Q208` remains open for `worldFlags` bits, `KQDoor::state` `0`/`3`, and
+  `KQConner::doMode` mapping.)
 
 ## Viewer helpers (not in the original)
 
@@ -1203,10 +1231,7 @@ message that shows the usage.
 
 ## What doesn't work yet
 
-- **Not playable:** there is no inventory screen, saving, game over, or
-  travel between worlds (so no teleporting: the magic map's "Go" stops
-  before the world change); the story's scenes run only as far as the
-  built parts allow.
+- **Not playable:** there is no full inventory screen yet (though the top/bottom bars, item pointer, and saved games work); the story's scenes run only as far as the built parts allow.
 - **Characters:** the fight is a first version (M5 5c): Connor's
   controls are partly stand-ins; not
   compared with the original by eye. Their shadows on buildings

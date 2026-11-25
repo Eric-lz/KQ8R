@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## M4 4h-5 (2026-11-25): Saved-games documentation, feature list, and hand-over status (`Q207` complete, `Q208` open)
+- **Changed:** `docs/DESIGN.md` (marked `4h` & `4h-5` done), `docs/FEATURES.md` (updated menu/saved-game status and added Saved games section covering `4h-1`..`4h-4`), `README.md` (added brief saved-game note and `kq8 save-verify` CLI entry), `STATUS.md` (updated current state for M4 `4h`, flagged `Q208` open, listed verified vs untested items), `docs/provenance/README.md` (step `4h-5` doc hand-over note), `MODLOG.md`.
+- **Why:** Complete Step `4h-5` of M4 `4h` (`docs/behaviour/savefile.md` / `Q207`) with clear user test instructions and honest status of what was verified vs not tested.
+- **Tested how:** Documentation review only (no code changes since Step `4h-4`'s `847`-test pass, `kq8 save-verify`, and headless Daventry save/reload verification).
+- **Result:** All `4h-1`..`4h-5` docs consistent; `Q208` stays logged in `docs/behaviour/QUESTIONS.md`.
+- **Still broken / not tested:** Live interactive `cargo play` eye check and loading a KQ8R-written `save<N>.vol` inside original `Mask.exe`.
+- **Next:** User test run in `cargo play` (plus Study Session A on `Q208` if needed, or next Session B batch from Batches 5–7 / `Q202` / `Q206`).
+
 ## M4 4h-4 (2026-11-25): Binary `PERS` `save<N>.vol` exporter (`save_export.rs`) & unified load
 - **Changed:** `crates/kq8-core/src/save_export.rs` (new: `export_save_vol` building `PVOL` with non-NUL metadata strings, `WorldVar.cs`, `newWorld.cs` `setCurrentTime`, `current.bin`, current-world binary `PERS` chunks via `write_pers` including `GameState.kq`, `KQCamera.kq`, `Connor.kq` + `KQConnerInventory`, `WorldInventory.kq`, `worldState.kq`, `Music.kq`, current `KQMap`, doors, chests, states, alt interiors, and rusted rivers, plus embedded ASCII kept `.vol` archives in `worldVolumes`, ASCII `.kq` maps in `maps`, `kq8r_meta.txt` for KQ8R extras, and round-trip unit test; `apply_kq8r_meta`), `crates/kq8-core/src/save_game.rs` (`pub(crate)` formatting/parsing helpers), `crates/kq8-core/src/lib.rs`, `crates/kq8-viewer/src/menu_view.rs` (`PerformSave` uses `export_save_vol`, `PerformLoad` routes standard saves through `import_original_save` + optional `apply_kq8r_meta` while keeping legacy `kq8r_state.txt` fallback), `docs/DESIGN.md`, `docs/provenance/README.md`, `MODLOG.md`.
 - **Why:** Implement Step `4h-4` (`docs/behaviour/savefile.md`) so KQ8R writes standard `Mask.exe`-structured `save<N>.vol` archives instead of `kq8r_state.txt` while losslessly round-tripping KQ8R state.

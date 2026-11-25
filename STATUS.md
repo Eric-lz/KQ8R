@@ -1,17 +1,27 @@
 # STATUS
 
-Hand-over in case the chat is lost. Brought up to date 2026-11-24 after
-**Implementation Session (B)** finished **M4 step `4g`** (`4g-1`..`4g-5` +
-fixes **`4g-F1`/`4g-F2`**) and the user confirmed the main menu submenus,
-`Replay Intro`, `Dynamic Lights`, and `Save/Load` UI live by eye and ear (`839`
-unit tests and headless viewer runs also pass).
-**Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:** none.
+Hand-over in case the chat is lost. Brought up to date 2026-11-25 after
+**Implementation Session (B)** finished **M4 step `4h`** (`4h-1`..`4h-5`) for
+saved games and binary `PERS` support (`Q207`; `847` workspace unit tests,
+`kq8 save-verify`, and headless save/reload checks pass; live interactive
+`cargo play` eye check and loading a KQ8R save inside original `Mask.exe` are
+**not tested**).
+**Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:** **`Q208`** (`worldFlags` bit layout, `KQDoor::state` `0`/`3`, `KQConner::doMode` enum mapping).
 
 Read with `AGENTS.md`, `docs/DESIGN.md`, `docs/SESSIONS.md`, `MODLOG.md`
 (newest entries at the top). The short public summary is `README.md`; the
 detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-25)
+
+- **2026-11-25 (B): M4 step 4h — Saved games & binary `PERS` support (`4h-1`..`4h-5`, `Q207`) implemented:**
+  - **`4h-1` (binary `PERS` & `kq8 save-verify`):** `crates/kq8-data/src/save_pers.rs` + `kq8-cli` `save_verify.rs` / `map_verify.rs` — `9,686` binary `PERS` chunks across `28` classes, `30` ASCII `.kq` chunks, and `30` kept `.vol` archives in `MASK/save/` parsed with `0` failures (`54` saved maps read with `0` failures).
+  - **`4h-2` (mid-world save/restore):** `DoorState`/`ChestState::from_pers`/`to_pers`, `EventQueue` save/restore, `SavedCameraState`, `apply_exact_pose`, loose world-item/music-stack/`current_time` restoration, and `BeginNow` on restore guarded by `WorldVar.cs`.
+  - **`4h-3` (`save_import.rs`):** imports original `Mask.exe` `save1.vol`–`save24.vol` directly from `MASK/save/` or user folder (verified headlessly on `save18.vol` Swamp and `save1.vol` Daventry); opened **`Q208`** in `docs/behaviour/QUESTIONS.md` (`worldFlags`, `KQDoor::state` `0`/`3`, `KQConner::doMode`).
+  - **`4h-4` (`save_export.rs`):** writes standard `PVOL` `save<N>.vol` archives (`savedGameName`/`worldName`/`savedGameVersion` without trailing `\0`, `WorldVar.cs`, `newWorld.cs` `setCurrentTime`, binary `PERS` current world, embedded ASCII kept `.vol` worlds & `.kq` maps, `current.bin`, and `kq8r_meta.txt` with `apply_kq8r_meta`, plus legacy `kq8r_state.txt` load fallback).
+  - **Verified:** `cargo test --workspace` (`847` passed, `0` failed), `cargo build --release -p kq8-viewer -p kq8-cli`, `kq8 save-verify --file kq8-artifacts/user/save/save26.vol` (`26` binary `PERS` across `8` classes, `11` ASCII `.kq`, `0` failures), and headless Daventry save + reload (`Condoor` `opened`, `smlchst3` `open`, `NoName22` crystal, exact Connor & camera pose, `world.cs Daventry Begin` with `FirstTime == 0` and no cutscene replay).
+  - **Not tested:** live interactive `cargo play` eye check and loading a KQ8R-written `save<N>.vol` inside original `Mask.exe`.
+  - **Next:** User live eye/game checks on M4 `4h` (and `Mask.exe` interoperability check if desired), or Session B implementing Script Coverage Batches 5–7 / `Q202` / `Q206`.
 
 - **2026-11-25 (A): Script Coverage Batch 7 (Temples & stragglers) studied — ALL 7 study batches complete** (traced in `Mask.exe` via Ghidra and checked against `MASK/` data; **not checked by hand in the running original**; no Rust code written):
   - **Commands & Connor `Die` (`script-commands.md` rules 12i–12n):** `KQObject::setFootStepSound` (`temple1/sloshtrp.cs`); `KQCamera::setHeight2` & `setHeight` (`temple3/traphz1.cs`, `temple4/archon.cs`); `KQConner::reduceHealth <frac> <minFrac>` (`trunc(level * 10 * frac)` clamped to `minFrac`, `temple4/altar.cs`); `killGame`, `doCredits` (screen `8`), `checkSave` (session saved flag, `Daventry/savegmh.cs`); `KQMonster::setState Connor Die Now` (skips death animation and finishes death immediately, `temple4/vortrap.cs`); `clearstateChangeNotify` (case-insensitive alias) and `beep` (unregistered command).
