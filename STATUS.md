@@ -1,10 +1,10 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-24 after
-**Implementation Session (B)** finished **M4 step `4g-F2`** (fixing live window
-tracking for `Replay Intro`, `useDynamicLighting` persistence, `save4x6.pbm`
-Save/Load alignment, and 1:1 pixel `sl_hilite` dithering; verified in `839`
-unit tests and headless viewer runs; **re-check in `cargo play` pending**).
+**Implementation Session (B)** finished **M4 step `4g`** (`4g-1`..`4g-5` +
+fixes **`4g-F1`/`4g-F2`**) and the user confirmed the main menu submenus,
+`Replay Intro`, `Dynamic Lights`, and `Save/Load` UI live by eye and ear (`839`
+unit tests and headless viewer runs also pass).
 **Open questions in `docs/behaviour/QUESTIONS.md` for Study Session A:**
 - **`Q202`:** Pressure plates popping back up when picking up a thrown rock.
 - **`Q206`:** Minor submenu resource discrepancies (`400.MSG` vs `500.MSG` for Credits, missing `sldrbar.pba`/`sldrtab.pba` vs `slider.pba`, `Saveload.ppl` vs `Menus.ppl`, `0x02` Monster / `0x04` Character shadow bits, and exact `.gui`/`500.MSG` tag numbering).
@@ -16,7 +16,7 @@ detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-24)
 
-- **2026-11-24 (B): M4 step 4g-F2 — Re-check fixes (`839` unit tests + headless Tests 1/2/3 pass; ready for live check) + `Q207`:**
+- **2026-11-24 (B): M4 step 4g-F2 — Re-check fixes (`839` unit tests + headless Tests 1/2/3 pass; confirmed live by eye and ear 2026-11-24) + `Q207`:**
   - **`Replay Intro` window tracking:** Installed `SetWinEventHook` (`EVENT_OBJECT_LOCATIONCHANGE`, `EVENT_SYSTEM_MINIMIZESTART..=MINIMIZEEND`) with `GetClientRect` + `ClientToScreen` + `IsIconic` so the owned borderless MCI overlay moves, resizes, and minimizes live with the game window.
   - **Dynamic Lighting persistence:** `kq8_data::lightmap::use_dynamic_lighting` now accepts `"true"`/`"false"` as well as `1`/`0`, and `UserOptions::format` writes `useDynamicLighting 1|0` matching `MASK/Options.cs` so Dynamic Lights stays On across New Game / Load Save.
   - **Save/Load alignment & highlight dither:** Switched `SL_BG_PICTURE` to `save4x6.pbm` (`640×480` matching `Loadgame.gui`/`Savegame.gui`) and composited `render_saveload` at native `ScreenFrame` pixels so `sl_hilite` renders a clean 1:1 checkerboard behind the save list.
