@@ -60,7 +60,7 @@ pub fn file_name(settings: &TerrainSettings, hardware: bool, kind: Kind) -> Opti
     name.as_deref().filter(|n| !n.is_empty())
 }
 
-/// `useDynamicLighting <0|1>` from a console script such as `Options.cs`
+/// `useDynamicLighting <0|1|true|false>` from a console script such as `Options.cs`
 /// (rule 2). The last such line wins; `None` if there is none (the game
 /// then keeps its starting value 0).
 pub fn use_dynamic_lighting(script: &[u8]) -> Option<bool> {
@@ -70,8 +70,14 @@ pub fn use_dynamic_lighting(script: &[u8]) -> Option<bool> {
         let line = line.split("//").next().unwrap_or("").trim();
         let mut words = line.split_whitespace();
         if words.next().is_some_and(|w| w.eq_ignore_ascii_case("useDynamicLighting")) {
-            if let Some(v) = words.next().and_then(|v| v.parse::<f64>().ok()) {
-                found = Some(v != 0.0);
+            if let Some(word) = words.next() {
+                if word.eq_ignore_ascii_case("true") {
+                    found = Some(true);
+                } else if word.eq_ignore_ascii_case("false") {
+                    found = Some(false);
+                } else if let Ok(v) = word.parse::<f64>() {
+                    found = Some(v != 0.0);
+                }
             }
         }
     }
@@ -410,6 +416,9 @@ mod tests {
     #[test]
     fn options_line() {
         assert_eq!(use_dynamic_lighting(b"setBrightness 50\r\nuseDynamicLighting 1\r\n"), Some(true));
+        assert_eq!(use_dynamic_lighting(b"useDynamicLighting true\r\n"), Some(true));
+        assert_eq!(use_dynamic_lighting(b"useDynamicLighting TRUE\r\n"), Some(true));
+        assert_eq!(use_dynamic_lighting(b"useDynamicLighting false\r\n"), Some(false));
         assert_eq!(use_dynamic_lighting(b"useDynamicLighting 1\nuseDynamicLighting 0\n"), Some(false));
         assert_eq!(use_dynamic_lighting(b"// useDynamicLighting 1\n"), None);
         assert_eq!(use_dynamic_lighting(b"setBrightness 50\n"), None);

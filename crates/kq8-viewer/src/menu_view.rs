@@ -374,6 +374,7 @@ struct MenuDrawKey {
     movekeys_state: (usize, Option<usize>, Option<usize>, Vec<(u32, String)>),
     saveload_state: Option<(bool, usize, usize, usize, String, bool, Option<SaveLoadPopup>, usize, usize)>,
     credits_page: Option<usize>,
+    target_px: [u32; 2],
 }
 
 fn find_bytes(game: &GameDir, candidates: &[&str]) -> Option<(String, Vec<u8>)> {
@@ -710,7 +711,7 @@ impl MenuView {
         ((self.now_ms / (1000.0 / CURSOR_FPS)) as usize) % n
     }
 
-    fn draw_key(&self) -> MenuDrawKey {
+    fn draw_key(&self, target_px: [u32; 2]) -> MenuDrawKey {
         let mut mask = 0u8;
         for item in MenuItem::ALL {
             if self.state.is_enabled(item) {
@@ -768,6 +769,7 @@ impl MenuView {
                 )
             }),
             credits_page: self.credits_state.as_ref().map(|c| c.page),
+            target_px,
         }
     }
 
@@ -818,13 +820,23 @@ impl MenuView {
         }
     }
 
-    /// Renders the active menu screen (640 × 480) into a [`gui_draw::Canvas`].
-    pub fn render_canvas(&self) -> gui_draw::Canvas {
+    fn saveload_hilite_rgb(&self) -> [u8; 3] {
+        let idx = self
+            .files
+            .get(&SL_HILITE_PICTURE.to_ascii_lowercase())
+            .and_then(|v| v.first())
+            .and_then(|b| b.pixels.iter().copied().find(|&p| p != 0))
+            .unwrap_or(128);
+        self.saveload_palette[idx as usize]
+    }
+
+    /// Renders the active menu screen into a [`gui_draw::Canvas`].
+    pub fn render_canvas(&self, target_px: [u32; 2]) -> gui_draw::Canvas {
         match self.screen {
             MenuScreen::Options => return self.render_options(),
             MenuScreen::Graphics => return self.render_graphics(),
             MenuScreen::MoveKeys => return self.render_movekeys(),
-            MenuScreen::LoadGame | MenuScreen::SaveGame => return self.render_saveload(),
+            MenuScreen::LoadGame | MenuScreen::SaveGame => return self.render_saveload(target_px),
             MenuScreen::Credits => return self.render_credits(),
             _ => {}
         }
@@ -1175,14 +1187,16 @@ impl MenuView {
         gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette)
     }
 
-    fn render_saveload(&self) -> gui_draw::Canvas {
-        let mut pieces: Vec<Piece> = Vec::new();
-        self.push_submenu_bg(&mut pieces, SL_BG_PICTURE);
+    fn render_saveload(&self, target_px: [u32; 2]) -> gui_draw::Canvas {
+        let mut bg_pieces: Vec<Piece> = Vec::new();
+        self.push_submenu_bg(&mut bg_pieces, SL_BG_PICTURE);
+        let bg_canvas = gui_draw::draw([0, 0], [640, 480], 1.0, &bg_pieces, &self.saveload_palette);
 
         let Some(st) = self.saveload_state.as_ref() else {
-            pieces.reverse();
-            return gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.palette);
+            return bg_canvas;
         };
+
+        let mut pieces: Vec<Piece> = Vec::new();
 
         if let Some(font) = self.fonts.get(&SL_TITLE_FONT.to_ascii_lowercase()) {
             let title = if st.is_save {
@@ -1213,21 +1227,6 @@ impl MenuView {
                 justification: 0x9,
                 text: name_text,
             });
-        }
-
-        if st.selected_entry().is_some() {
-            if let Some(pic) = self
-                .files
-                .get(&SL_HILITE_PICTURE.to_ascii_lowercase())
-                .and_then(|v| v.first())
-                .and_then(Pic::of)
-            {
-                pieces.push(Piece::Picture {
-                    rect: sl_hilite_rect(st.selected_row),
-                    pic,
-                    stretch: true,
-                });
-            }
         }
 
         if let Some(font) = font20 {
@@ -1394,22 +1393,64 @@ impl MenuView {
         }
 
         pieces.reverse();
-        let mut canvas = gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.saveload_palette);
+        let mut fg_canvas = gui_draw::draw([0, 0], [640, 480], 1.0, &pieces, &self.saveload_palette);
         if let Some(ref rgba) = self.sl_preview_rgba {
             let tw = THUMBNAIL_WIDTH as usize;
             let th = THUMBNAIL_HEIGHT as usize;
             if rgba.len() >= tw * th * 4 {
                 let x0 = SL_THUMB_RECT[0] as usize;
                 let y0 = SL_THUMB_RECT[1] as usize;
-                let cw = canvas.width as usize;
+                let cw = fg_canvas.width as usize;
                 for row in 0..th {
                     let src = row * tw * 4;
                     let dst = ((y0 + row) * cw + x0) * 4;
-                    canvas.rgba[dst..dst + tw * 4].copy_from_slice(&rgba[src..src + tw * 4]);
+                    fg_canvas.rgba[dst..dst + tw * 4].copy_from_slice(&rgba[src..src + tw * 4]);
                 }
             }
         }
-        canvas
+
+        // Composite at native target pixels so the 1x1 checkerboard highlight has
+        // zero doubled rows/columns when scaled to non-640x480 window sizes.
+        let [tw, th] = [target_px[0].max(640), target_px[1].max(480)];
+        let (twu, thu) = (tw as usize, th as usize);
+        let mut out = gui_draw::Canvas::new(tw, th);
+        for y in 0..thu {
+            let sy = ((y * 480) / thu).min(479);
+            for x in 0..twu {
+                let sx = ((x * 640) / twu).min(639);
+                let src = (sy * 640 + sx) * 4;
+                let dst = (y * twu + x) * 4;
+                out.rgba[dst..dst + 4].copy_from_slice(&bg_canvas.rgba[src..src + 4]);
+            }
+        }
+        if st.selected_entry().is_some() {
+            let [l, t, r, b] = sl_hilite_rect(st.selected_row);
+            let pl = ((l as f32 * tw as f32) / 640.0).round() as usize;
+            let pr = ((r as f32 * tw as f32) / 640.0).round() as usize;
+            let pt = ((t as f32 * th as f32) / 480.0).round() as usize;
+            let pb = ((b as f32 * th as f32) / 480.0).round() as usize;
+            let hi = self.saveload_hilite_rgb();
+            for y in pt..pb.min(thu) {
+                for x in pl..pr.min(twu) {
+                    if (x + y) % 2 == 0 {
+                        let dst = (y * twu + x) * 4;
+                        out.rgba[dst..dst + 4].copy_from_slice(&[hi[0], hi[1], hi[2], 255]);
+                    }
+                }
+            }
+        }
+        for y in 0..thu {
+            let sy = ((y * 480) / thu).min(479);
+            for x in 0..twu {
+                let sx = ((x * 640) / twu).min(639);
+                let src = (sy * 640 + sx) * 4;
+                if fg_canvas.rgba[src + 3] > 0 {
+                    let dst = (y * twu + x) * 4;
+                    out.rgba[dst..dst + 4].copy_from_slice(&fg_canvas.rgba[src..src + 4]);
+                }
+            }
+        }
+        out
     }
 }
 
@@ -2729,9 +2770,18 @@ pub fn menu_step(
         }
         return;
     }
-    let key = menu.draw_key();
+    let target_px = if matches!(menu.screen, MenuScreen::LoadGame | MenuScreen::SaveGame) {
+        let scale = window.single().ok().map_or(1.0, |w| w.scale_factor());
+        [
+            ((frame.0[2] * scale).round() as u32).clamp(640, 3840),
+            ((frame.0[3] * scale).round() as u32).clamp(480, 2880),
+        ]
+    } else {
+        [640, 480]
+    };
+    let key = menu.draw_key(target_px);
     if menu.last_drawn_key.as_ref() != Some(&key) {
-        let canvas = menu.render_canvas();
+        let canvas = menu.render_canvas(target_px);
         let mut picture = Image::new(
             Extent3d { width: canvas.width, height: canvas.height, depth_or_array_layers: 1 },
             TextureDimension::D2,

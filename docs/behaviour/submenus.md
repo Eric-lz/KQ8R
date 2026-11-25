@@ -311,7 +311,7 @@ For the main menu itself, see [main-menu.md](file:///c:/Games/KQ8R/docs/behaviou
 ## Data used
 
 - **Archive `GAME/Kq/KqGui.kq`** (and `MASK/movekeys.kq`, `MASK/Options.cs`, `MASK/save/save<N>.vol`):
-  - **Load Game**: `Loadgame.kq`, `Loadgame.gui`, `saveload.pbm` (`save4x6.pbm` / `save6x8.pbm`), `sl_hilite.pba`, `sl_buton.pba`, `sl_hibtn.pba`, `sl_scton.pba`, `sl_scbon.pba`, `sl_scbox.pba`, `sl_notmb.pbm`, `sl_win2.pbm`, `s_ybtn.pba`, `s_yhibtn.pba`, fonts `20sl.pft`, `27sl.pft`, `consoles.pft`.
+  - **Load Game**: `Loadgame.kq`, `Loadgame.gui`, `save4x6.pbm` (`640×480`, or `saveload.pbm` `800×600`), `sl_hilite.pba`, `sl_buton.pba`, `sl_hibtn.pba`, `sl_scton.pba`, `sl_scbon.pba`, `sl_scbox.pba`, `sl_notmb.pbm`, `sl_win2.pbm`, `s_ybtn.pba`, `s_yhibtn.pba`, fonts `20sl.pft`, `27sl.pft`, `consoles.pft`, palette `Saveload.ppl`.
   - **Save Game**: `Savegame.kq`, `Savegame.gui`, plus `savebar.pba` and `savered.pbm` (progress bar), and `<game>/current.bin` (live 19,204-byte thumbnail).
   - **Options**: `Options.kq`, `Options.gui`, `options.pbm` (`opt4x6.pbm` / `opt6x8.pbm`), `Mskicng.pba` (two spinning mask cursors), `sldrbar.pba`, `sldrtab.pba`, `20o.pft`, `27o.pft`, `27oh.pft`, `<game>/Options.cs`.
   - **Graphics**: `Graphics.kq`, `Graphics.gui`, `options.pbm`, `Mskicng.pba`, `sldrbar.pba`, `sldrtab.pba`, `sl_win2.pbm`.

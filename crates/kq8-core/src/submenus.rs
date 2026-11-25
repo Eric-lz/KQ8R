@@ -161,7 +161,7 @@ impl UserOptions {
             self.sfx_vol.clamp(0.0, 1.0),
             self.music_vol.clamp(0.0, 1.0),
             self.shadow_mask & 0x0F,
-            if self.dynamic_lighting { "true" } else { "false" },
+            u8::from(self.dynamic_lighting),
             if self.captions { "true" } else { "false" },
             self.not_starting_help.min(2),
             self.gmode_name,
@@ -1372,7 +1372,7 @@ impl MoveKeysState {
 }
 
 /// Layout constants and assets for `Loadgame.gui` / `Savegame.gui` (`submenus.md` rules 3–10, `gui-verify.log`).
-pub const SL_BG_PICTURE: &str = "saveload.pbm";
+pub const SL_BG_PICTURE: &str = "save4x6.pbm";
 pub const SL_HILITE_PICTURE: &str = "sl_hilite.pba";
 pub const SL_BTN_PICTURE: &str = "sl_buton.pba";
 pub const SL_HIBTN_PICTURE: &str = "sl_hibtn.pba";

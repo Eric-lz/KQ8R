@@ -4429,6 +4429,15 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | `saveload_palette` (`GAME/Resource/Saveload.ppl`) and `SL_POINTER_FILE` (`slcurgui.pba`) applied to `LoadGame`, `SaveGame`, `Credits` (`4black.pbm`, `kqteam08.pbm`), and `current.bin` (`pal_id=999`), with `sl_notmb.pbm` fallback for blank live thumbnails | `MASK/GAME/Resource/Saveload.ppl`, `MASK/save/save1.vol` inspected (`Q206` d); user visual check 2026-11-24 | headless Test C (`26` pictures loaded; `Credits` & `Load Game` opened cleanly) |
 | `MciThreadAnchor` (`!Send`) pinning MCI to Bevy's main Win32 message-pump thread, `queue_start` from `MenuAction::ReplayIntro`, owned borderless click-transparent popup overlay (`parent <hwnd> style popup`, `WS_EX_NOACTIVATE \| WS_EX_TRANSPARENT`) aligned to `ScreenFrame`, and `status position >= length` stop check | `submenus.md` rules 26–28; user live check 2026-11-24 | headless Test B (`w32opn_1.avi` stays playing across frames `25..150` with no premature stop or theme restart); headless Test A (skip at frame `60` closes MCI and restarts `theme.aud` at `+200 ms`) |
 
+## M4 4g-F2 2026-11-24: Live re-check fixes (`Replay Intro` WinEvent move tracking, dynamic lighting persistence, Save/Load framing/dither) — data `lightmap.rs`; core `submenus.rs`; viewer `menu_view.rs`, `movie_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `use_dynamic_lighting` accepts `true`/`false` case-insensitively and numeric `0`/`1`; `UserOptions::format` writes `useDynamicLighting 1|0` matching `MASK/Options.cs` | `terrain-lighting.md` rule 2; `MASK/Options.cs` (`useDynamicLighting 1`); user live check 2026-11-24 | unit test `lightmap::tests::options_line`; headless Test 1 (`Options.cs` writes `useDynamicLighting 1`, Daventry logs `Shadow map daveshdw.bin (Options.cs useDynamicLighting 1)`) |
+| `SL_BG_PICTURE` uses `save4x6.pbm` (640×480 matching `Loadgame.gui`/`Savegame.gui`); `render_saveload` composites at native `ScreenFrame` pixels (`MenuDrawKey::target_px`) so `sl_hilite` draws a smooth 1:1 checkerboard behind `LIST0..LIST9` | `MASK/GAME/8Gui/save4x6.pbm` & `sl_hilite.pba` inspected (`640×480`, `[128, 0]` 1-px checkerboard); user live check 2026-11-24 | headless Test 3 (`menu.log`: `Load Game` opened with `25` saves, moved row, `RESULT: PASS`) |
+| `SetWinEventHook` (`EVENT_OBJECT_LOCATIONCHANGE`, `EVENT_SYSTEM_MINIMIZESTART..=MINIMIZEEND`) + `GetClientRect` / `ClientToScreen` / `IsIconic` live tracking for the `Replay Intro` / `playMovie` MCI overlay while dragging, resizing, or minimizing | `submenus.md` rules 26–28; user live check 2026-11-24 | headless Test 2 (`menu.log`: `w32opn_1.avi` started frame `25`, skipped frame `60`, `theme.aud` restarted at `+200 ms`, `RESULT: PASS`) |
+
+
 
 
 

@@ -9,6 +9,8 @@
 //! supports key/click skipping when `allow_skip` is true (`Replay Intro`).
 
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::sync::Mutex;
 
 use bevy::prelude::*;
 use kq8_data::GameDir;
@@ -30,6 +32,15 @@ mod winmm {
         pub y: i32,
     }
 
+    #[repr(C)]
+    #[derive(Default, Copy, Clone)]
+    pub struct Rect {
+        pub left: i32,
+        pub top: i32,
+        pub right: i32,
+        pub bottom: i32,
+    }
+
     pub const GW_OWNER: u32 = 4;
     pub const GWL_STYLE: i32 = -16;
     pub const GWL_EXSTYLE: i32 = -20;
@@ -41,6 +52,14 @@ mod winmm {
     pub const SWP_NOACTIVATE: u32 = 0x0010;
     pub const SWP_FRAMECHANGED: u32 = 0x0020;
     pub const SWP_SHOWWINDOW: u32 = 0x0040;
+    pub const SW_HIDE: i32 = 0;
+
+    pub const EVENT_OBJECT_LOCATIONCHANGE: u32 = 0x800B;
+    pub const EVENT_SYSTEM_MINIMIZESTART: u32 = 0x0016;
+    pub const EVENT_SYSTEM_MINIMIZEEND: u32 = 0x0017;
+    pub const WINEVENT_OUTOFCONTEXT: u32 = 0x0000;
+    pub const OBJID_WINDOW: i32 = 0;
+    pub const CHILDID_SELF: i32 = 0;
 
     #[link(name = "winmm")]
     extern "system" {
@@ -54,6 +73,7 @@ mod winmm {
 
     #[link(name = "kernel32")]
     extern "system" {
+        pub fn GetCurrentProcessId() -> u32;
         pub fn GetCurrentThreadId() -> u32;
     }
 
@@ -66,8 +86,11 @@ mod winmm {
             l_param: isize,
         ) -> i32;
         pub fn IsWindowVisible(hwnd: isize) -> i32;
+        pub fn IsIconic(hwnd: isize) -> i32;
+        pub fn ShowWindow(hwnd: isize, cmd_show: i32) -> i32;
         pub fn GetParent(hwnd: isize) -> isize;
         pub fn GetWindow(hwnd: isize, cmd: u32) -> isize;
+        pub fn GetClientRect(hwnd: isize, rect: *mut Rect) -> i32;
         pub fn ClientToScreen(hwnd: isize, point: *mut Point) -> i32;
         #[cfg(target_pointer_width = "64")]
         pub fn GetWindowLongPtrW(hwnd: isize, index: i32) -> isize;
@@ -83,6 +106,16 @@ mod winmm {
             flags: u32,
         ) -> i32;
         pub fn SetFocus(hwnd: isize) -> isize;
+        pub fn SetWinEventHook(
+            event_min: u32,
+            event_max: u32,
+            hmod_win_event_proc: isize,
+            pfn_win_event_proc: unsafe extern "system" fn(isize, u32, isize, i32, i32, u32, u32),
+            id_process: u32,
+            id_thread: u32,
+            dw_flags: u32,
+        ) -> isize;
+        pub fn UnhookWinEvent(h_win_event_hook: isize) -> i32;
     }
 }
 
@@ -136,7 +169,82 @@ fn primary_win32_hwnd() -> Option<isize> {
 }
 
 #[cfg(windows)]
-fn position_overlay(owner_hwnd: isize, mci_hwnd: isize, client_dest: [i32; 4], make_borderless: bool) {
+#[derive(Debug, Clone, Copy)]
+struct OverlayTrack {
+    owner_hwnd: isize,
+    mci_hwnd: isize,
+    last_screen_rect: Option<[i32; 4]>,
+    hidden_iconic: bool,
+}
+
+#[cfg(windows)]
+static ACTIVE_OVERLAY: Mutex<Option<OverlayTrack>> = Mutex::new(None);
+
+#[cfg(windows)]
+fn overlay_screen_rect(owner_hwnd: isize) -> Option<[i32; 4]> {
+    let mut rc = winmm::Rect::default();
+    if unsafe { winmm::GetClientRect(owner_hwnd, &mut rc) } == 0 {
+        return None;
+    }
+    let cw = (rc.right - rc.left).max(0) as f32;
+    let ch = (rc.bottom - rc.top).max(0) as f32;
+    if cw <= 0.0 || ch <= 0.0 {
+        return None;
+    }
+    let [fl, ft, fw, fh] = kq8_core::panels::screen_frame([cw, ch]);
+    let pw = fw.round() as i32;
+    let ph = fh.round() as i32;
+    if pw <= 0 || ph <= 0 {
+        return None;
+    }
+    let mut pt = winmm::Point {
+        x: fl.round() as i32,
+        y: ft.round() as i32,
+    };
+    unsafe {
+        winmm::ClientToScreen(owner_hwnd, &mut pt);
+    }
+    Some([pt.x, pt.y, pw, ph])
+}
+
+#[cfg(windows)]
+fn sync_overlay_window(make_borderless: bool) {
+    let mut dest_resize: Option<(i32, i32)> = None;
+    let (owner_hwnd, mci_hwnd, screen_rect, apply_show) = {
+        let Ok(mut guard) = ACTIVE_OVERLAY.try_lock() else {
+            return;
+        };
+        let Some(track) = guard.as_mut() else {
+            return;
+        };
+        if unsafe { winmm::IsIconic(track.owner_hwnd) } != 0 {
+            if !track.hidden_iconic {
+                unsafe {
+                    winmm::ShowWindow(track.mci_hwnd, winmm::SW_HIDE);
+                }
+                track.hidden_iconic = true;
+            }
+            return;
+        }
+        let Some(rect) = overlay_screen_rect(track.owner_hwnd) else {
+            return;
+        };
+        let size_changed = track
+            .last_screen_rect
+            .is_none_or(|prev| prev[2] != rect[2] || prev[3] != rect[3]);
+        let moved_or_restored =
+            make_borderless || track.hidden_iconic || track.last_screen_rect != Some(rect);
+        if !moved_or_restored {
+            return;
+        }
+        if size_changed || make_borderless || track.hidden_iconic {
+            dest_resize = Some((rect[2], rect[3]));
+        }
+        track.last_screen_rect = Some(rect);
+        track.hidden_iconic = false;
+        (track.owner_hwnd, track.mci_hwnd, rect, true)
+    };
+    let _ = owner_hwnd;
     if make_borderless {
         #[cfg(target_pointer_width = "64")]
         unsafe {
@@ -149,26 +257,110 @@ fn position_overlay(owner_hwnd: isize, mci_hwnd: isize, client_dest: [i32; 4], m
             winmm::SetWindowLongPtrW(mci_hwnd, winmm::GWL_EXSTYLE, new_ex);
         }
     }
-    let mut pt = winmm::Point {
-        x: client_dest[0],
-        y: client_dest[1],
-    };
-    unsafe {
-        winmm::ClientToScreen(owner_hwnd, &mut pt);
-        let flags = winmm::SWP_NOACTIVATE
-            | winmm::SWP_NOZORDER
-            | winmm::SWP_SHOWWINDOW
-            | if make_borderless { winmm::SWP_FRAMECHANGED } else { 0 };
-        winmm::SetWindowPos(mci_hwnd, 0, pt.x, pt.y, client_dest[2], client_dest[3], flags);
+    if apply_show {
+        unsafe {
+            let flags = winmm::SWP_NOACTIVATE
+                | winmm::SWP_NOZORDER
+                | winmm::SWP_SHOWWINDOW
+                | if make_borderless { winmm::SWP_FRAMECHANGED } else { 0 };
+            winmm::SetWindowPos(
+                mci_hwnd,
+                0,
+                screen_rect[0],
+                screen_rect[1],
+                screen_rect[2],
+                screen_rect[3],
+                flags,
+            );
+        }
     }
-    let _ = mci_send(&format!(
-        "put kq8movie destination at 0 0 {} {}",
-        client_dest[2], client_dest[3]
-    ));
+    if let Some((pw, ph)) = dest_resize {
+        let _ = mci_send(&format!("put kq8movie destination at 0 0 {pw} {ph}"));
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "system" fn owner_move_winevent(
+    _hook: isize,
+    _event: u32,
+    hwnd: isize,
+    id_object: i32,
+    id_child: i32,
+    _thread_id: u32,
+    _time_ms: u32,
+) {
+    if id_object != winmm::OBJID_WINDOW || id_child != winmm::CHILDID_SELF {
+        return;
+    }
+    let matches_owner = ACTIVE_OVERLAY
+        .try_lock()
+        .ok()
+        .and_then(|g| g.map(|t| t.owner_hwnd == hwnd))
+        .unwrap_or(false);
+    if matches_owner {
+        sync_overlay_window(false);
+    }
+}
+
+#[cfg(windows)]
+fn install_overlay_hooks(owner_hwnd: isize, mci_hwnd: isize) -> Vec<isize> {
+    if let Ok(mut guard) = ACTIVE_OVERLAY.lock() {
+        *guard = Some(OverlayTrack {
+            owner_hwnd,
+            mci_hwnd,
+            last_screen_rect: None,
+            hidden_iconic: false,
+        });
+    }
+    sync_overlay_window(true);
+    let (pid, tid) = unsafe { (winmm::GetCurrentProcessId(), winmm::GetCurrentThreadId()) };
+    let mut hooks = Vec::with_capacity(2);
+    for (min_ev, max_ev) in [
+        (winmm::EVENT_OBJECT_LOCATIONCHANGE, winmm::EVENT_OBJECT_LOCATIONCHANGE),
+        (winmm::EVENT_SYSTEM_MINIMIZESTART, winmm::EVENT_SYSTEM_MINIMIZEEND),
+    ] {
+        let h = unsafe {
+            winmm::SetWinEventHook(
+                min_ev,
+                max_ev,
+                0,
+                owner_move_winevent,
+                pid,
+                tid,
+                winmm::WINEVENT_OUTOFCONTEXT,
+            )
+        };
+        if h != 0 {
+            hooks.push(h);
+        }
+    }
+    hooks
+}
+
+#[cfg(windows)]
+fn clear_overlay_hooks(hooks: &[isize]) {
+    for &h in hooks {
+        if h != 0 {
+            unsafe {
+                winmm::UnhookWinEvent(h);
+            }
+        }
+    }
+    if let Ok(mut guard) = ACTIVE_OVERLAY.lock() {
+        *guard = None;
+    }
 }
 
 #[cfg(not(windows))]
-fn position_overlay(_owner_hwnd: isize, _mci_hwnd: isize, _client_dest: [i32; 4], _make_borderless: bool) {}
+fn sync_overlay_window(_make_borderless: bool) {}
+
+#[cfg(not(windows))]
+fn install_overlay_hooks(_owner_hwnd: isize, _mci_hwnd: isize) -> Vec<isize> {
+    Vec::new()
+}
+
+#[cfg(not(windows))]
+fn clear_overlay_hooks(_hooks: &[isize]) {}
 
 /// Resolves `requested` (e.g. `"w32opn_1.dll"`, `"W32mdl_1.dll"`, `"W32ndg_1.dll"`)
 /// in `<game>/`, preferring the `.avi` conversion shipped by GOG when a
@@ -211,9 +403,7 @@ struct ActiveMovie {
     elapsed_ms: f64,
     skip_requested: bool,
     length_frames: u32,
-    owner_hwnd: Option<isize>,
-    mci_hwnd: Option<isize>,
-    last_rect: Option<[i32; 4]>,
+    hooks: Vec<isize>,
 }
 
 #[derive(Resource, Default)]
@@ -256,7 +446,7 @@ impl MoviePlayer {
         allow_skip: bool,
         from_replay_intro: bool,
         sound_off: bool,
-        client_dest: Option<[i32; 4]>,
+        _client_dest: Option<[i32; 4]>,
     ) -> Result<u32, String> {
         self.stop();
         let abs = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
@@ -287,13 +477,15 @@ impl MoviePlayer {
             .and_then(|s| s.parse::<isize>().ok())
             .filter(|&h| h != 0);
 
-        let mut placed_rect = None;
-        if opened_popup {
-            if let (Some(owner), Some(mci_w), Some(dest)) = (owner_hwnd, mci_hwnd, client_dest) {
-                position_overlay(owner, mci_w, dest, true);
-                placed_rect = Some(dest);
+        let hooks = if opened_popup {
+            if let (Some(owner), Some(mci_w)) = (owner_hwnd, mci_hwnd) {
+                install_overlay_hooks(owner, mci_w)
+            } else {
+                Vec::new()
             }
-        }
+        } else {
+            Vec::new()
+        };
         if sound_off {
             let _ = mci_send("setaudio kq8movie off");
         }
@@ -319,9 +511,7 @@ impl MoviePlayer {
             elapsed_ms: 0.0,
             skip_requested: false,
             length_frames,
-            owner_hwnd,
-            mci_hwnd,
-            last_rect: placed_rect,
+            hooks,
         });
         Ok(length_frames)
     }
@@ -329,7 +519,8 @@ impl MoviePlayer {
     /// Stops and closes any active MCI movie (`submenus.md` rule 28).
     pub fn stop(&mut self) {
         self.pending = None;
-        if self.active.take().is_some() {
+        if let Some(active) = self.active.take() {
+            clear_overlay_hooks(&active.hooks);
             let _ = mci_send("stop kq8movie");
             let _ = mci_send("close kq8movie");
         }
@@ -440,14 +631,8 @@ pub fn movie_step(
     }
 
     // 2. Drive active playback (keep overlay aligned, check skip, poll MCI).
-    let client_dest_now = movie_client_dest(&window, &frame);
     let Some(active) = movie.active.as_mut() else { return };
-    if let (Some(owner), Some(mci_w), Some(dest)) = (active.owner_hwnd, active.mci_hwnd, client_dest_now) {
-        if active.last_rect != Some(dest) {
-            position_overlay(owner, mci_w, dest, false);
-            active.last_rect = Some(dest);
-        }
-    }
+    sync_overlay_window(false);
 
     let dt_ms = time.delta_secs_f64() * 1000.0;
     active.elapsed_ms += dt_ms;
