@@ -201,8 +201,8 @@ Words used here:
    clickable 0x20 + 1) on `bricks.kq`, `coffnlid.kq`, `urn.kq`
    (Daventry), `kingart.kq` (Castle D); the Barren symbols (`KQDoor`)
    and Dead City's `paddle2` (`KQPaddleObject`) have it too; Temple 3's
-   `order01–09` (`KQPushTile`, 0x10101) have their own class (not
-   traced).
+   `order01–09` (`KQPushTile`, 0x10101) have their own class (rules
+   13a–13e).
 10. **What the Daventry scripts do with `Push`** (data): all three take
     control at once on the first call, so the repeated calls of rule 3
     don't matter:
@@ -371,6 +371,64 @@ Words used here:
      it within `3,000` of `bouldtp2` (`bouldtp2.cs`) cues `brikwall` (`Cue
      1`), which deletes `boulder`.
 
+### Temple 3 sliding tiles (`KQPushTile`, traced 2026-11-25, Batch 7)
+
+13a. **Setup and `.kq` keys:** `KQPushTile` is a `KQAnimObject` subclass
+     used by the nine numbered stone blocks `order01`–`order09` in
+     `temple3` (`colliderType = 65793` = `0x10101` scripted pushable,
+     `order01.kq`–`order09.kq`). Extra `.kq` keys:
+     - `tilepos` (whole number, saved): two-digit **`row * 10 + col`** on
+       a **5 × 5 grid** (`row` in `0..4`, `col` in `0..4`).
+     - `initiator` (flag, saved): set to `1` on the tile Connor pushed so
+       only that tile checks completion and unlocks controls on animation
+       end.
+     `temple3/newworld.cs` places the 9 tiles in the inner **3 × 3**
+     (`11..33`, leaving a 1-cell empty border at `row 0`, `row 4`, `col
+     0`, `col 4`) with **`780`-unit** spacing (`x = 99,220 / 100,000 /
+     100,780`, `y = 131,530 / 130,750 / 129,970`, `z = 4,000`), starting
+     scrambled (`order05=11, order04=12, order08=13, order01=21,
+     order09=22, order06=23, order03=31, order02=32, order07=33`).
+13b. **Push direction and 5 × 5 chain check:** On a pushing touch by
+     Connor, `KQPushTile` does **not** run a `Push` script. Instead it
+     turns `handsOff 1`, puts Connor in `Wait` (`Stop`), disables its own
+     collision (`0`), builds the 5 × 5 occupancy grid from `order01`–
+     `order09`'s current `tilepos`, and converts the horizontal contact
+     normal into a grid step `delta`:
+     - normal `(0, +1)` → `delta = +10` (down, row + 1);
+     - normal `(0, −1)` → `delta = −10` (up, row − 1);
+     - normal `(−1, 0)` → `delta = +1` (right, col + 1);
+     - normal `(+1, 0)` → `delta = −1` (left, col − 1).
+     It walks forward from the pushed tile's cell in direction `delta`
+     until the first empty cell or the edge of the 5 × 5 grid, collecting
+     every contiguous tile in front of it. The push **succeeds** if and
+     only if there is at least one empty cell ahead before the grid edge
+     (`0..4`); if the contiguous line of tiles is jammed against the outer
+     5 × 5 border, the push is **blocked**.
+13c. **Snapping Connor and push animations:** Connor is moved relative to
+     the pushed tile so he stands **`860` units** back from the tile's
+     centre along the push axis (with `+25` z), and enters `Special` with
+     `tempush.anm`:
+     - **Can push:** `tempush` (`c_opush.kqs`) in third person, or
+       `tempushf` (`fp_opush.kqs`) in first person.
+     - **Blocked:** `trypush` (`c_opshno.kqs`) in third person, or
+       `trypushf` (`fp_opsno.kqs`) in first person; collision (`0x10101`)
+       and `handsOff 0` are restored immediately.
+13d. **Sliding the tiles:** When the push succeeds, the pushed tile and
+     every contiguous tile ahead of it each add `delta` to their `tilepos`
+     and play the matching one-step slide animation from `order01.kq`–
+     `order09.kq`:
+     - `delta = +1`: `right` (`cboxl.kqs`);
+     - `delta = −1`: `left` (`cboxr.kqs`);
+     - `delta = +10`: `down` (`cboxf.kqs`);
+     - `delta = −10`: `up` (`cboxb.kqs`).
+13e. **Completion check (`onEndLoop`):** When the initiator tile's slide
+     animation finishes, it checks whether `order01`–`order09` occupy
+     **`11, 12, 13, 21, 22, 23, 31, 32, 33`** in exact numerical order:
+     - **Solved:** sends **`Cue 1`** to **`door03a`** and sets all 9
+       tiles' `colliderType = 1` (solid, no longer pushable).
+     - **Not solved:** restores `colliderType = 0x10101`.
+     In both cases `handsOff 0` returns controls to Connor.
+
 ## Numbers and units
 
 | What | Value | Source |
@@ -486,10 +544,9 @@ Words used here:
 
 ## Open questions
 
-1. The other pushable classes (`KQPushTile` in Temple 3, the Barren
-   symbols as `KQDoor`) may react in their own way; not traced.
-   (`KQBoulder` in Gnome is now covered in rules 12a–12d; `KQPaddleObject`
-   in rules 11a–11h, 2026-10-27.)
+1. The Barren symbols as `KQDoor` may react in their own way; not traced.
+   (`KQBoulder` in Gnome is covered in rules 12a–12d, `KQPaddleObject` in
+   rules 11a–11h, and `KQPushTile` in Temple 3 in rules 13a–13e.)
    Paddle details still open: one engine flag the push sets (the
    conversation code sets the same one; meaning unknown); when exactly
    an `AnimOnce` object reports its end; none of rules 11a–11h checked

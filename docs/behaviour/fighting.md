@@ -912,6 +912,41 @@ a cave wall (`dragwall`).
   **50,000 experience** (`Monstats.mtl` type `dragonbody`), and swaps to
   its corpse `db_dead.KQS`.
 
+### 7d. Lucreto (`KQLucreto`, traced 2026-11-25, Batch 7)
+
+The final boss fight in `temple4` uses two `KQLucreto` instances loaded
+from `temple4/lucend.kq`: **`LucEnd`** (melee, `doMode = 0`) and
+**`LucEndFar`** (ranged, `doMode = 1`, initially hidden).
+
+**Extra `.kq` keys:**
+- `reactPause` (float, default `2.0 s`): pause length after reacting
+  (same meaning as `KQTowerSkeleton`'s `reactPause`).
+- `moveTime` (float, default `0.0 s`, saved): game-time timestamp before
+  which Lucreto stays idle in `Wait` without moving or swapping.
+- `changeDist` (float, default `2,000.0`): 3D distance threshold for
+  swapping between melee and ranged forms.
+
+**Overrides beyond ordinary `KQMonster`:**
+- **0-damage taunt (`onHit`):** Whenever Lucreto receives a **0-damage**
+  hit, he speaks **`7000.msg` `(noun 0, verb 0, case 51, seq 1)`**
+  instead of running the normal hit handler. Positive-damage hits use
+  ordinary `KQMonster` hit handling.
+- **Melee ↔ Ranged swap (`Wait` and `Move` states):** Every update in
+  state `2` (`Wait`) or state `4` (`Move`), if `now < moveTime`, Lucreto
+  stays in `Wait` and does nothing. Otherwise, he checks 3D distance to
+  Connor against `changeDist` (`2,000`):
+  - If **ranged** (`doMode != 0`, `LucEndFar`) and distance to Connor
+    **`< changeDist`**: turns off gravity and hides `LucEndFar`, moves
+    **`LucEnd`** to `LucEndFar`'s exact position and rotation, unhides
+    `LucEnd`, and turns `LucEnd`'s gravity on.
+  - If **melee** (`doMode == 0`, `LucEnd`) and distance to Connor
+    **`> changeDist`**: turns off gravity and hides `LucEnd`, moves
+    **`LucEndFar`** to `LucEnd`'s exact position and rotation (also
+    copying home position), unhides `LucEndFar`, and turns `LucEndFar`'s
+    gravity on.
+  - Otherwise behaves like ordinary `KQMonster` `Wait` / `Move` (with
+    standard stuck-detection while chasing).
+
 ### 8. Ranged characters (`doMode=1`)
 
 34. **Who is ranged** (traced and data): a character that holds a

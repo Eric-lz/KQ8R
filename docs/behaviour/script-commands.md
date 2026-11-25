@@ -219,6 +219,53 @@ hints with no visible gameplay effect.
     `IceWorld/icelord.cs` is **not** an engine script call — `icelord.cs`
     calls itself directly on line 88 (`icelord.cs Icelord Preload`) as a
     script subroutine.
+12i. **`KQObject::setFootStepSound <obj> <int>` (traced 2026-11-25, Batch
+    7):** Sets the object's footstep-sound index (`footStepSound`) to the
+    parsed integer and returns `0`. Used by `temple1/sloshtrp.cs` to set
+    `temple_e` to `3` (water/slosh footsteps) and back to `0` (default).
+12j. **`KQCamera::setHeight2 <height>` and `KQCamera::setHeight <0|1>`
+    (traced 2026-11-25, Batch 7):**
+    - `KQCamera::setHeight2 <float>` stores an alternate follow-camera
+      height (`camHeight2`, e.g. `2000` in `temple4/archon.cs`).
+    - `KQCamera::setHeight <int>` switches the camera's active follow
+      height (or zoomed follow height when zoomed) to the default
+      `camHeight` when `0`, or to `camHeight2` when non-zero, then
+      recomputes the follow camera position (`temple3/traphz1.cs`,
+      `temple4/archon.cs`).
+12k. **`KQConner::reduceHealth <fraction> <minFraction>` (traced
+    2026-11-25, Batch 7):** Subtracts `trunc(level * 10 * fraction)` from
+    Connor's health (the same level-scaled formula as `KQSpiriTrap`). If
+    `(health - loss) / (level * 10)` would fall below `minFraction`, sets
+    Connor's health to `trunc(level * 10 * minFraction)` instead. Applied
+    as a plain health-change stats event (no attack, flinch, or
+    protection) and returns `0`. Used by `temple4/altar.cs` (`0.5 0.02`,
+    5 uses).
+12l. **`killGame`, `doCredits`, and `checkSave` (traced 2026-11-25, Batch
+    7):**
+    - `killGame` marks the current game as ended and clears the running
+      game state / pauses the world so `Save` and `Back to Game` are
+      disabled on the Main Menu (`temple4/vortrap.cs` line 152).
+    - `doCredits` (with no arguments) switches directly to the Credits
+      screen (`screen 8`, `submenus.md` section 7). Used at the end of
+      `temple4/vortrap.cs` after `killGame` and `playAvi w32ndg_1.dll`.
+    - `checkSave` returns `1` if the player has saved the game at least
+      once during this session, else `0`. Used by `Daventry/savegmh.cs`
+      to show starting-help popup `#143` if the player has not saved yet.
+12m. **`KQMonster::setState Connor Die [Now]` (traced 2026-11-25, Batch
+    7):** Entering Connor's `Die` state zeroes his health and stops his
+    speech/sounds. When the optional extra argument matches `"now"`
+    (case-insensitive, used by `temple4/vortrap.cs` lines 131–137 along
+    with `KQConner::reincarnate 0`), Connor **skips his death animation**
+    and immediately finishes death (returning to the Main Menu). Without
+    `"Now"`, he plays his normal death movement (`fighting.md`).
+12n. **Remaining script-coverage stragglers (traced 2026-11-25, Batch
+    7):**
+    - `KQMonster::clearstateChangeNotify` (`DeadCity/SKELKING.CS`): simply
+      a lowercase-`s` spelling of `KQMonster::clearStateChangeNotify`
+      (commands match case-insensitively, rule 4).
+    - `beep` (`Swamp/BOILOIL.CS` line 4): **not** a registered command in
+      `Mask.exe` — leftover unknown command that safely sets
+      `$Console::Return = 1` (rule 5).
 
 13. **Pure memory/timing hints (confirmed safe no-ops for rendering and
     logic, aside from save tracking / loading bar):**
