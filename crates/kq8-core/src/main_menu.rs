@@ -333,8 +333,10 @@ pub struct MenuPopup {
     pub lines: Vec<String>,
     /// Highlighted button index (`0..button_count`).
     pub highlight: usize,
-    /// Button currently held down by Enter (`main-menu.md` rule 16).
+    /// Button currently held down by Enter or left mouse button (`main-menu.md` rule 16).
     pub pressed: Option<usize>,
+    /// Whether `pressed` was initiated by a left mouse press (vs. Enter).
+    pub pressed_by_mouse: bool,
 }
 
 impl MenuPopup {
@@ -350,6 +352,7 @@ impl MenuPopup {
             lines: split_popup_text(prompt),
             highlight,
             pressed: None,
+            pressed_by_mouse: false,
         }
     }
 
@@ -562,6 +565,9 @@ impl MainMenuState {
         let Some(popup) = self.popup.as_mut() else {
             return Vec::new();
         };
+        if popup.pressed.is_some() {
+            return Vec::new();
+        }
         let max_idx = popup.button_count().saturating_sub(1);
         let next = if delta < 0 {
             popup.highlight.saturating_sub(1)
@@ -589,11 +595,16 @@ impl MainMenuState {
             return Vec::new();
         }
         if let Some(popup) = self.popup.as_mut() {
-            popup.pressed = Some(popup.highlight);
-            return vec![MenuAction::Note(format!(
-                "popup Enter pressed on button {} (rule 16)",
-                popup.highlight
-            ))];
+            let idx = popup.highlight;
+            popup.pressed = Some(idx);
+            popup.pressed_by_mouse = false;
+            return vec![
+                MenuAction::PlayMenuSound {
+                    file: SELECT_SOUND,
+                    why: format!("popup Enter pressed on button {idx}"),
+                },
+                MenuAction::Note(format!("popup Enter pressed on button {idx} (rule 16)")),
+            ];
         }
         let item = self.selected;
         if !self.is_enabled(item) {
@@ -610,6 +621,9 @@ impl MainMenuState {
         let Some(popup) = self.popup.as_mut() else {
             return Vec::new();
         };
+        if popup.pressed_by_mouse {
+            return Vec::new();
+        }
         let Some(pressed) = popup.pressed.take() else {
             return Vec::new();
         };
@@ -643,16 +657,25 @@ impl MainMenuState {
         }
     }
 
-    /// Left mouse click at 640 × 480 layout position (`main-menu.md` rules 16, 21,
-    /// "Do not reproduce" 1).
-    pub fn click_at(&mut self, pos: [f32; 2], texts: &MenuTexts) -> Vec<MenuAction> {
+    /// Left mouse button pressed at 640 × 480 layout position (`main-menu.md` rules 16, 21,
+    /// "Do not reproduce" 1). On an open popup, plays the click sound and shows the button
+    /// pressed down without triggering until release.
+    pub fn press_mouse(&mut self, pos: [f32; 2], texts: &MenuTexts) -> Vec<MenuAction> {
         if !self.open || self.input_blocked() {
             return Vec::new();
         }
-        if let Some(popup) = self.popup.as_ref() {
+        if let Some(popup) = self.popup.as_mut() {
             for (idx, r) in popup.button_rects().into_iter().enumerate() {
                 if point_in_rect(pos, r) {
-                    return self.pick_popup_button(idx, "mouse click", texts);
+                    popup.pressed = Some(idx);
+                    popup.pressed_by_mouse = true;
+                    return vec![
+                        MenuAction::PlayMenuSound {
+                            file: SELECT_SOUND,
+                            why: format!("popup mouse pressed on button {idx}"),
+                        },
+                        MenuAction::Note(format!("popup mouse pressed on button {idx} (rule 16)")),
+                    ];
                 }
             }
             return Vec::new();
@@ -667,6 +690,44 @@ impl MainMenuState {
             }
         }
         Vec::new()
+    }
+
+    /// Left mouse button released at 640 × 480 layout position (`main-menu.md` rule 16).
+    /// Triggers a held popup button only if the cursor is still over that button.
+    pub fn release_mouse(&mut self, pos: Option<[f32; 2]>, texts: &MenuTexts) -> Vec<MenuAction> {
+        if !self.open || self.input_blocked() {
+            if let Some(popup) = self.popup.as_mut() {
+                if popup.pressed_by_mouse {
+                    popup.pressed = None;
+                    popup.pressed_by_mouse = false;
+                }
+            }
+            return Vec::new();
+        }
+        let Some(popup) = self.popup.as_mut() else {
+            return Vec::new();
+        };
+        if !popup.pressed_by_mouse {
+            return Vec::new();
+        }
+        let Some(idx) = popup.pressed.take() else {
+            popup.pressed_by_mouse = false;
+            return Vec::new();
+        };
+        popup.pressed_by_mouse = false;
+        let still_inside = pos.is_some_and(|p| {
+            popup
+                .button_rects()
+                .get(idx)
+                .is_some_and(|&r| point_in_rect(p, r))
+        });
+        if still_inside {
+            self.pick_popup_button(idx, "mouse released", texts)
+        } else {
+            vec![MenuAction::Note(format!(
+                "popup mouse released off button {idx} (cancelled)"
+            ))]
+        }
     }
 
     /// Completes `Replay Intro` (`main-menu.md` rule 12).
@@ -712,10 +773,7 @@ impl MainMenuState {
         let Some(popup) = self.popup.take() else {
             return Vec::new();
         };
-        let mut actions = vec![MenuAction::PlayMenuSound {
-            file: SELECT_SOUND,
-            why: format!("popup button {button} ({how})"),
-        }];
+        let mut actions = Vec::new();
         match popup.kind {
             MenuPopupKind::NewConfirm => {
                 if button == 0 {
@@ -879,11 +937,17 @@ mod tests {
         m.move_popup_highlight(1);
         assert_eq!(m.popup.as_ref().unwrap().highlight, 2);
 
-        // Enter presses Hard without moving the pointer and release starts Daventry.
+        // Enter presses Hard without moving the pointer (sound on press, action on release).
         let press = m.press_enter(&texts);
         assert_eq!(m.popup.as_ref().unwrap().pressed, Some(2));
+        assert!(!m.popup.as_ref().unwrap().pressed_by_mouse);
+        assert!(press.iter().any(|a| matches!(a, MenuAction::PlayMenuSound { file: SELECT_SOUND, .. })));
         assert!(!press.iter().any(|a| matches!(a, MenuAction::StartNewGame { .. })));
+        // Arrow keys do not move highlight while button is held.
+        assert!(m.move_popup_highlight(-1).is_empty());
+        assert_eq!(m.popup.as_ref().unwrap().highlight, 2);
         let rel = m.release_enter(&texts);
+        assert!(!rel.iter().any(|a| matches!(a, MenuAction::PlayMenuSound { .. })));
         assert!(rel.contains(&MenuAction::FadeTheme));
         assert!(rel.contains(&MenuAction::StartNewGame { combat_level_number: 3, factor: 1.5 }));
         assert!(!m.open && m.game_running());
@@ -897,10 +961,28 @@ mod tests {
         assert!(m.is_enabled(MenuItem::Save) && m.is_enabled(MenuItem::Load));
         m.tick(0.2);
 
-        // New while game running asks Yes/No (No highlighted), Escape drops back to game.
-        m.click_at([100.0, 140.0], &texts);
+        // New while game running asks Yes/No (No highlighted); releasing that opening click
+        // over a popup button does not trigger it.
+        m.press_mouse([100.0, 140.0], &texts);
         assert_eq!(m.popup.as_ref().unwrap().kind, MenuPopupKind::NewConfirm);
         assert_eq!(m.popup.as_ref().unwrap().highlight, 1);
+        let yes_rect = m.popup.as_ref().unwrap().button_rects()[0];
+        let yes_mid = [(yes_rect[0] + 10) as f32, (yes_rect[1] + 10) as f32];
+        assert!(m.release_mouse(Some(yes_mid), &texts).is_empty());
+        assert_eq!(m.popup.as_ref().unwrap().kind, MenuPopupKind::NewConfirm);
+
+        // Pressing mouse on Yes plays sound & shows pressed without triggering; releasing off-button cancels.
+        let p_yes = m.press_mouse(yes_mid, &texts);
+        assert!(p_yes.iter().any(|a| matches!(a, MenuAction::PlayMenuSound { file: SELECT_SOUND, .. })));
+        assert_eq!(m.popup.as_ref().unwrap().pressed, Some(0));
+        assert!(m.popup.as_ref().unwrap().pressed_by_mouse);
+        assert!(m.release_enter(&texts).is_empty(), "Enter release must not fire mouse-held button");
+        assert_eq!(m.popup.as_ref().unwrap().pressed, Some(0));
+        let cancel_rel = m.release_mouse(Some([10.0, 10.0]), &texts);
+        assert!(cancel_rel.iter().any(|a| matches!(a, MenuAction::Note(n) if n.contains("cancelled"))));
+        assert_eq!(m.popup.as_ref().unwrap().kind, MenuPopupKind::NewConfirm);
+        assert_eq!(m.popup.as_ref().unwrap().pressed, None);
+
         let esc_popup = m.press_escape();
         assert!(esc_popup.contains(&MenuAction::ResumeGame) && !m.open);
     }
@@ -919,9 +1001,15 @@ mod tests {
         let (mut m, _) = MainMenuState::new_at_startup(scan, &texts);
         assert!(!m.is_enabled(MenuItem::Load), "Load disabled while corrupt save question is waiting");
         m.tick(0.2);
-        // Click Yes on corrupt save ("Do not reproduce" 1).
+        // Press & release Yes on corrupt save ("Do not reproduce" 1).
         let yes_rect = m.popup.as_ref().unwrap().button_rects()[0];
-        let click = m.click_at([(yes_rect[0] + 10) as f32, (yes_rect[1] + 10) as f32], &texts);
+        let yes_pt = [(yes_rect[0] + 10) as f32, (yes_rect[1] + 10) as f32];
+        let down = m.press_mouse(yes_pt, &texts);
+        assert!(down.iter().any(|a| matches!(a, MenuAction::PlayMenuSound { file: SELECT_SOUND, .. })));
+        assert!(!down.iter().any(|a| matches!(a, MenuAction::DeleteCorruptSave { .. })));
+        assert!(m.popup.is_some());
+        let click = m.release_mouse(Some(yes_pt), &texts);
+        assert!(!click.iter().any(|a| matches!(a, MenuAction::PlayMenuSound { .. })));
         assert!(click.contains(&MenuAction::DeleteCorruptSave { file: "save2.vol".into() }));
         assert!(m.popup.is_none() && m.is_enabled(MenuItem::Load));
 

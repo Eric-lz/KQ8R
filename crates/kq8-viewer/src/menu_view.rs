@@ -28,16 +28,16 @@ use kq8_core::main_menu::{
 use kq8_core::save_game::{KeptWorldSnapshot, SavedWorldSnapshot};
 use kq8_core::submenus::{
     brightness_factor, decode_thumbnail_bin, move_label_rect, move_value_rect, scan_save_entries,
-    sl_hilite_rect, sl_list_row_rect, CreditsState, GraphicsState, MenuScreen, MoveKeysFile,
-    MoveKeysState, OptionsState, SaveLoadPopup, SaveLoadState, SubmenuAction, SubmenuTexts,
-    UserOptions, CREDITS_PHOTO_FILE, CREDITS_PHOTO_RECT, GRA_BRIGHTNESS_SLIDER_RECT,
-    GRA_LABEL_RECTS, GRA_MODE_LABEL_RECT, GRA_RES_LABEL_RECT, GRA_ROW_COUNT, GRA_SHADOW_BITS,
-    GRA_TITLE_RECT, GRA_VALUE_RECTS, LOAD_NAME_RECT, MOVE_KEY_COUNT, MOVE_TITLE_RECT,
-    OPT_LABEL_RECTS, OPT_ROW_COUNT, OPT_ROW_RECTS, OPT_SLIDER_RECTS, OPT_TITLE_RECT,
-    OPT_VALUE_RECTS, SAVE_NAME_RECT, SLIDER_KNOB_SIZE, SLIDER_LEFT, SL_BG_PICTURE,
-    SL_BTN_PICTURE, SL_BUTTON_RECTS, SL_DOWN_PICTURE, SL_HIBTN_PICTURE, SL_HILITE_PICTURE,
-    SL_LIST_FONT, SL_LIST_ROWS, SL_NOTMB_PICTURE, SL_POPUP_BG, SL_POPUP_BTN, SL_POPUP_FONT,
-    SL_POPUP_HIBTN, SL_SAVE_BAR, SL_SAVE_BAR_RECT, SL_SAVE_RED, SL_SAVE_RED_RECT,
+    sl_hilite_rect, sl_list_row_rect, ButtonPress, CreditsState, GraphicsState, MenuScreen,
+    MoveKeysFile, MoveKeysState, OptionsState, SaveLoadPopup, SaveLoadState, SubmenuAction,
+    SubmenuTexts, UserOptions, CREDITS_PHOTO_FILE, CREDITS_PHOTO_RECT,
+    GRA_BRIGHTNESS_SLIDER_RECT, GRA_LABEL_RECTS, GRA_MODE_LABEL_RECT, GRA_RES_LABEL_RECT,
+    GRA_ROW_COUNT, GRA_SHADOW_BITS, GRA_TITLE_RECT, GRA_VALUE_RECTS, LOAD_NAME_RECT,
+    MOVE_KEY_COUNT, MOVE_TITLE_RECT, OPT_LABEL_RECTS, OPT_ROW_COUNT, OPT_ROW_RECTS,
+    OPT_SLIDER_RECTS, OPT_TITLE_RECT, OPT_VALUE_RECTS, SAVE_NAME_RECT, SLIDER_KNOB_SIZE,
+    SLIDER_LEFT, SL_BG_PICTURE, SL_BTN_PICTURE, SL_BUTTON_RECTS, SL_DOWN_PICTURE, SL_HIBTN_PICTURE,
+    SL_HILITE_PICTURE, SL_LIST_FONT, SL_LIST_ROWS, SL_NOTMB_PICTURE, SL_POPUP_BG, SL_POPUP_BTN,
+    SL_POPUP_FONT, SL_POPUP_HIBTN, SL_SAVE_BAR, SL_SAVE_BAR_RECT, SL_SAVE_RED, SL_SAVE_RED_RECT,
     SL_SCROLL_DOWN_RECT, SL_SCROLL_UP_RECT, SL_TAB_PICTURE, SL_THUMB_RECT, SL_TITLE_FONT,
     SL_TITLE_RECT, SL_UP_PICTURE,
 };
@@ -369,7 +369,7 @@ struct MenuDrawKey {
     options_flags: (bool, u8, bool, u32, i32, bool),
     graphics_selected: usize,
     movekeys_state: (usize, Option<usize>, Option<usize>, Vec<(u32, String)>),
-    saveload_state: Option<(bool, usize, usize, usize, String, bool, Option<SaveLoadPopup>, usize, usize)>,
+    saveload_state: Option<(bool, usize, usize, usize, Option<ButtonPress>, String, bool, Option<SaveLoadPopup>, Option<ButtonPress>, usize, usize)>,
     credits_page: Option<usize>,
     target_px: [u32; 2],
 }
@@ -758,9 +758,11 @@ impl MenuView {
                     s.top_index,
                     s.selected_row,
                     s.active_button,
+                    s.button_pressed,
                     s.typed_name.clone(),
                     s.caret_visible,
                     s.popup.clone(),
+                    s.popup_pressed,
                     s.entries.len(),
                     usize::from(self.sl_preview_rgba.is_some()),
                 )
@@ -1266,18 +1268,19 @@ impl MenuView {
         ];
         for (idx, (&rect, label)) in SL_BUTTON_RECTS.iter().zip(btn_labels).enumerate() {
             let pic_name = if idx == st.active_button { SL_HIBTN_PICTURE } else { SL_BTN_PICTURE };
-            if let Some(mut pic) = self
-                .files
-                .get(&pic_name.to_ascii_lowercase())
-                .and_then(|v| v.first())
-                .and_then(Pic::of)
-            {
-                pic.see_through = false;
-                pieces.push(Piece::Picture { rect, pic, stretch: true });
+            let pressed = st.button_pressed.is_some_and(|p| p.index == idx);
+            if let Some(frames) = self.files.get(&pic_name.to_ascii_lowercase()) {
+                let f = usize::from(pressed).min(frames.len().saturating_sub(1));
+                if let Some(mut pic) = frames.get(f).and_then(Pic::of) {
+                    pic.see_through = false;
+                    pieces.push(Piece::Picture { rect, pic, stretch: true });
+                }
             }
             if let Some(font) = font20 {
+                let shift = if pressed { 1 } else { 0 };
+                let text_rect = [rect[0] + shift, rect[1] + shift, rect[2] + shift, rect[3] + shift];
                 pieces.push(Piece::Text {
-                    rect,
+                    rect: text_rect,
                     font,
                     justification: 0xC,
                     text: label.to_string(),
@@ -1369,18 +1372,19 @@ impl MenuView {
             let hl = popup.highlight();
             for (idx, (rect, label)) in popup.button_rects(st.is_save).into_iter().zip(labels).enumerate() {
                 let pic_name = if idx == hl { SL_POPUP_HIBTN } else { SL_POPUP_BTN };
-                if let Some(mut pic) = self
-                    .files
-                    .get(&pic_name.to_ascii_lowercase())
-                    .and_then(|v| v.first())
-                    .and_then(Pic::of)
-                {
-                    pic.see_through = false;
-                    pieces.push(Piece::Picture { rect, pic, stretch: true });
+                let pressed = st.popup_pressed.is_some_and(|p| p.index == idx);
+                if let Some(frames) = self.files.get(&pic_name.to_ascii_lowercase()) {
+                    let f = usize::from(pressed).min(frames.len().saturating_sub(1));
+                    if let Some(mut pic) = frames.get(f).and_then(Pic::of) {
+                        pic.see_through = false;
+                        pieces.push(Piece::Picture { rect, pic, stretch: true });
+                    }
                 }
                 if let Some(font) = self.fonts.get(&SL_POPUP_FONT.to_ascii_lowercase()) {
+                    let shift = if pressed { 1 } else { 0 };
+                    let text_rect = [rect[0] + shift, rect[1] + shift, rect[2] + shift, rect[3] + shift];
                     pieces.push(Piece::Text {
-                        rect,
+                        rect: text_rect,
                         font,
                         justification: 0xC,
                         text: label.to_string(),
@@ -1803,8 +1807,37 @@ pub fn menu_step(
                             };
                             if let Some(r) = pos {
                                 let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
-                                actions.extend(menu.state.click_at(mid, &texts));
+                                let popup_was_open = menu.state.popup.is_some();
+                                actions.extend(menu.state.press_mouse(mid, &texts));
+                                if popup_was_open {
+                                    actions.extend(menu.state.release_mouse(Some(mid), &texts));
+                                }
                             }
+                        }
+                        click if click.starts_with("click_down:") => {
+                            let target = &click[11..];
+                            let pos = match target {
+                                "btn0" | "yes" | "easy" => menu.state.popup.as_ref().and_then(|p| p.button_rects().first().copied()),
+                                "btn1" | "no" | "normal" => menu.state.popup.as_ref().and_then(|p| p.button_rects().get(1).copied()),
+                                "btn2" | "hard" => menu.state.popup.as_ref().and_then(|p| p.button_rects().get(2).copied()),
+                                _ => None,
+                            };
+                            if let Some(r) = pos {
+                                let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
+                                actions.extend(menu.state.press_mouse(mid, &texts));
+                            }
+                        }
+                        click if click.starts_with("click_up:") => {
+                            let target = &click[9..];
+                            let pos = match target {
+                                "btn0" | "yes" | "easy" => menu.state.popup.as_ref().and_then(|p| p.button_rects().first().copied()),
+                                "btn1" | "no" | "normal" => menu.state.popup.as_ref().and_then(|p| p.button_rects().get(1).copied()),
+                                "btn2" | "hard" => menu.state.popup.as_ref().and_then(|p| p.button_rects().get(2).copied()),
+                                "off" => Some([0, 0, 10, 10]),
+                                _ => None,
+                            };
+                            let mid = pos.map(|r| [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32]);
+                            actions.extend(menu.state.release_mouse(mid, &texts));
                         }
                         _ => {}
                     }
@@ -1882,7 +1915,12 @@ pub fn menu_step(
                                 "down" | "sl:down" | "load:down" | "save:down" => sub_actions.extend(sl.move_list(1)),
                                 "left" | "sl:left" => sub_actions.extend(sl.move_button(-1)),
                                 "right" | "sl:right" => sub_actions.extend(sl.move_button(1)),
-                                "enter" | "sl:enter" => sub_actions.extend(sl.activate_button(&texts)),
+                                "enter_down" | "sl:enter_down" => sub_actions.extend(sl.press_enter()),
+                                "enter_up" | "sl:enter_up" => sub_actions.extend(sl.release_enter(&texts)),
+                                "enter" | "sl:enter" => {
+                                    sub_actions.extend(sl.press_enter());
+                                    sub_actions.extend(sl.release_enter(&texts));
+                                }
                                 "escape" | "close" | "sl:escape" => sub_actions.extend(sl.press_escape()),
                                 "backspace" | "sl:backspace" => {
                                     sl.press_backspace();
@@ -1891,29 +1929,37 @@ pub fn menu_step(
                                     let target = click.strip_prefix("sl:click:").unwrap_or_else(|| &click[6..]);
                                     match target {
                                         "ok" | "load" | "save" => {
-                                            sl.active_button = 0;
-                                            sub_actions.extend(sl.activate_button(&texts));
+                                            let r = SL_BUTTON_RECTS[0];
+                                            let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
+                                            sub_actions.extend(sl.press_mouse(mid));
+                                            sub_actions.extend(sl.release_mouse(Some(mid), &texts));
                                         }
                                         "delete" => {
-                                            sl.active_button = 1;
-                                            sub_actions.extend(sl.activate_button(&texts));
+                                            let r = SL_BUTTON_RECTS[1];
+                                            let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
+                                            sub_actions.extend(sl.press_mouse(mid));
+                                            sub_actions.extend(sl.release_mouse(Some(mid), &texts));
                                         }
                                         "cancel" => {
-                                            sl.active_button = 2;
-                                            sub_actions.extend(sl.activate_button(&texts));
+                                            let r = SL_BUTTON_RECTS[2];
+                                            let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
+                                            sub_actions.extend(sl.press_mouse(mid));
+                                            sub_actions.extend(sl.release_mouse(Some(mid), &texts));
                                         }
                                         "up" => sub_actions.extend(sl.scroll_step(-1)),
                                         "down" => sub_actions.extend(sl.scroll_step(1)),
                                         "yes" | "btn0" => {
                                             if let Some(r) = sl.popup.as_ref().and_then(|p| p.button_rects(sl.is_save).into_iter().next()) {
                                                 let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
-                                                sub_actions.extend(sl.click_at(mid, &texts));
+                                                sub_actions.extend(sl.press_mouse(mid));
+                                                sub_actions.extend(sl.release_mouse(Some(mid), &texts));
                                             }
                                         }
                                         "no" | "btn1" => {
                                             if let Some(r) = sl.popup.as_ref().and_then(|p| p.button_rects(sl.is_save).into_iter().nth(1)) {
                                                 let mid = [0.5 * (r[0] + r[2]) as f32, 0.5 * (r[1] + r[3]) as f32];
-                                                sub_actions.extend(sl.click_at(mid, &texts));
+                                                sub_actions.extend(sl.press_mouse(mid));
+                                                sub_actions.extend(sl.release_mouse(Some(mid), &texts));
                                             }
                                         }
                                         r if r.starts_with("row") => {
@@ -1921,7 +1967,7 @@ pub fn menu_step(
                                                 if idx < SL_LIST_ROWS {
                                                     let rect = sl_list_row_rect(idx);
                                                     let mid = [0.5 * (rect[0] + rect[2]) as f32, 0.5 * (rect[1] + rect[3]) as f32];
-                                                    sub_actions.extend(sl.click_at(mid, &texts));
+                                                    sub_actions.extend(sl.press_mouse(mid));
                                                 }
                                             }
                                         }
@@ -1970,8 +2016,11 @@ pub fn menu_step(
                 }
                 if buttons.just_pressed(MouseButton::Left) {
                     if let Some(pos) = cursor_layout {
-                        actions.extend(menu.state.click_at(pos, &texts));
+                        actions.extend(menu.state.press_mouse(pos, &texts));
                     }
+                }
+                if buttons.just_released(MouseButton::Left) {
+                    actions.extend(menu.state.release_mouse(cursor_layout, &texts));
                 }
             }
             MenuScreen::Options => {
@@ -2093,8 +2142,12 @@ pub fn menu_step(
                     if keys.just_pressed(KeyCode::ArrowRight) {
                         sub_actions.extend(sl.move_button(1));
                     }
-                    if keys.any_just_pressed([KeyCode::Enter, KeyCode::NumpadEnter]) {
-                        sub_actions.extend(sl.activate_button(&texts));
+                    let enter = [KeyCode::Enter, KeyCode::NumpadEnter];
+                    if keys.any_just_pressed(enter) {
+                        sub_actions.extend(sl.press_enter());
+                    }
+                    if keys.any_just_released(enter) {
+                        sub_actions.extend(sl.release_enter(&texts));
                     }
                     if keys.just_pressed(KeyCode::Escape) {
                         keys.clear_just_pressed(KeyCode::Escape);
@@ -2117,17 +2170,17 @@ pub fn menu_step(
                     }
                     if buttons.just_pressed(MouseButton::Left) {
                         if let Some(pos) = cursor_layout {
-                            sub_actions.extend(sl.click_at(pos, &texts));
+                            sub_actions.extend(sl.press_mouse(pos));
                         }
                     } else if buttons.pressed(MouseButton::Left) && sl.scroll_drag {
                         if let Some(pos) = cursor_layout {
                             sub_actions.extend(sl.drag_thumb(pos[1]));
                         }
-                    } else {
+                    } else if !buttons.pressed(MouseButton::Left) {
                         sl.scroll_drag = false;
                     }
                     if buttons.just_released(MouseButton::Left) {
-                        sl.scroll_drag = false;
+                        sub_actions.extend(sl.release_mouse(cursor_layout, &texts));
                     }
                 }
             }

@@ -1656,6 +1656,13 @@ impl SaveLoadPopup {
     }
 }
 
+/// Tracks which button is currently held down by Enter or left mouse press.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ButtonPress {
+    pub index: usize,
+    pub by_mouse: bool,
+}
+
 /// Shared state machine for `Loadgame.gui` (`is_save = false`) and `Savegame.gui` (`is_save = true`)
 /// (`submenus.md` rules 3–9).
 #[derive(Debug, Clone)]
@@ -1665,7 +1672,9 @@ pub struct SaveLoadState {
     pub top_index: usize,
     pub selected_row: usize,
     pub active_button: usize,
+    pub button_pressed: Option<ButtonPress>,
     pub popup: Option<SaveLoadPopup>,
+    pub popup_pressed: Option<ButtonPress>,
     pub typed_name: String,
     pub caret_visible: bool,
     pub caret_timer_ms: f64,
@@ -1688,7 +1697,9 @@ impl SaveLoadState {
             top_index: 0,
             selected_row: 0,
             active_button: 0,
+            button_pressed: None,
             popup: None,
+            popup_pressed: None,
             typed_name,
             caret_visible: true,
             caret_timer_ms: 0.0,
@@ -1832,6 +1843,9 @@ impl SaveLoadState {
             return Vec::new();
         }
         if let Some(popup) = self.popup.as_mut() {
+            if self.popup_pressed.is_some() {
+                return Vec::new();
+            }
             match popup {
                 SaveLoadPopup::DeleteConfirm { highlight, .. }
                 | SaveLoadPopup::OverwriteConfirm { highlight, .. } => {
@@ -1843,6 +1857,9 @@ impl SaveLoadState {
                 }
                 SaveLoadPopup::MaxSavesError { .. } => {}
             }
+            return Vec::new();
+        }
+        if self.button_pressed.is_some() {
             return Vec::new();
         }
         let next = if delta < 0 {
@@ -1866,32 +1883,74 @@ impl SaveLoadState {
         slot
     }
 
-    pub fn activate_button(&mut self, texts: &SubmenuTexts) -> Vec<SubmenuAction> {
-        if let Some(popup) = self.popup.take() {
-            let mut acts = vec![SubmenuAction::PlaySound("button1.aud")];
-            match popup {
-                SaveLoadPopup::DeleteConfirm { entry_index, highlight, .. } => {
-                    if highlight == 0 {
-                        if let Some(entry) = self.entries.get(entry_index).cloned() {
-                            acts.push(SubmenuAction::DeleteSave {
-                                slot: entry.slot,
-                                path: entry.path,
-                                read_only: entry.read_only,
-                            });
-                        }
-                    }
-                }
-                SaveLoadPopup::OverwriteConfirm { slot, name, highlight, .. } => {
-                    if highlight == 0 {
-                        acts.push(SubmenuAction::PerformSave { slot, name });
-                    }
-                }
-                SaveLoadPopup::MaxSavesError { .. } => {}
-            }
-            return acts;
+    /// Enter key going down: plays `button1.aud` immediately and shows the highlighted
+    /// button pressed down without triggering its action until [`Self::release_enter`].
+    pub fn press_enter(&mut self) -> Vec<SubmenuAction> {
+        if let Some(popup) = self.popup.as_ref() {
+            self.popup_pressed = Some(ButtonPress {
+                index: popup.highlight(),
+                by_mouse: false,
+            });
+            return vec![SubmenuAction::PlaySound("button1.aud")];
         }
+        self.button_pressed = Some(ButtonPress {
+            index: self.active_button,
+            by_mouse: false,
+        });
+        vec![SubmenuAction::PlaySound("button1.aud")]
+    }
 
-        match self.active_button {
+    /// Enter key let go: triggers the button held by Enter.
+    pub fn release_enter(&mut self, texts: &SubmenuTexts) -> Vec<SubmenuAction> {
+        if self.popup.is_some() {
+            if let Some(p) = self.popup_pressed.filter(|p| !p.by_mouse) {
+                self.popup_pressed = None;
+                return self.trigger_popup_button(p.index);
+            }
+            return Vec::new();
+        }
+        if let Some(p) = self.button_pressed.filter(|p| !p.by_mouse) {
+            self.button_pressed = None;
+            return self.trigger_right_button(p.index, texts);
+        }
+        Vec::new()
+    }
+
+    pub fn activate_button(&mut self, texts: &SubmenuTexts) -> Vec<SubmenuAction> {
+        let mut acts = self.press_enter();
+        acts.extend(self.release_enter(texts));
+        acts
+    }
+
+    fn trigger_popup_button(&mut self, button_idx: usize) -> Vec<SubmenuAction> {
+        let Some(popup) = self.popup.take() else {
+            return Vec::new();
+        };
+        let mut acts = Vec::new();
+        match popup {
+            SaveLoadPopup::DeleteConfirm { entry_index, .. } => {
+                if button_idx == 0 {
+                    if let Some(entry) = self.entries.get(entry_index).cloned() {
+                        acts.push(SubmenuAction::DeleteSave {
+                            slot: entry.slot,
+                            path: entry.path,
+                            read_only: entry.read_only,
+                        });
+                    }
+                }
+            }
+            SaveLoadPopup::OverwriteConfirm { slot, name, .. } => {
+                if button_idx == 0 {
+                    acts.push(SubmenuAction::PerformSave { slot, name });
+                }
+            }
+            SaveLoadPopup::MaxSavesError { .. } => {}
+        }
+        acts
+    }
+
+    fn trigger_right_button(&mut self, button_idx: usize, texts: &SubmenuTexts) -> Vec<SubmenuAction> {
+        match button_idx {
             0 => {
                 if self.is_save {
                     let trimmed = self.typed_name.trim_start().to_string();
@@ -1913,31 +1972,25 @@ impl SaveLoadState {
                             lines,
                             highlight: 1,
                         });
-                        return vec![SubmenuAction::PlaySound("button1.aud")];
+                        return Vec::new();
                     }
                     if self.entries.len() >= SL_MAX_SAVES {
                         self.popup = Some(SaveLoadPopup::MaxSavesError {
                             lines: split_sl_popup_lines(&texts.max_saves_prompt, 3),
                         });
-                        return vec![SubmenuAction::PlaySound("button1.aud")];
+                        return Vec::new();
                     }
                     let slot = self.lowest_unused_slot();
-                    vec![
-                        SubmenuAction::PlaySound("button1.aud"),
-                        SubmenuAction::PerformSave { slot, name: trimmed },
-                    ]
+                    vec![SubmenuAction::PerformSave { slot, name: trimmed }]
                 } else {
                     let Some(entry) = self.selected_entry().cloned() else {
                         return Vec::new();
                     };
-                    vec![
-                        SubmenuAction::PlaySound("button1.aud"),
-                        SubmenuAction::PerformLoad {
-                            slot: entry.slot,
-                            path: entry.path,
-                            name: entry.name,
-                        },
-                    ]
+                    vec![SubmenuAction::PerformLoad {
+                        slot: entry.slot,
+                        path: entry.path,
+                        name: entry.name,
+                    }]
                 }
             }
             1 => {
@@ -1954,19 +2007,18 @@ impl SaveLoadState {
                     lines,
                     highlight: 1,
                 });
-                vec![SubmenuAction::PlaySound("button1.aud")]
+                Vec::new()
             }
             _ => {
                 self.active_button = 0;
-                vec![
-                    SubmenuAction::PlaySound("button1.aud"),
-                    SubmenuAction::ReturnToMainMenu,
-                ]
+                vec![SubmenuAction::ReturnToMainMenu]
             }
         }
     }
 
     pub fn press_escape(&mut self) -> Vec<SubmenuAction> {
+        self.popup_pressed = None;
+        self.button_pressed = None;
         if self.popup.take().is_some() {
             return vec![SubmenuAction::Note("closed Save/Load popup with Escape".into())];
         }
@@ -1994,19 +2046,19 @@ impl SaveLoadState {
         true
     }
 
-    pub fn click_at(&mut self, pos: [f32; 2], texts: &SubmenuTexts) -> Vec<SubmenuAction> {
-        if let Some(popup) = self.popup.as_mut() {
+    /// Left mouse button pressed on Load/Save screen. On buttons (right-hand or popup),
+    /// plays `button1.aud` immediately and shows the button pressed down without triggering
+    /// until [`Self::release_mouse`].
+    pub fn press_mouse(&mut self, pos: [f32; 2]) -> Vec<SubmenuAction> {
+        if let Some(popup) = self.popup.as_ref() {
             let rects = popup.button_rects(self.is_save);
             for (idx, r) in rects.into_iter().enumerate() {
                 if point_in_rect(pos, r) {
-                    match popup {
-                        SaveLoadPopup::DeleteConfirm { highlight, .. }
-                        | SaveLoadPopup::OverwriteConfirm { highlight, .. } => {
-                            *highlight = idx;
-                        }
-                        SaveLoadPopup::MaxSavesError { .. } => {}
-                    }
-                    return self.activate_button(texts);
+                    self.popup_pressed = Some(ButtonPress {
+                        index: idx,
+                        by_mouse: true,
+                    });
+                    return vec![SubmenuAction::PlaySound("button1.aud")];
                 }
             }
             return Vec::new();
@@ -2014,8 +2066,11 @@ impl SaveLoadState {
 
         for (idx, &rect) in SL_BUTTON_RECTS.iter().enumerate() {
             if point_in_rect(pos, rect) {
-                self.active_button = idx;
-                return self.activate_button(texts);
+                self.button_pressed = Some(ButtonPress {
+                    index: idx,
+                    by_mouse: true,
+                });
+                return vec![SubmenuAction::PlaySound("button1.aud")];
             }
         }
 
@@ -2048,6 +2103,41 @@ impl SaveLoadState {
         if point_in_rect(pos, SL_SCROLL_TRACK_RECT) {
             let dir = if pos[1] < thumb_r[1] as f32 { -1 } else { 1 };
             return self.scroll_page(dir);
+        }
+        Vec::new()
+    }
+
+    /// Left mouse button released on Load/Save screen: triggers a held button only if the
+    /// cursor is still inside that button's rectangle.
+    pub fn release_mouse(&mut self, pos: Option<[f32; 2]>, texts: &SubmenuTexts) -> Vec<SubmenuAction> {
+        self.scroll_drag = false;
+        if let Some(popup) = self.popup.as_ref() {
+            if let Some(p) = self.popup_pressed.filter(|p| p.by_mouse) {
+                self.popup_pressed = None;
+                let still_inside = pos.is_some_and(|pt| {
+                    popup
+                        .button_rects(self.is_save)
+                        .get(p.index)
+                        .copied()
+                        .is_some_and(|r| point_in_rect(pt, r))
+                });
+                if still_inside {
+                    return self.trigger_popup_button(p.index);
+                }
+            }
+            return Vec::new();
+        }
+        if let Some(p) = self.button_pressed.filter(|p| p.by_mouse) {
+            self.button_pressed = None;
+            let still_inside = pos.is_some_and(|pt| {
+                SL_BUTTON_RECTS
+                    .get(p.index)
+                    .is_some_and(|&r| point_in_rect(pt, r))
+            });
+            if still_inside {
+                self.active_button = p.index;
+                return self.trigger_right_button(p.index, texts);
+            }
         }
         Vec::new()
     }
@@ -2165,35 +2255,77 @@ mod tests {
         let mut st = SaveLoadState::new(true, test_entries(2));
         // Existing save name triggers OverwriteConfirm with Cancel (1) highlighted by default.
         st.typed_name = "  slot 2".into();
-        st.activate_button(&texts);
+        let down = st.press_enter();
+        assert_eq!(down, vec![SubmenuAction::PlaySound("button1.aud")]);
+        assert_eq!(st.button_pressed, Some(ButtonPress { index: 0, by_mouse: false }));
+        assert!(st.move_button(1).is_empty(), "arrow keys blocked while button is held");
+        assert!(st.popup.is_none());
+        let up = st.release_enter(&texts);
+        assert!(!up.contains(&SubmenuAction::PlaySound("button1.aud")));
+        assert_eq!(st.button_pressed, None);
+        assert_eq!(st.popup_pressed, None);
         assert!(matches!(
             st.popup,
             Some(SaveLoadPopup::OverwriteConfirm { slot: 2, highlight: 1, .. })
         ));
-        // Left selects Yes (0) then Enter emits PerformSave.
+        // Left selects Yes (0) then Enter press/release emits PerformSave only on release.
         st.move_button(-1);
-        let acts = st.activate_button(&texts);
-        assert!(acts.contains(&SubmenuAction::PerformSave {
+        let p_down = st.press_enter();
+        assert_eq!(p_down, vec![SubmenuAction::PlaySound("button1.aud")]);
+        assert_eq!(st.popup_pressed, Some(ButtonPress { index: 0, by_mouse: false }));
+        assert!(st.popup.is_some());
+        let acts = st.release_enter(&texts);
+        assert_eq!(acts, vec![SubmenuAction::PerformSave {
             slot: 2,
             name: "slot 2".into(),
-        }));
+        }]);
+        assert_eq!(st.popup_pressed, None);
 
         // Delete opens DeleteConfirm with Cancel (1) highlighted.
         st.active_button = 1;
         st.activate_button(&texts);
+        assert_eq!(st.popup_pressed, None);
+        assert_eq!(st.button_pressed, None);
         assert!(matches!(
             st.popup,
             Some(SaveLoadPopup::DeleteConfirm { entry_index: 0, highlight: 1, .. })
         ));
-        // Escape closes popup without deleting.
-        st.press_escape();
+        // Mouse press on Yes (0) plays button1.aud and holds without deleting; drag off cancels.
+        let yes_rect = st.popup.as_ref().unwrap().button_rects(true)[0];
+        let yes_mid = [(yes_rect[0] + 10) as f32, (yes_rect[1] + 10) as f32];
+        assert_eq!(st.press_mouse(yes_mid), vec![SubmenuAction::PlaySound("button1.aud")]);
+        assert_eq!(st.popup_pressed, Some(ButtonPress { index: 0, by_mouse: true }));
+        assert!(st.release_enter(&texts).is_empty(), "Enter release must not fire mouse-held popup button");
+        assert!(st.release_mouse(Some([10.0, 10.0]), &texts).is_empty());
+        assert_eq!(st.popup_pressed, None);
+        assert!(st.popup.is_some());
+        // Mouse press + release on Yes triggers DeleteSave even while Cancel (1) is highlighted.
+        assert_eq!(st.press_mouse(yes_mid), vec![SubmenuAction::PlaySound("button1.aud")]);
+        let del_acts = st.release_mouse(Some(yes_mid), &texts);
+        assert!(matches!(del_acts.as_slice(), [SubmenuAction::DeleteSave { slot: 2, .. }]));
         assert!(st.popup.is_none());
 
-        // 50 saves triggers MaxSavesError (#166) on a new save name.
+        // Right-hand mouse press + release off-button cancels; on-button triggers without duplicate sound.
+        let cancel_rect = SL_BUTTON_RECTS[2];
+        let cancel_mid = [(cancel_rect[0] + 10) as f32, (cancel_rect[1] + 10) as f32];
+        assert_eq!(st.press_mouse(cancel_mid), vec![SubmenuAction::PlaySound("button1.aud")]);
+        assert_eq!(st.button_pressed, Some(ButtonPress { index: 2, by_mouse: true }));
+        assert!(st.release_mouse(Some([5.0, 5.0]), &texts).is_empty());
+        assert_eq!(st.button_pressed, None);
+        assert_eq!(st.press_mouse(cancel_mid), vec![SubmenuAction::PlaySound("button1.aud")]);
+        assert_eq!(st.release_mouse(Some(cancel_mid), &texts), vec![SubmenuAction::ReturnToMainMenu]);
+
+        // 50 saves triggers MaxSavesError (#166) on a new save name; OK closes on release.
         let mut full = SaveLoadState::new(true, test_entries(SL_MAX_SAVES as u32));
         full.typed_name = "Brand New Save".into();
         full.activate_button(&texts);
         assert!(matches!(full.popup, Some(SaveLoadPopup::MaxSavesError { .. })));
+        let ok_rect = full.popup.as_ref().unwrap().button_rects(true)[0];
+        let ok_mid = [(ok_rect[0] + 10) as f32, (ok_rect[1] + 10) as f32];
+        assert_eq!(full.press_mouse(ok_mid), vec![SubmenuAction::PlaySound("button1.aud")]);
+        assert!(full.popup.is_some());
+        assert!(full.release_mouse(Some(ok_mid), &texts).is_empty());
+        assert!(full.popup.is_none());
     }
 
     #[test]
