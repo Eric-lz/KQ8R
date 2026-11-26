@@ -70,6 +70,25 @@ pub const WONT_WORK: Tuple = Tuple { file: 0, noun: 0, verb: 0, case: 4, seq: 1 
 /// `RiverControl` too-far remark (`objects.md` rule 2: `0.MSG` file 0,
 /// condition 14: "I am not close enough.").
 pub const NOT_CLOSE_ENOUGH: Tuple = Tuple { file: 0, noun: 0, verb: 0, case: 14, seq: 1 };
+/// Rule 19: "Whence came these foul creatures? This is madness!"
+/// (Daventry only, the first time a monster other than a chicken dies, once per game).
+pub const FIRST_KILL_REMARK: Tuple = Tuple { file: 1000, noun: 0, verb: 0, case: 62, seq: 1 };
+
+/// Serializable waiting/playing speech entry for save/load (`savefile.md` rule 35, `KQTalk`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedTalkEntry {
+    pub tuple: Tuple,
+    pub first: Tuple,
+    pub last: bool,
+    pub nofade: bool,
+}
+
+/// Serializable active speech queue (`!conv`) for save/load (`savefile.md` rule 35).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedTalkQueue {
+    pub issuer: String,
+    pub lines: Vec<SavedTalkEntry>,
+}
 
 /// A line's voice file, found by the caller.
 #[derive(Debug, Clone, PartialEq)]
@@ -307,6 +326,94 @@ impl Talk {
     /// between the lines of one queue, as the next starts at once).
     pub fn ducking(&self) -> bool {
         self.queues.iter().any(|q| q.playing.as_ref().is_some_and(|p| p.duck))
+    }
+
+    /// Snapshots active non-conversation speech queues (plus pending `queue_later`
+    /// turn-wait slots) for save files (`savefile.md` rule 35). Any currently
+    /// playing line is placed first so reloading restarts it from the beginning.
+    pub fn snapshot_active(&self) -> Vec<SavedTalkQueue> {
+        let mut out: Vec<SavedTalkQueue> = Vec::new();
+        for q in &self.queues {
+            if q.conv {
+                continue;
+            }
+            let mut lines = Vec::new();
+            if let Some(p) = &q.playing {
+                if p.kind == LineKind::Normal {
+                    let e = p.entry();
+                    lines.push(SavedTalkEntry { tuple: e.tuple, first: e.first, last: e.last, nofade: e.nofade });
+                }
+            }
+            for e in &q.lines {
+                if e.kind == LineKind::Normal {
+                    lines.push(SavedTalkEntry { tuple: e.tuple, first: e.first, last: e.last, nofade: e.nofade });
+                }
+            }
+            if !lines.is_empty() {
+                out.push(SavedTalkQueue { issuer: q.issuer.clone(), lines });
+            }
+        }
+        for (key, s) in &self.slots {
+            if !self.waits.iter().any(|(_, k)| k == key) || s.last < s.first.seq {
+                continue;
+            }
+            let pos = out.iter().position(|sq| same(&sq.issuer, &s.issuer));
+            let target = match pos {
+                Some(i) => &mut out[i],
+                None => {
+                    out.push(SavedTalkQueue { issuer: s.issuer.clone(), lines: Vec::new() });
+                    out.last_mut().expect("pushed")
+                }
+            };
+            let last_line = s.first.with_seq(s.last);
+            if target.lines.iter().any(|e| e.tuple == last_line) {
+                continue;
+            }
+            for seq in s.first.seq..=s.last {
+                target.lines.push(SavedTalkEntry {
+                    tuple: s.first.with_seq(seq),
+                    first: s.first,
+                    last: seq == s.last,
+                    nofade: s.nofade,
+                });
+            }
+        }
+        out.retain(|sq| !sq.lines.is_empty());
+        out
+    }
+
+    /// Restores active speech queues on save-game reload so each queued speech
+    /// restarts cleanly from the beginning of its first remaining line.
+    pub fn restore_active(&mut self, saved: &[SavedTalkQueue], now: f64) -> Vec<String> {
+        let mut lines = Vec::new();
+        for sq in saved {
+            if sq.lines.is_empty() {
+                continue;
+            }
+            let i = match self.queue_index(&sq.issuer) {
+                Some(i) => i,
+                None => {
+                    self.queues.push(Queue::new(&sq.issuer, false));
+                    self.queues.len() - 1
+                }
+            };
+            let q = &mut self.queues[i];
+            for e in &sq.lines {
+                q.lines.push_back(Entry {
+                    tuple: e.tuple,
+                    first: e.first,
+                    last: e.last,
+                    nofade: e.nofade,
+                    kind: LineKind::Normal,
+                });
+            }
+            let first = sq.lines[0].tuple;
+            let count = sq.lines.len();
+            let note = format!("{}Talk: restored {count} active line(s) starting at {first}", sq.issuer);
+            self.note(now, note.clone());
+            lines.push(note);
+        }
+        lines
     }
 
     /// Rule 9: adds a `speak`'s lines to the issuer's queue, unless it is
@@ -961,5 +1068,35 @@ mod tests {
         let starts: Vec<_> = t.events.iter().filter_map(|e| if let TalkEvent::Start { tuple, .. } = e { Some(tuple.seq) } else { None }).collect();
         assert_eq!(starts, [2]);
         assert!(t.log.iter().any(|l| l.contains("duplicate")));
+    }
+
+    #[test]
+    fn snapshot_and_restore_restarts_playing_line_and_keeps_waiting() {
+        let mut t = talk();
+        t.voices = Some(Box::new(|folder, tuple| Some(Voice { path: format!("{folder}/{}", tuple.voice_name()), seconds: 0.4, mouths: vec![] })));
+        t.queue(&speak("Connor", 55, 1, 2), 0.0);
+        run(&mut t, 0, 3); // midway through line 1
+        t.queue_later(speak("Witch", 55, 2, 2), 0.2);
+
+        let snap = t.snapshot_active();
+        assert_eq!(snap.len(), 2);
+        assert_eq!(snap[0].issuer, "Connor");
+        assert_eq!(snap[0].lines.iter().map(|l| l.tuple.seq).collect::<Vec<_>>(), [1, 2]);
+        assert_eq!(snap[1].issuer, "Witch");
+        assert_eq!(snap[1].lines.iter().map(|l| l.tuple.seq).collect::<Vec<_>>(), [2]);
+
+        let mut restored = talk();
+        restored.voices = Some(Box::new(|folder, tuple| Some(Voice { path: format!("{folder}/{}", tuple.voice_name()), seconds: 0.4, mouths: vec![] })));
+        let notes = restored.restore_active(&snap, 0.0);
+        assert_eq!(notes.len(), 2);
+        restored.update(0.0, true, &|_| true);
+        let starts: Vec<_> = restored
+            .events
+            .iter()
+            .filter_map(|e| if let TalkEvent::Start { issuer, tuple, .. } = e { Some((issuer.clone(), tuple.seq)) } else { None })
+            .collect();
+        assert_eq!(starts, [("Connor".to_string(), 1), ("Witch".to_string(), 2)]);
+        let finished = run(&mut restored, 1, 20);
+        assert_eq!(finished.iter().filter(|f| f.issuer == "Connor").map(|f| (f.tuple.seq, f.last)).collect::<Vec<_>>(), [(1, false), (2, true)]);
     }
 }

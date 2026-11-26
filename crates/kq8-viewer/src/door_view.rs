@@ -986,6 +986,8 @@ pub fn spawn_doors(
     // fight, after the items the start-up scripts gave him (Swamp's
     // `constart.cs` gives Azriel's Hammer; M6 6b-1), so a ranged weapon he
     // carries gives his bolt file and shoot offset.
+    active.world.world_name = std::mem::take(&mut objects.world_name);
+    active.world.corpses = std::mem::take(&mut objects.restored_corpses);
     active.world.projectiles = std::mem::take(&mut objects.projectiles);
     active.world.set_connor_fight(objects.connor_fight.clone());
     for (name, mode) in file_dithered {

@@ -71,6 +71,8 @@ pub struct Journey {
     pub helps_asked: std::collections::BTreeSet<&'static str>,
     pub connor_tips: [bool; 2],
     pub kill_tip: bool,
+    /// Daventry first-kill voice remark (`talking.md` rule 19, once per game).
+    pub first_kill_remark: bool,
     /// `Options.cs` `notStartingHelp` mode (`0|1|2`) and 7-bit built-in tip suppression mask (`0x7f` = `stopHelp`).
     pub not_starting_help: u8,
     pub tip_bits: u8,
@@ -120,6 +122,7 @@ impl Journey {
             helps_asked: w.helps_asked.clone(),
             connor_tips: w.connor_tips,
             kill_tip: w.kill_tip,
+            first_kill_remark: w.first_kill_remark,
             not_starting_help: w.help.not_starting_help,
             tip_bits: w.help.tip_bits,
             god_mode: w.god_mode,
@@ -184,6 +187,7 @@ impl Journey {
         w.helps_asked = self.helps_asked.clone();
         w.connor_tips = self.connor_tips;
         w.kill_tip = self.kill_tip;
+        w.first_kill_remark = self.first_kill_remark;
         w.help.not_starting_help = self.not_starting_help;
         w.help.tip_bits |= self.tip_bits;
         w.god_mode = self.god_mode;

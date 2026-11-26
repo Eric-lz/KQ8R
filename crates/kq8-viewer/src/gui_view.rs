@@ -1702,15 +1702,20 @@ pub fn gui_step(
         let k = Slot::ALL.iter().position(|x| x == s).expect("listed");
         gui.flashes[k] = Some(now);
     }
-    // interface.md rule 26a (Q159): the experience sound, when the percent
-    // is set (also when the screen opens: Connor added to a world).
+    // interface.md rule 26a (Q159, Q209): synchronize the last shown
+    // experience percent on screen open silently; play STATS.AUD only on
+    // live gains (`!first`), per user check in original 2026-11-26.
     if let Some(p) = sent.experience_percent {
         let last = LAST_EXPERIENCE_PERCENT.swap(p.clamp(0, 100), std::sync::atomic::Ordering::Relaxed);
-        let plays = kq8_core::stats::experience_sound_plays(p, last);
+        let plays = !first && kq8_core::stats::experience_sound_plays(p, last);
         if plays {
             sim.active.world.sounds.push(kq8_core::sound::Start::plain_one_shot(kq8_core::stats::EXPERIENCE_SOUND, format!("experience {p} % (was {last} %)")));
         }
-        let line = format!("update {updates}: experience {p} % set (last shown {last} %): {} (interface.md rule 26a)", if plays { "STATS.AUD plays" } else { "no sound" });
+        let line = format!(
+            "update {updates}: experience {p} % set (last shown {last} %): {} (interface.md rule 26a{})",
+            if plays { "STATS.AUD plays" } else { "no sound" },
+            if first { "; initial load silent per Q209" } else { "" }
+        );
         gui.note(&line);
         shared.log.lock().unwrap().detail(format!("gui: {line}"));
     }

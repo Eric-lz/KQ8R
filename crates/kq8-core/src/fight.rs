@@ -550,6 +550,8 @@ impl Corpse {
 /// Types whose death gives no first-kill tip (rule 33, with the Do
 /// instead: `chicken2`, not the original's typo `checken2`).
 pub const NO_KILL_TIP: [&str; 3] = ["bat", "chicken", "chicken2"];
+/// Types whose death gives no Daventry first-kill remark (`talking.md` rule 19).
+pub const NO_FIRST_KILL_REMARK: [&str; 2] = ["chicken", "chicken2"];
 /// The first-kill tip comes this long after the death (rule 33), seconds.
 pub const KILL_TIP_DELAY: f64 = 1.5;
 
@@ -1570,6 +1572,15 @@ impl crate::active::WorldState {
             if let Some(note) = self.help.queue_builtin_tip(crate::help::TIP_FIRST_KILL, 137, now, KILL_TIP_DELAY, &format!("first kill ({type_name})")) {
                 self.fight_note(&name, format!("first kill (type {type_name}): {note} (fighting.md rule 33; interface.md rule 58)"));
             }
+        }
+        // talking.md rule 19: Daventry only, first non-chicken monster death (once per game).
+        if !self.first_kill_remark
+            && self.world_name.eq_ignore_ascii_case("daventry")
+            && !NO_FIRST_KILL_REMARK.iter().any(|t| t.eq_ignore_ascii_case(&type_name))
+        {
+            self.first_kill_remark = true;
+            let remark = self.connor_remark(crate::talk::FIRST_KILL_REMARK, "first kill in Daventry");
+            self.fight_note(&name, format!("{remark} (talking.md rule 19)"));
         }
     }
 }

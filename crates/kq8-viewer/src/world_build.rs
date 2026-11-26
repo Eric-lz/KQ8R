@@ -161,6 +161,7 @@ pub struct RestoreSave {
     pub camera: Option<kq8_core::save_game::SavedCameraState>,
     pub rope: Option<kq8_core::rope::Rope>,
     pub rope_climb: Option<kq8_core::rope::Climb>,
+    pub active_talk: Vec<kq8_core::talk::SavedTalkQueue>,
 }
 
 /// Target-world state applied immediately after `build_pending` on save restore (`M4 4h-2`).
@@ -170,6 +171,7 @@ pub struct RestoreApply {
     pub camera: Option<kq8_core::save_game::SavedCameraState>,
     pub rope: Option<kq8_core::rope::Rope>,
     pub rope_climb: Option<kq8_core::rope::Climb>,
+    pub active_talk: Vec<kq8_core::talk::SavedTalkQueue>,
     pub current_time: Option<f64>,
     pub pending_events: Vec<String>,
 }
@@ -205,6 +207,8 @@ pub struct KeptWorld {
     pub rusted_rivers: Vec<String>,
     /// Per-interior `useAlternateLightmap` flags (`object-lighting.md` rule 12).
     pub alt_lightmaps: std::collections::BTreeMap<String, bool>,
+    /// Corpses left in this world (`fighting.md` rule 32).
+    pub corpses: Vec<kq8_core::fight::Corpse>,
 }
 
 impl WorldChange {
@@ -258,6 +262,7 @@ impl WorldChange {
             camera: restore.camera.clone(),
             rope: restore.rope.clone(),
             rope_climb: restore.rope_climb.clone(),
+            active_talk: restore.active_talk.clone(),
             current_time: target_kept.and_then(|k| k.current_time),
             pending_events: target_kept
                 .map(|k| k.pending_events.clone())
@@ -815,6 +820,7 @@ pub fn world_change_step(world: &mut World) {
                     present_objects: None,
                     rusted_rivers: sim.active.world.rusted_rivers(),
                     alt_lightmaps: sim.active.world.alt_lightmaps.clone(),
+                    corpses: sim.active.world.corpses.clone(),
                 })
             }).flatten();
             if let Some(k) = kept {
@@ -917,6 +923,7 @@ pub fn world_change_step(world: &mut World) {
                     music_stack: None,
                     present_objects: None,
                     extra_item_kinds: Vec::new(),
+                    corpses: Vec::new(),
                 })
             } else if journey.is_some() || has_kept || restoring {
                 Some(load::Arrival {
@@ -938,6 +945,7 @@ pub fn world_change_step(world: &mut World) {
                         .as_ref()
                         .map(|j| j.items.iter().map(|i| i.kind.clone()).collect())
                         .unwrap_or_default(),
+                    corpses: kept.corpses.clone(),
                 })
             } else {
                 None
@@ -1058,13 +1066,22 @@ pub fn world_change_step(world: &mut World) {
             build_pending(world);
             give_journey(world, journey.as_deref(), &request.world, &log);
             if let Some(apply) = restore_apply {
-                if apply.current_time.is_some() || !apply.pending_events.is_empty() {
+                if apply.current_time.is_some()
+                    || !apply.pending_events.is_empty()
+                    || !apply.active_talk.is_empty()
+                {
                     if let Some(mut sim) = world.get_resource_mut::<crate::door_view::DoorSim>() {
                         if let Some(t) = apply.current_time {
                             sim.active.world.set_current_time(t);
                         }
                         if !apply.pending_events.is_empty() {
                             sim.active.world.restore_event_strings(&apply.pending_events);
+                        }
+                        if !apply.active_talk.is_empty() {
+                            let now = sim.active.world.now();
+                            for line in sim.active.world.talk.restore_active(&apply.active_talk, now) {
+                                log.lock().unwrap().summary(format!("restore: {line}"));
+                            }
                         }
                     }
                 }

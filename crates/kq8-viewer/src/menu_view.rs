@@ -2449,6 +2449,7 @@ pub fn menu_step(
                         helps_asked: Default::default(),
                         connor_tips: [false; 2],
                         kill_tip: false,
+                        first_kill_remark: false,
                         not_starting_help: menu.options.not_starting_help,
                         tip_bits: 0,
                         god_mode: false,
@@ -2478,6 +2479,7 @@ pub fn menu_step(
                                 present_objects: kw.present_objects.clone(),
                                 rusted_rivers: kw.rusted_rivers.clone(),
                                 alt_lightmaps: kw.alt_lightmaps.clone(),
+                                corpses: kw.corpses.clone(),
                             },
                         )
                     })
@@ -2501,6 +2503,7 @@ pub fn menu_step(
                                 present_objects: None,
                                 rusted_rivers: s.active.world.rusted_rivers(),
                                 alt_lightmaps: s.active.world.alt_lightmaps.clone(),
+                                corpses: s.active.world.corpses.clone(),
                             },
                         );
                     }
@@ -2515,6 +2518,9 @@ pub fn menu_step(
                 let camera = game_cam.as_ref().map(|c| c.snapshot());
                 let rope = sim.as_ref().map(|s| s.active.world.rope.clone());
                 let rope_climb = connor.as_ref().and_then(|c| c.rope.clone());
+                let active_talk = sim
+                    .as_ref()
+                    .map_or_else(Vec::new, |s| s.active.world.talk.snapshot_active());
                 let snap = SavedWorldSnapshot {
                     world: if world_base.is_empty() {
                         "Daventry".to_string()
@@ -2527,6 +2533,7 @@ pub fn menu_step(
                     camera,
                     rope,
                     rope_climb,
+                    active_talk,
                     journey,
                     kept_worlds,
                 };
@@ -2638,6 +2645,7 @@ pub fn menu_step(
                                         present_objects: kw.present_objects,
                                         rusted_rivers: kw.rusted_rivers,
                                         alt_lightmaps: kw.alt_lightmaps,
+                                        corpses: kw.corpses,
                                     },
                                 )
                             })
@@ -2661,6 +2669,7 @@ pub fn menu_step(
                                 camera: snap.camera,
                                 rope: snap.rope,
                                 rope_climb: snap.rope_climb,
+                                active_talk: snap.active_talk,
                             },
                             format!("Load Game {kind_label} slot {slot} '{name}'"),
                         );

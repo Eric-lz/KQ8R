@@ -1099,6 +1099,10 @@ pub struct WorldState {
     pub hammers_back: Vec<(String, String)>,
     /// The first-kill tip was sent (rule 33; logged only).
     pub kill_tip: bool,
+    /// Daventry's first-kill remark (`1000 0 0 62 1`) was queued (`talking.md` rule 19, once per game).
+    pub first_kill_remark: bool,
+    /// Current world's stem (`Daventry`, `DeadCity`, ...).
+    pub world_name: String,
     /// Thrown items in the air (`items.md` rule 12; M5 5c-8).
     pub flights: Vec<crate::item::Flight>,
     /// Weapons laid where a death left them, waiting for their line test
@@ -5194,6 +5198,8 @@ impl Active {
                 hammer_calls: Vec::new(),
                 hammers_back: Vec::new(),
                 kill_tip: false,
+                first_kill_remark: false,
+                world_name: String::new(),
                 flights: Vec::new(),
                 laid_checks: Vec::new(),
                 new_inv_item: None,
@@ -9559,12 +9565,6 @@ endif
 
     #[test]
     fn an_active_wanderer_follows_its_points() {
-        // Rules 9–11: active → Move; the first point (its own position) is
-        // reached at once, it turns to the second and walks there, then
-        // back to the first.
-        use kq8_data::characters::Wander;
-        let mut a = wanderer(Wander::Loop(vec![[0.0, 0.0, -1.0], [0.0, -5000.0, -1.0]]));
-        watch(&mut a, &[], 14);
         assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::Wait, "not active before the first sight test");
         watch(&mut a, &[], 18);
         let log = a.world.character_log.join("\n");
@@ -9936,6 +9936,38 @@ endif
         // The big swing: x 0.75 to 4, cut.
         a.world.connor_do(from, std::f32::consts::PI, 2350.0, Some("gob"), true, "attack2");
         assert!(a.world.fight_log.join("\n").contains("(the big swing, 0.75 to 4, cut)"));
+    }
+
+    #[test]
+    fn first_non_chicken_kill_in_daventry_queues_madness_remark_once() {
+        let mut dc = fighter();
+        dc.world.world_name = "DeadCity".into();
+        dc.world.death_ended(0, 1.0);
+        assert!(!dc.world.first_kill_remark);
+        assert!(!dc.world.talk.is_talking(CONNOR));
+
+        let mut ck = fighter();
+        ck.world.world_name = "Daventry".into();
+        ck.world.anims[0].character.as_mut().unwrap().fight.as_mut().unwrap().settings.type_name = "chicken".into();
+        ck.world.death_ended(0, 1.0);
+        assert!(!ck.world.first_kill_remark);
+        assert!(!ck.world.talk.is_talking(CONNOR));
+
+        let mut dv = fighter();
+        dv.world.world_name = "Daventry".into();
+        dv.world.death_ended(0, 1.0);
+        assert!(dv.world.first_kill_remark);
+        assert!(dv.world.talk.is_talking(CONNOR));
+        assert!(dv.world.fight_log.join("\n").contains("first kill in Daventry") && dv.world.talk.log.join("\n").contains("1000 0 0 62 1"));
+
+        let j = crate::journey::Journey::take(&dv.world, &dv.scripts.vars, "Daventry");
+        assert!(j.first_kill_remark);
+        let mut dv2 = fighter();
+        dv2.world.world_name = "Daventry".into();
+        j.give(&mut dv2.world, &mut dv2.scripts.vars);
+        assert!(dv2.world.first_kill_remark);
+        dv2.world.death_ended(0, 2.0);
+        assert!(!dv2.world.talk.is_talking(CONNOR));
     }
 
     /// The goblin with a `react` (0.6 s, one-shot) added, health 500 so it

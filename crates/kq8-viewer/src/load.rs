@@ -1681,6 +1681,10 @@ pub struct Objects {
     pub arrival_alt_lightmaps: BTreeMap<String, bool>,
     /// Restored `Place::World` items replacing start-up world items (`WorldInventory.kq`, `savefile.md` rule 16).
     pub restored_world_items: Option<Vec<kq8_core::item::ItemObject>>,
+    /// Restored corpses from a kept world or saved game (`fighting.md` rule 32).
+    pub restored_corpses: Vec<kq8_core::fight::Corpse>,
+    /// World stem (`Daventry`, `DeadCity`, ...).
+    pub world_name: String,
 }
 
 /// A placed object whose movement plays (M3 step 3c; objects.md "Animated
@@ -2015,6 +2019,8 @@ pub struct Arrival {
     pub present_objects: Option<std::collections::BTreeSet<String>>,
     /// Additional item `IDName`s carried by Connor or in saved `world_items` to preload models for.
     pub extra_item_kinds: Vec<String>,
+    /// Restored corpses from a kept world or saved game (`fighting.md` rule 32).
+    pub corpses: Vec<kq8_core::fight::Corpse>,
 }
 
 /// `arrival`: `Some` for a world change: `conStart.cs` is not run (rule
@@ -2326,6 +2332,11 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     if !object_shapes.is_empty() {
         placer.log.summary(format!("loadObject shapes made ready (anim-scripts.md rule 34): {object_shapes:?}"));
     }
+    if let Some(a) = &arrival {
+        for c in &a.corpses {
+            placer.load_corpse_shape(&c.shape, &c.name);
+        }
+    }
     let (item_shapes, item_lines) = placer.item_models(&script);
     let items = std::mem::take(&mut placer.items);
     let gone_skipped = std::mem::take(&mut placer.gone_skipped);
@@ -2354,21 +2365,23 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     objects.aliases = script.aliases;
     // M6 6e-8 (world-change.md rules 13, 14): a kept world's variables over
     // its own start values, before its objects' Init.
-    let (arrival_music_stack, restored_world_items) = match arrival {
+    let (arrival_music_stack, restored_world_items, restored_corpses) = match arrival {
         Some(a) => {
             for (n, v) in &a.kept_vars {
                 objects.vars.set(n, v.clone());
             }
-            (a.music_stack, a.world_items)
+            (a.music_stack, a.world_items, a.corpses)
         }
-        None => (None, None),
+        None => (None, None, Vec::new()),
     };
     if let Some(stack) = arrival_music_stack {
         if let Some(m) = &mut objects.music {
             *m = kq8_core::music::Music::new(&m.object, &stack);
         }
     }
+    objects.world_name = world.name.clone();
     objects.restored_world_items = restored_world_items;
+    objects.restored_corpses = restored_corpses;
     objects.items = items;
     objects.item_shapes = item_shapes;
     objects.item_lines = item_lines;
@@ -5677,6 +5690,8 @@ impl Placer<'_> {
             not_starting_help: crate::talk_view::not_starting_help(self.game),
             arrival_alt_lightmaps: self.arrival_alt_lightmaps,
             restored_world_items: None,
+            restored_corpses: Vec::new(),
+            world_name: String::new(),
         }
     }
 }

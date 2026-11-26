@@ -12,8 +12,8 @@ use kq8_data::pvol::Pvol;
 use kq8_data::save_pers::{
     write_pers, KqAnimObject, KqBase, KqCamMover, KqChest, KqConner, KqDoor, KqGameState,
     KqInterior, KqInventory, KqInventoryItem, KqMap, KqMonster, KqMoverInline, KqMusic, KqObject,
-    KqRiverControl, KqState, KqStateKind, KqVisibleBase, KqWorldState, MoverData, PersObject,
-    TMat3F,
+    KqRiverControl, KqState, KqStateKind, KqTalk, KqVisibleBase, KqWorldState, MoverData,
+    PersObject, TMat3F,
 };
 
 use crate::collide::Placement;
@@ -264,12 +264,46 @@ fn build_connor_pers(snap: &SavedWorldSnapshot, item_types: Option<&ItemTypes>) 
         )
     });
 
+    let talker = snap
+        .active_talk
+        .iter()
+        .find(|q| q.issuer.eq_ignore_ascii_case(crate::talk::CONNOR) && !q.lines.is_empty())
+        .map(|q| {
+            let talk_list = q
+                .lines
+                .iter()
+                .map(|e| {
+                    Some(format!(
+                        "{} {} {} {} {} 0 {}",
+                        e.tuple.file,
+                        e.tuple.noun,
+                        e.tuple.verb,
+                        e.tuple.case,
+                        e.tuple.seq,
+                        i32::from(e.last)
+                    ))
+                })
+                .collect();
+            (
+                "ConnorTalk".to_string(),
+                Box::new(PersObject::KqTalk(KqTalk {
+                    visible: kq_visible("ConnorTalk", false),
+                    flags: 0,
+                    nostop: 0,
+                    no_fade: i32::from(q.lines[0].nofade),
+                    talker_name: Some(crate::talk::CONNOR.to_string()),
+                    talk_list,
+                })),
+            )
+        });
+
     let monster = KqMonster {
         anim_object,
         state,
         do_mode: j.weapon_mode.number() as i32,
         active: 1,
         inventory,
+        talker,
         ..Default::default()
     };
 
@@ -510,6 +544,25 @@ fn format_kq8r_meta(snap: &SavedWorldSnapshot) -> Vec<u8> {
     if let Some(p) = &j.projectile {
         out.push_str(&format!("projectile\t{}\n", esc(p)));
     }
+    if j.first_kill_remark {
+        out.push_str("first_kill_remark\t1\n");
+    }
+    for sq in &snap.active_talk {
+        for line in &sq.lines {
+            out.push_str(&format!(
+                "talk_line\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                esc(&sq.issuer),
+                line.tuple.file,
+                line.tuple.noun,
+                line.tuple.verb,
+                line.tuple.case,
+                line.tuple.seq,
+                line.first.seq,
+                u8::from(line.last),
+                u8::from(line.nofade),
+            ));
+        }
+    }
     for (i, item) in j.items.iter().enumerate() {
         out.push_str(&format!(
             "item_meta\t{}\t{}\t{}\t{}\t{}\n",
@@ -679,6 +732,19 @@ fn format_kq8r_meta(snap: &SavedWorldSnapshot) -> Vec<u8> {
                 ));
             }
         }
+        for c in &kw.corpses {
+            let rot_flat: Vec<f32> = c.rotation.iter().flatten().copied().collect();
+            out.push_str(&format!(
+                "kw_corpse\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                esc(wname),
+                esc(&c.name),
+                esc(&c.shape),
+                fmt_f32_slice(&c.position),
+                fmt_f32_slice(&rot_flat),
+                u8::from(c.loaded),
+                u8::from(c.solid),
+            ));
+        }
     }
 
     let _ = (fmt_f32_slice, parse_f32_hex_or_dec::<3>);
@@ -712,6 +778,8 @@ pub fn apply_kq8r_meta(snap: &mut SavedWorldSnapshot, bytes: &[u8]) -> Result<()
     let mut replaced_potions = false;
     let mut cleared_flags = false;
     let mut cleared_pickup = false;
+    let mut replaced_talk = false;
+    let mut replaced_corpses = BTreeSet::new();
 
     for raw in lines {
         if raw.trim().is_empty() {
@@ -739,6 +807,39 @@ pub fn apply_kq8r_meta(snap: &mut SavedWorldSnapshot, bytes: &[u8]) -> Result<()
             }
             "projectile" if f.len() >= 2 => {
                 snap.journey.projectile = Some(unesc(f[1]));
+            }
+            "first_kill_remark" if f.len() >= 2 => {
+                snap.journey.first_kill_remark = parse_bool(f[1]);
+            }
+            "talk_line" if f.len() >= 10 => {
+                if !replaced_talk {
+                    snap.active_talk.clear();
+                    replaced_talk = true;
+                }
+                let issuer = unesc(f[1]);
+                let file: u16 = f[2].parse().map_err(|_| "bad talk file")?;
+                let noun: u8 = f[3].parse().map_err(|_| "bad talk noun")?;
+                let verb: u8 = f[4].parse().map_err(|_| "bad talk verb")?;
+                let case: u8 = f[5].parse().map_err(|_| "bad talk case")?;
+                let seq: u8 = f[6].parse().map_err(|_| "bad talk seq")?;
+                let first_seq: u8 = f[7].parse().map_err(|_| "bad talk first_seq")?;
+                let tuple = kq8_data::msg::Tuple::new(file, noun, verb, case, seq);
+                let entry = crate::talk::SavedTalkEntry {
+                    tuple,
+                    first: tuple.with_seq(first_seq),
+                    last: parse_bool(f[8]),
+                    nofade: parse_bool(f[9]),
+                };
+                if let Some(q) = snap
+                    .active_talk
+                    .iter_mut()
+                    .find(|q| q.issuer.eq_ignore_ascii_case(&issuer))
+                {
+                    q.lines.push(entry);
+                } else {
+                    snap.active_talk
+                        .push(crate::talk::SavedTalkQueue { issuer, lines: vec![entry] });
+                }
             }
             "item_meta" if f.len() >= 6 => {
                 if let Ok(idx) = f[1].parse::<usize>() {
@@ -962,6 +1063,28 @@ pub fn apply_kq8r_meta(snap: &mut SavedWorldSnapshot, bytes: &[u8]) -> Result<()
                         }
                     }
                 }
+            }
+            "kw_corpse" if f.len() >= 8 => {
+                let wname = unesc(f[1]);
+                let kw = snap.kept_worlds.entry(wname.clone()).or_default();
+                if replaced_corpses.insert(wname.to_ascii_lowercase()) {
+                    kw.corpses.clear();
+                }
+                let pos = parse_f32_hex_or_dec::<3>(f[4])?;
+                let rot_flat = parse_f32_hex_or_dec::<9>(f[5])?;
+                let rotation = [
+                    [rot_flat[0], rot_flat[1], rot_flat[2]],
+                    [rot_flat[3], rot_flat[4], rot_flat[5]],
+                    [rot_flat[6], rot_flat[7], rot_flat[8]],
+                ];
+                kw.corpses.push(crate::fight::Corpse {
+                    name: unesc(f[2]),
+                    shape: unesc(f[3]),
+                    position: pos,
+                    rotation,
+                    loaded: parse_bool(f[6]),
+                    solid: parse_bool(f[7]),
+                });
             }
             _ => {}
         }
@@ -1200,6 +1323,25 @@ pub fn export_save_vol(
             let chunk = unique_chunk_name(&mut used, name, ".kq");
             owned.push((chunk, write_pers(&rc)));
         }
+        for c in &kw.corpses {
+            let drawn = c.drawn_name();
+            let mut obj = build_kq_object(
+                &drawn,
+                false,
+                &Placement {
+                    rotation: c.rotation,
+                    position: c.position,
+                },
+                if c.solid { 0x41 } else { 0 },
+                None,
+                true,
+                0,
+                None,
+            );
+            obj.shape_name = Some(c.shape.clone());
+            let chunk = unique_chunk_name(&mut used, &drawn, ".kq");
+            owned.push((chunk, write_pers(&PersObject::KqObject(obj))));
+        }
     }
 
     // Current world map as binary PERS; other worlds' maps as ASCII listed in `maps`.
@@ -1331,6 +1473,14 @@ mod tests {
             alt_lightmaps: [("altroom".into(), true), ("normroom".into(), false)]
                 .into_iter()
                 .collect(),
+            corpses: vec![crate::fight::Corpse {
+                name: "sprigan1".into(),
+                shape: "spdeath.kqs".into(),
+                position: [204000.0, 263000.0, 8209.5],
+                rotation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                loaded: false,
+                solid: false,
+            }],
         };
         let mut sw_kept = KeptWorldSnapshot {
             vars: vec![("Swamp::Gate::Open".into(), "1".into())],
@@ -1466,6 +1616,23 @@ mod tests {
                 saved_steps: Some((325.0, 325.0)),
                 done: false,
             }),
+            active_talk: vec![crate::talk::SavedTalkQueue {
+                issuer: "Connor".into(),
+                lines: vec![
+                    crate::talk::SavedTalkEntry {
+                        tuple: kq8_data::msg::Tuple::new(1000, 10, 0, 1, 1),
+                        first: kq8_data::msg::Tuple::new(1000, 10, 0, 1, 1),
+                        last: false,
+                        nofade: false,
+                    },
+                    crate::talk::SavedTalkEntry {
+                        tuple: kq8_data::msg::Tuple::new(1000, 10, 0, 1, 2),
+                        first: kq8_data::msg::Tuple::new(1000, 10, 0, 1, 1),
+                        last: true,
+                        nofade: false,
+                    },
+                ],
+            }],
             journey: Journey {
                 from: "Daventry".into(),
                 stats: Some(ConnorStats {
@@ -1519,6 +1686,7 @@ mod tests {
                 helps_asked: BTreeSet::new(),
                 connor_tips: [true, false],
                 kill_tip: true,
+                first_kill_remark: true,
                 not_starting_help: 1,
                 tip_bits: 0x05,
                 god_mode: false,
@@ -1584,6 +1752,8 @@ mod tests {
         assert!(imported.rope.is_some());
         assert!(imported.rope_climb.is_some());
         assert_eq!(imported.rope_climb.as_ref().unwrap().stage, Stage::Hanging);
+        assert_eq!(imported.active_talk.len(), 1);
+        assert_eq!(imported.active_talk[0].lines.len(), 2);
         let meta = pvol.find("kq8r_meta.txt").expect("kq8r_meta.txt");
         apply_kq8r_meta(&mut imported, pvol.data(meta).unwrap()).expect("apply_kq8r_meta");
 
@@ -1593,6 +1763,8 @@ mod tests {
         assert_eq!(imported.camera, snap.camera);
         assert_eq!(imported.rope, snap.rope);
         assert_eq!(imported.rope_climb, snap.rope_climb);
+        assert_eq!(imported.active_talk, snap.active_talk);
+        assert!(imported.journey.first_kill_remark);
         assert_eq!(imported.journey.next_no_name, 23);
         assert!((imported.journey.combat_level - 1.5).abs() < 1e-6);
         assert_eq!(imported.journey.stats, snap.journey.stats);
@@ -1616,6 +1788,7 @@ mod tests {
         assert_eq!(dv.came_in, dv_kept.came_in);
         assert_eq!(dv.rusted_rivers, dv_kept.rusted_rivers);
         assert_eq!(dv.alt_lightmaps, dv_kept.alt_lightmaps);
+        assert_eq!(dv.corpses, dv_kept.corpses);
 
         let sw = imported.kept_worlds.get("swamp").expect("swamp kept");
         assert_eq!(sw.doors, sw_kept.doors);

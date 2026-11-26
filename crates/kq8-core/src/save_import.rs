@@ -203,6 +203,7 @@ fn apply_connor_pers(
     Journey,
     Option<crate::rope::Rope>,
     Option<crate::rope::Climb>,
+    Vec<crate::talk::SavedTalkQueue>,
 ) {
     let placement = placement_from_object(&c.monster.anim_object.object);
     let pos = placement.position;
@@ -334,6 +335,7 @@ fn apply_connor_pers(
         helps_asked: BTreeSet::new(),
         connor_tips: [false; 2],
         kill_tip: false,
+        first_kill_remark: false,
         not_starting_help: c.start_help.clamp(0, 2) as u8,
         tip_bits: 0,
         god_mode: false,
@@ -418,7 +420,61 @@ fn apply_connor_pers(
         _ => None,
     };
 
-    (connor_at, connor_pos, connor_anim, journey, rope, rope_climb)
+    let mut active_talk = Vec::new();
+    if let Some((_, talk_obj)) = &c.monster.talker {
+        if let PersObject::KqTalk(t) = talk_obj.as_ref() {
+            let issuer = t
+                .talker_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or(crate::talk::CONNOR)
+                .to_string();
+            let tuples: Vec<(kq8_data::msg::Tuple, bool)> = t
+                .talk_list
+                .iter()
+                .flatten()
+                .filter_map(|line| {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() < 5 {
+                        return None;
+                    }
+                    let file: u16 = parts[0].parse().ok()?;
+                    let noun: u8 = parts[1].parse().ok()?;
+                    let verb: u8 = parts[2].parse().ok()?;
+                    let case: u8 = parts[3].parse().ok()?;
+                    let seq: u8 = parts[4].parse().ok()?;
+                    let flag_last = parts.get(6).and_then(|s| s.parse::<i32>().ok()).is_some_and(|v| v != 0);
+                    Some((kq8_data::msg::Tuple::new(file, noun, verb, case, seq), flag_last))
+                })
+                .collect();
+            if let Some((first_tuple, _)) = tuples.first().copied() {
+                let len = tuples.len();
+                let nofade = t.no_fade != 0;
+                let lines = tuples
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, (tuple, flag_last))| crate::talk::SavedTalkEntry {
+                        tuple,
+                        first: if tuple.file == first_tuple.file
+                            && tuple.noun == first_tuple.noun
+                            && tuple.verb == first_tuple.verb
+                            && tuple.case == first_tuple.case
+                        {
+                            first_tuple
+                        } else {
+                            tuple
+                        },
+                        last: flag_last || idx + 1 == len,
+                        nofade,
+                    })
+                    .collect();
+                active_talk.push(crate::talk::SavedTalkQueue { issuer, lines });
+            }
+        }
+    }
+
+    (connor_at, connor_pos, connor_anim, journey, rope, rope_climb, active_talk)
 }
 
 fn parse_kept_vol(
@@ -607,6 +663,32 @@ fn apply_pers_world_object(
             }
             kw.world_items = Some(items);
         }
+        PersObject::KqObject(o) => {
+            if let Some(shape) = &o.shape_name {
+                let low = shape.to_ascii_lowercase();
+                if o.collider_type == 0
+                    && low.ends_with(".kqs")
+                    && (low.contains("dead") || low.contains("ided") || low.contains("death") || low.contains("cadth"))
+                {
+                    let name = o
+                        .visible
+                        .base
+                        .name
+                        .clone()
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| "corpse".to_string());
+                    let p = placement_from_object(&o);
+                    kw.corpses.push(crate::fight::Corpse {
+                        name,
+                        shape: shape.clone(),
+                        position: p.position,
+                        rotation: p.rotation,
+                        loaded: true,
+                        solid: false,
+                    });
+                }
+            }
+        }
         _ => {}
     }
 }
@@ -792,6 +874,7 @@ pub fn import_original_save(
     let mut journey_opt: Option<Journey> = None;
     let mut rope: Option<crate::rope::Rope> = None;
     let mut rope_climb: Option<crate::rope::Climb> = None;
+    let mut active_talk: Vec<crate::talk::SavedTalkQueue> = Vec::new();
     let mut camera: Option<SavedCameraState> = None;
     let mut extra_maps: Vec<(String, MapKeys)> = Vec::new();
 
@@ -812,7 +895,7 @@ pub fn import_original_save(
         if lower == "connor.kq" {
             if is_pers {
                 if let Ok(PersObject::KqConner(c)) = parse_pers(data) {
-                    let (at, pos, anim, j, r, rc) =
+                    let (at, pos, anim, j, r, rc, talk) =
                         apply_connor_pers(&c, &world, item_types, &world_vars);
                     connor_at = at;
                     connor_pos = pos;
@@ -820,6 +903,7 @@ pub fn import_original_save(
                     journey_opt = Some(j);
                     rope = r;
                     rope_climb = rc;
+                    active_talk = talk;
                 }
             }
             continue;
@@ -899,6 +983,7 @@ pub fn import_original_save(
         helps_asked: BTreeSet::new(),
         connor_tips: [false; 2],
         kill_tip: false,
+        first_kill_remark: false,
         not_starting_help: 0,
         tip_bits: 0,
         god_mode: false,
@@ -939,6 +1024,7 @@ pub fn import_original_save(
         camera,
         rope,
         rope_climb,
+        active_talk,
         journey,
         kept_worlds,
     })

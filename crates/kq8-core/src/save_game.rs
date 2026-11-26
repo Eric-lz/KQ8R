@@ -54,6 +54,7 @@ pub struct KeptWorldSnapshot {
     pub present_objects: Option<BTreeSet<String>>,
     pub rusted_rivers: Vec<String>,
     pub alt_lightmaps: BTreeMap<String, bool>,
+    pub corpses: Vec<crate::fight::Corpse>,
 }
 
 /// Complete saved-game snapshot stored in `kq8r_state.txt` inside `save<N>.vol`.
@@ -66,6 +67,7 @@ pub struct SavedWorldSnapshot {
     pub camera: Option<SavedCameraState>,
     pub rope: Option<crate::rope::Rope>,
     pub rope_climb: Option<crate::rope::Climb>,
+    pub active_talk: Vec<crate::talk::SavedTalkQueue>,
     pub journey: Journey,
     pub kept_worlds: BTreeMap<String, KeptWorldSnapshot>,
 }
@@ -297,6 +299,25 @@ impl SavedWorldSnapshot {
         if let Some(raw_wf) = j.raw_world_flags {
             out.push_str(&format!("raw_world_flags\t{raw_wf}\n"));
         }
+        if j.first_kill_remark {
+            out.push_str("first_kill_remark\t1\n");
+        }
+        for sq in &self.active_talk {
+            for line in &sq.lines {
+                out.push_str(&format!(
+                    "talk_line\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                    esc(&sq.issuer),
+                    line.tuple.file,
+                    line.tuple.noun,
+                    line.tuple.verb,
+                    line.tuple.case,
+                    line.tuple.seq,
+                    line.first.seq,
+                    u8::from(line.last),
+                    u8::from(line.nofade),
+                ));
+            }
+        }
         if let Some(h) = &j.hand {
             out.push_str(&format!("hand\t{}\n", esc(h)));
         }
@@ -496,6 +517,19 @@ impl SavedWorldSnapshot {
             for ev in &kw.pending_events {
                 out.push_str(&format!("kw_event\t{}\t{}\n", esc(wname), esc(ev)));
             }
+            for c in &kw.corpses {
+                let rot_flat: Vec<f32> = c.rotation.iter().flatten().copied().collect();
+                out.push_str(&format!(
+                    "kw_corpse\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                    esc(wname),
+                    esc(&c.name),
+                    esc(&c.shape),
+                    fmt_f32_slice(&c.position),
+                    fmt_f32_slice(&rot_flat),
+                    u8::from(c.loaded),
+                    u8::from(c.solid),
+                ));
+            }
         }
         out
     }
@@ -528,6 +562,7 @@ impl SavedWorldSnapshot {
         let mut connor_pos: Option<([f32; 3], f32)> = None;
         let mut connor_anim: Option<(String, f32)> = None;
         let mut camera: Option<SavedCameraState> = None;
+        let mut active_talk: Vec<crate::talk::SavedTalkQueue> = Vec::new();
         let mut journey = Journey {
             from: String::new(),
             stats: None,
@@ -552,6 +587,7 @@ impl SavedWorldSnapshot {
             helps_asked: BTreeSet::new(),
             connor_tips: [false; 2],
             kill_tip: false,
+            first_kill_remark: false,
             not_starting_help: 0,
             tip_bits: 0,
             god_mode: false,
@@ -628,6 +664,30 @@ impl SavedWorldSnapshot {
                 }
                 "raw_world_flags" if f.len() >= 2 => {
                     journey.raw_world_flags = f[1].parse().ok();
+                }
+                "first_kill_remark" if f.len() >= 2 => {
+                    journey.first_kill_remark = parse_bool(f[1]);
+                }
+                "talk_line" if f.len() >= 10 => {
+                    let issuer = unesc(f[1]);
+                    let file: u16 = f[2].parse().map_err(|_| "bad talk file")?;
+                    let noun: u8 = f[3].parse().map_err(|_| "bad talk noun")?;
+                    let verb: u8 = f[4].parse().map_err(|_| "bad talk verb")?;
+                    let case: u8 = f[5].parse().map_err(|_| "bad talk case")?;
+                    let seq: u8 = f[6].parse().map_err(|_| "bad talk seq")?;
+                    let first_seq: u8 = f[7].parse().map_err(|_| "bad talk first_seq")?;
+                    let tuple = kq8_data::msg::Tuple::new(file, noun, verb, case, seq);
+                    let entry = crate::talk::SavedTalkEntry {
+                        tuple,
+                        first: tuple.with_seq(first_seq),
+                        last: parse_bool(f[8]),
+                        nofade: parse_bool(f[9]),
+                    };
+                    if let Some(q) = active_talk.iter_mut().find(|q| q.issuer.eq_ignore_ascii_case(&issuer)) {
+                        q.lines.push(entry);
+                    } else {
+                        active_talk.push(crate::talk::SavedTalkQueue { issuer, lines: vec![entry] });
+                    }
                 }
                 "hand" if f.len() >= 2 => journey.hand = Some(unesc(f[1])),
                 "weapon_ready" if f.len() >= 2 => journey.weapon_ready = Some(unesc(f[1])),
@@ -890,6 +950,27 @@ impl SavedWorldSnapshot {
                         .pending_events
                         .push(unesc(f[2]));
                 }
+                "kw_corpse" if f.len() >= 8 => {
+                    let pos = parse_f32_hex_or_dec::<3>(f[4])?;
+                    let rot_flat = parse_f32_hex_or_dec::<9>(f[5])?;
+                    let rotation = [
+                        [rot_flat[0], rot_flat[1], rot_flat[2]],
+                        [rot_flat[3], rot_flat[4], rot_flat[5]],
+                        [rot_flat[6], rot_flat[7], rot_flat[8]],
+                    ];
+                    kept_worlds
+                        .entry(unesc(f[1]))
+                        .or_default()
+                        .corpses
+                        .push(crate::fight::Corpse {
+                            name: unesc(f[2]),
+                            shape: unesc(f[3]),
+                            position: pos,
+                            rotation,
+                            loaded: parse_bool(f[6]),
+                            solid: parse_bool(f[7]),
+                        });
+                }
                 other => return Err(format!("unknown record '{other}' in kq8r_state.txt")),
             }
         }
@@ -904,6 +985,7 @@ impl SavedWorldSnapshot {
             camera,
             rope: None,
             rope_climb: None,
+            active_talk,
             journey,
             kept_worlds,
         })
@@ -972,6 +1054,14 @@ mod tests {
         kept.music_stack = Some(vec!["Daventry.mid".into()]);
         kept.current_time = Some(42.5);
         kept.pending_events.push("KQCueEvent Connor 45.0 2300 144 (null)".into());
+        kept.corpses.push(crate::fight::Corpse {
+            name: "goblin1".into(),
+            shape: "gdead.kqs".into(),
+            position: [152000.0, 181000.0, 6220.0],
+            rotation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            loaded: false,
+            solid: false,
+        });
         let mut kept_worlds = BTreeMap::new();
         kept_worlds.insert("daventry".into(), kept);
 
@@ -996,6 +1086,15 @@ mod tests {
             }),
             rope: None,
             rope_climb: None,
+            active_talk: vec![crate::talk::SavedTalkQueue {
+                issuer: "Connor".into(),
+                lines: vec![crate::talk::SavedTalkEntry {
+                    tuple: kq8_data::msg::Tuple::new(1000, 1, 2, 3, 1),
+                    first: kq8_data::msg::Tuple::new(1000, 1, 2, 3, 1),
+                    last: true,
+                    nofade: false,
+                }],
+            }],
             journey: Journey {
                 from: "Daventry".into(),
                 stats: Some(ConnorStats {
@@ -1037,6 +1136,7 @@ mod tests {
                 helps_asked: BTreeSet::new(),
                 connor_tips: [true, false],
                 kill_tip: true,
+                first_kill_remark: true,
                 not_starting_help: 1,
                 tip_bits: 0x15,
                 god_mode: false,
