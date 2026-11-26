@@ -4502,7 +4502,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 | Behaviour implemented | Source | Verification |
 |---|---|---|
 | `credits_total_score(level, current_xp)` cumulative XP formula (`((10 << (level - 1)) - 10) + xp` for `< 16`, `(level * 150,000 - 2,086,170) + xp` for `>= 16`, `0` if `level <= 0`), dynamic `CreditsPage::line_rects` vertical centering (`min(36, (480 - 50) / n)`, slot height `30`), and `GRA_ROW_RECTS` `0x02`/`0x04` comment fix | `submenus.md` rule 23 (`Q206` a, traced 2026-11-25) | unit test `submenus::tests::credits_timing_score_formatting_and_vertical_centering` (`855` workspace tests pass); headless `--menu` Credits open/exit (`menu.log`: `25 pages from 400.MSG, level=0, xp=0, score=0`, `RESULT: PASS`); live eye check **not tested** |
-| `MenuView::push_slider` stretches `slider.pba` frame 0 across the full slider rect and draws frame 1 (`10×10` knob) at native size (`kx = rect[0] + (span * val) / 100`) | `submenus.md` rule 14 (`Q206` b, traced 2026-11-25) | `cargo build --release -p kq8-viewer` (`0` warnings); headless `--menu` opening `Options` (`menu.log`, `RESULT: PASS`); live eye check **not tested** |
+| `MenuView::push_slider` stretches `slider.pba` frame 0 across the full slider rect and draws frame 1 (`10×10` knob) at native size (`kx = rect[0] + (span * val) / 100`) | `submenus.md` rule 14 (`Q206` b, traced 2026-11-25) | `cargo build --release -p kq8-viewer` (`0` warnings); headless `--menu` opening `Options` (`menu.log`, `RESULT: PASS`); confirmed by user live eye check (2026-11-26) |
+
+## M4 4f/4g-F4 2026-11-26: Main Menu pointer scale — viewer `menu_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `menu_pointer_draw` scales `Cursgui.pba` / `slcurgui.pba` by `(frame.0[3] / screen_h).round().max(1)` with `screen_h = 600` when `mode_800` else `480`, matching `gui_view::pointer_draw` | `interface.md` rule 47 / `Q108`; `gui_view::pointer_draw`; user live eye check (2026-11-26) | `cargo test --workspace` (`855` passed); headless `--menu --frames 60` (`menu.log`: `pointer: Cursgui.pba (20x20 drawn x1, frame_h=720, screen_h=600)`, `RESULT: PASS`); live eye check **not tested** |
 
 
 

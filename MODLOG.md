@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## M4 4f/4g-F4 (2026-11-26): Match Main Menu pointer scale to gameplay screen height
+- **Changed:** `crates/kq8-viewer/src/menu_view.rs` (`menu_pointer_draw` now computes `step` against `screen_h = if menu.options.mode_800 { 600.0 } else { 480.0 }` instead of hardcoding `480.0`, and logs the chosen pointer size to `menu.log`), `docs/provenance/README.md`, `MODLOG.md`.
+- **Why:** In the 1280×720 default window (`frame_h = 720`), `menu_pointer_draw` divided `720 / 480.0 = 1.5` (rounding to `2x`, drawing `20×20` `Cursgui.pba` at `40×40`), whereas gameplay `pointer_draw` divided `720 / 600.0 = 1.2` (rounding to `1x`, drawing `20×20` `curs04.pba` at `20×20`). Matching `gui_view::pointer_draw`'s `screen_h` rule makes the menu cursor the same size as the in-game cursor.
+- **Tested how:** `cargo test --workspace`; `cargo build --release -p kq8-viewer`; headless Main Menu run (`target\release\kq8-viewer.exe --menu --sound off --frames 60`), inspecting `kq8-artifacts/logs/menu.log`.
+- **Result:** All `855` workspace unit tests pass (`kq8-audio` 5, `kq8` 1, `kq8-core` 662, `kq8-data` 155, `kq8-viewer` 32); release `kq8-viewer.exe` builds with `0` warnings; `menu.log` logs `pointer: Cursgui.pba (20x20 drawn x1, frame_h=720, screen_h=600)` (`RESULT: PASS`).
+- **Still broken / not tested:** Live interactive eye check in `kq8-viewer --menu`.
+- **Next:** User live eye check of the Main Menu pointer size, then Script Coverage Batch 5 (Barren).
+
 ## Q206 (2026-11-26): Credits layout/score formula & slider drawing (`submenus.md` rules 14, 23–25)
 - **Changed:** `crates/kq8-core/src/submenus.rs` (`credits_total_score`, dynamic `CreditsPage::line_rects` spacing `min(36, (480 - 50) / n)` with slot height `30`, `GRA_ROW_RECTS` `0x02`/`0x04` comment fix, updated `credits_timing_score_formatting_and_vertical_centering`), `crates/kq8-viewer/src/menu_view.rs` (`Credits` screen passes `credits_total_score(c.level, c.stats.0[4])`; `MenuView::push_slider` stretches `slider.pba` frame 0 across the full slider rect and draws frame 1 at native size `kx = rect[0] + (span * val) / 100`), `docs/DESIGN.md`, `docs/provenance/README.md`, `STATUS.md`, `MODLOG.md`.
 - **Why:** Apply Study Session A's `Q206` answers (`submenus.md`): Credits page 25 formats Connor's cumulative total XP across levels rather than current-level XP alone, Credits line vertical centering uses uniform `(avail_h / lines).min(36)` steps with 30-px slots, and `KQSliderControl` stretches `slider.pba` frame 0 rather than tiling 10-px chunks while positioning the knob relative to `rect[0]`.

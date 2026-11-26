@@ -1518,7 +1518,7 @@ pub fn menu_camera_step(
 
 /// Updates the Main Menu pointer (`Cursgui.pba`) while the menu is open.
 pub fn menu_pointer_draw(
-    menu: Option<Res<MenuView>>,
+    menu: Option<ResMut<MenuView>>,
     window: Query<(Entity, &Window), With<bevy::window::PrimaryWindow>>,
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
@@ -1526,13 +1526,14 @@ pub fn menu_pointer_draw(
     mut shown: Local<Option<(u32, bool)>>,
 ) {
     use bevy::window::{CursorIcon, CustomCursor, CustomCursorImage};
-    let Some(menu) = menu else { return };
+    let Some(mut menu) = menu else { return };
     if !menu.state.open {
         *shown = None;
         return;
     }
     let Ok((entity, _)) = window.single() else { return };
-    let step = ((frame.0[3] / 480.0).round() as u32).max(1);
+    let screen_h = if menu.options.mode_800 { 600.0 } else { 480.0 };
+    let step = ((frame.0[3] / screen_h).round() as u32).max(1);
     let use_saveload_pal = matches!(
         menu.screen,
         MenuScreen::LoadGame | MenuScreen::SaveGame | MenuScreen::Credits
@@ -1559,11 +1560,12 @@ pub fn menu_pointer_draw(
     } else {
         &menu.palette
     };
-    let (pw, ph) = (pic.width * step, pic.height * step);
+    let (pic_w, pic_h) = (pic.width, pic.height);
+    let (pw, ph) = (pic_w * step, pic_h * step);
     let mut rgba = vec![0u8; (pw * ph * 4) as usize];
     for y in 0..ph {
         for x in 0..pw {
-            let index = pic.pixels[((y / step) * pic.width + x / step) as usize];
+            let index = pic.pixels[((y / step) * pic_w + x / step) as usize];
             if pic.see_through && index == 0 {
                 continue;
             }
@@ -1583,6 +1585,10 @@ pub fn menu_pointer_draw(
     commands
         .entity(entity)
         .insert(CursorIcon::Custom(CustomCursor::Image(CustomCursorImage { handle, hotspot: (0, 0), ..default() })));
+    menu.note(format!(
+        "pointer: {ptr_name} ({pic_w}x{pic_h} drawn x{step}, frame_h={:.0}, screen_h={screen_h:.0})",
+        frame.0[3]
+    ));
     *shown = Some(key);
 }
 
