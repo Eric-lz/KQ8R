@@ -9565,6 +9565,12 @@ endif
 
     #[test]
     fn an_active_wanderer_follows_its_points() {
+        // Rules 9–11: active → Move; the first point (its own position) is
+        // reached at once, it turns to the second and walks there, then
+        // back to the first.
+        use kq8_data::characters::Wander;
+        let mut a = wanderer(Wander::Loop(vec![[0.0, 0.0, -1.0], [0.0, -5000.0, -1.0]]));
+        watch(&mut a, &[], 14);
         assert_eq!(a.world.anims[0].character.as_ref().unwrap().state, crate::character::State::Wait, "not active before the first sight test");
         watch(&mut a, &[], 18);
         let log = a.world.character_log.join("\n");

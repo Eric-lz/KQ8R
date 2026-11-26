@@ -234,6 +234,10 @@ pub fn sound_step(
     let mut connor = connor;
     let listener = connor.as_ref().map_or(view.position, |c| c.mover.position);
     let ears = Ears { listener, view };
+    // Advance already-playing sounds by the time elapsed since the previous
+    // frame BEFORE starting this frame's new sounds, so a slow spawn/load
+    // frame is never charged against sounds that only start at the end of it.
+    sim.system.update(time.delta_secs_f64(), &ears);
     let mut decoded: HashMap<String, Arc<Sound>> = HashMap::new();
     let (game, world) = (&sim.game, sim.world.as_str());
 
@@ -350,7 +354,9 @@ pub fn sound_step(
             sim.system.log.push(format!("music: {line}"));
         }
     }
-    sim.system.update(time.delta_secs_f64(), &ears);
+    // Apply any ducking, level or placement updates from this frame without
+    // advancing playback time again.
+    sim.system.update(0.0, &ears);
     let orders = std::mem::take(&mut sim.system.orders);
     let lines = std::mem::take(&mut sim.system.log);
     let frame = sim.frames;

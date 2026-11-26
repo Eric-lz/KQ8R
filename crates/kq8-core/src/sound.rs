@@ -527,6 +527,11 @@ impl SoundSystem {
         Some(id)
     }
 
+    fn finish_at(&mut self, n: usize) {
+        let p = self.playing.remove(n);
+        self.note(format!("stop #{} {}: finished (played {:.3} of {:.3} s)", p.id, p.name, p.played, p.seconds));
+    }
+
     fn stop_at(&mut self, n: usize, why: &str) {
         let p = self.playing.remove(n);
         self.orders.push(Order::Stop { id: p.id });
@@ -630,9 +635,12 @@ impl SoundSystem {
         while self.since_housekeeping >= HOUSEKEEPING {
             self.since_housekeeping -= HOUSEKEEPING;
             self.step_fades();
-            // Rule 20: finished one-shots leave the list.
+            // Rule 20: finished one-shots leave the list. Do not emit
+            // `Order::Stop` here: `kq8_audio::Mixer` drops one-shots cleanly at
+            // the end of their sample buffer, so wall-clock lead or audio
+            // device latency never cuts off the tail of a clip.
             while let Some(n) = self.playing.iter().position(|p| !p.looping && !sound_paused(p, game_paused) && p.played >= p.seconds) {
-                self.stop_at(n, "finished");
+                self.finish_at(n);
             }
         }
         let mut n = 0;
@@ -1296,5 +1304,54 @@ mod tests {
         assert!(s.orders.contains(&Order::Gains { id: theme, gains: [0.45, 0.45] }));
         assert!(s.orders.contains(&Order::Gains { id: sfx, gains: [0.25, 0.25] }));
         assert!(close(s.groups().loudness(3), 0.70));
+    }
+
+    #[test]
+    fn finished_one_shot_leaves_list_without_stopping_mixer() {
+        let mut s = SoundSystem::default();
+        let id = s.start(&Start::plain_one_shot("a", "t".into()), found(0.25), &ears()).unwrap();
+        s.orders.clear();
+        s.update(HOUSEKEEPING, &ears());
+        s.update(HOUSEKEEPING, &ears());
+        assert_eq!(s.playing_count(), 0);
+        assert!(s.log.iter().any(|l| l.contains(&format!("stop #{id} a: finished"))));
+        assert!(!s.orders.iter().any(|o| matches!(o, Order::Stop { .. })), "natural finish lets mixer drain tail: {:?}", s.orders);
+
+        // Explicit stops must still emit Order::Stop so cut speech / mix limit / beyond-max halt in mixer.
+        let id2 = s.start(&Start::speech("b", None, "t".into()), found(2.0), &ears()).unwrap();
+        s.orders.clear();
+        s.stop(id2, "cut");
+        assert_eq!(s.orders, vec![Order::Stop { id: id2 }]);
+    }
+
+    #[test]
+    fn updating_before_start_does_not_charge_slow_frame_dt_to_new_sounds() {
+        let mut g = Groups::default();
+        g.slider[GROUP_WORLD_MUSIC] = 0.5;
+        g.slider[GROUP_SPEECH] = 0.8;
+        let mut s = SoundSystem::new(g);
+        let bg = s
+            .start(
+                &Start { name: "forest.aud".into(), placed: None, looping: true, group: GROUP_WORLD_MUSIC, why: "t".into() },
+                found(178.5),
+                &ears(),
+            )
+            .unwrap();
+        s.orders.clear();
+
+        // Simulate a 0.5 s world-load frame before new sounds start on the current frame.
+        s.update(0.5, &ears());
+        let cue = s.start(&Start::plain_one_shot("gblnbone.aud", "t".into()), found(0.291), &ears()).unwrap();
+        let voice = s.start(&Start::speech("A0RS060E.001", None, "t".into()), found(6.484), &ears()).unwrap();
+        s.set_ducking(true);
+        s.update(0.0, &ears());
+
+        assert!(s.is_playing(cue) && s.is_playing(voice));
+        assert!(!s.log.iter().any(|l| l.contains("finished")), "{:?}", s.log);
+        let bg_gain = s.orders.iter().rev().find_map(|o| match o {
+            Order::Gains { id, gains } if *id == bg => Some(*gains),
+            _ => None,
+        });
+        assert!(bg_gain.is_some_and(|[l, r]| close(l, 0.1) && close(r, 0.1)), "expected ducked gains on bg, got {:?}", s.orders);
     }
 }
