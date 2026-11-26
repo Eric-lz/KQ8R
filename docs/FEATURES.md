@@ -1031,12 +1031,13 @@ ear by the user (`2026-11-23`):**
   `Back to Game` disabled. (`Load`, `Save`, `Options`, `Graphics`,
   `Remap Move Keys`, `Credits`, and `Replay Intro` are built in `4g`/`4h`.)
 
-## Saved games (milestone M4, step 4h, 2026-11-25; done in tests & logs)
+## Saved games (milestone M4, step 4h, 2026-11-26; confirmed live in `cargo play`)
 
 From `docs/behaviour/savefile.md` (A, 2026-11-24; answers `Q207`). **Checked
-via workspace unit tests, `kq8 save-verify`, and headless Save/Load runs;
-live interactive `cargo play` eye check and loading KQ8R saves inside
-original `Mask.exe` are not tested:**
+via workspace unit tests, `kq8 save-verify`, headless Save/Load runs, and
+live interactive `cargo play` checks (`4h-F1`–`4h-F4` confirmed 2026-11-26);
+one-way compatibility only (original `Mask.exe` → KQ8R; KQ8R writes compact
+delta `save<N>.vol` archives by user decision 2026-11-26):**
 
 - **Binary `PERS` archives (`kq8-data` `save_pers.rs`, `kq8 save-verify`):**
   reads and writes 2-byte aligned `"PERS"` / `"DICT"` game-object blocks
@@ -1047,17 +1048,20 @@ original `Mask.exe` are not tested:**
   (`9,686` binary `PERS` chunks, `30` ASCII `.kq` chunks, `30` kept `.vol`
   archives) with `0` failures.
 - **Saving and loading (`save_export.rs`, `save_import.rs`):** saving writes
-  `PVOL` `save<N>.vol` archives in `kq8-artifacts/user/save/` with current
-  world binary `PERS` chunks, `WorldVar.cs`, `newWorld.cs` (`setCurrentTime`),
-  embedded ASCII kept `.vol` archives (`worldVolumes`), ASCII maps (`maps`),
-  `current.bin`, and `kq8r_meta.txt` for KQ8R-specific extras; loading reads
-  original `Mask.exe` `save<N>.vol` archives directly (`MASK/save/save1.vol`
-  and `save18.vol` verified headlessly) as well as KQ8R saves (including
-  legacy `4g-4` `kq8r_state.txt` fallback), restoring Connor's exact 3D pose,
-  camera view, doors, chests, loose world items, music stack, clock, timed
-  events, and `world.cs <World> Begin` without replaying first-time cutscenes.
-  (`Q208` remains open for `worldFlags` bits, `KQDoor::state` `0`/`3`, and
-  `KQConner::doMode` mapping.)
+  compact delta `PVOL` `save<N>.vol` archives in `kq8-artifacts/user/save/`
+  with current world binary `PERS` chunks, `WorldVar.cs`, `newWorld.cs`
+  (`setCurrentTime`), embedded ASCII kept `.vol` archives (`worldVolumes`),
+  ASCII maps (`maps`), `current.bin`, and `kq8r_meta.txt` for KQ8R-specific
+  extras (intended for KQ8R, not full `Mask.exe` world snapshots); loading
+  reads original `Mask.exe` `save<N>.vol` archives directly
+  (`MASK/save/save1.vol` and `save18.vol` verified headlessly) as well as
+  KQ8R saves (including legacy `4g-4` `kq8r_state.txt` fallback), restoring
+  Connor's exact 3D pose, mid-climb rope state, camera view, doors, opened
+  chests, corpses, active speech, loose world items, music stack, clock,
+  timed events, `prior_gone`/`prior_kept_states`/`came_in` across re-saves,
+  and `world.cs <World> Begin` without replaying first-time cutscenes.
+  (`Q208` and `Q209` remain open for `worldFlags`, `KQDoor::state` `0`/`3`,
+  `KQConner::doMode`, `STATS.AUD` load silence, and bottom-bar slot blink.)
 
 ## Viewer helpers (not in the original)
 

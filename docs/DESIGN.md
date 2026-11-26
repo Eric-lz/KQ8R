@@ -1157,14 +1157,18 @@ inventory and menus.
     audio suspend/resume, key/click skip for `Replay Intro`, and 200 ms
     `theme.aud` restart via main-thread Windows MCI borderless overlay.
 
-- **4h — Saved games & binary `PERS` format (**done** 2026-11-25).** From
+- **4h — Saved games & binary `PERS` format (**done** 2026-11-26).** From
   `docs/behaviour/savefile.md` (Session A, 2026-11-24; answers `Q207`),
   `submenus.md` rules 3–11, and `world-change.md` rules 6–20. Implements
-  full two-way compatibility with original `Mask.exe` `save/save<N>.vol`
-  files and restores full mid-world state (Connor's exact 3D pose,
-  camera pose/angle/mode, doors, chests, dropped/loose items, music
-  stack, clock/timed events, and running `world.cs <World> Begin` while
-  `WorldVar.cs` guards first-time cutscenes). One commit per step:
+  one-way compatibility with original `Mask.exe` `save/save<N>.vol`
+  files (KQ8R loads original `Mask.exe` saves, while KQ8R's own saves use
+  a compact delta `save<N>.vol` format per user decision 2026-11-26) and
+  restores full mid-world state (Connor's exact 3D pose, camera
+  pose/angle/mode, doors, opened chests, mid-climb rope state, corpses,
+  active speech, dropped/loose items, music stack, clock/timed events,
+  gone/kept/`came_in` objects across re-saves, and running `world.cs
+  <World> Begin` while `WorldVar.cs` guards first-time cutscenes). One
+  commit per step:
   - **4h-1, binary `PERS` game-object reader/writer & `kq8 save-verify`**
     (**done** 2026-11-25): new `kq8-data` `save_pers.rs` (2-byte aligned
     `"PERS"`/`"DICT"` framing with no version field, even-padded class
@@ -1207,9 +1211,18 @@ inventory and menus.
     `kq8r_state.txt` load fallback kept intact.
   - **4h-5, final hand-over docs & test instructions** (**done** 2026-11-25):
     updated `README.md`, `docs/FEATURES.md`, `STATUS.md`, `docs/DESIGN.md`,
-    `MODLOG.md`, and `docs/provenance/README.md` (recording `Q207` complete,
-    `Q208` open, and live `cargo play` / original `Mask.exe` checks as
-    **not tested**).
+    `MODLOG.md`, and `docs/provenance/README.md` (recording `Q207` complete
+    and `Q208` open).
+  - **4h-F1..4h-F4, live-check fixes & re-save persistence** (**done &
+    confirmed live** 2026-11-26): kept opened clickable `KQAnimObject`
+    chests (`smlchst1`/`smlchst2`) open (`with_names_at_load` + `animPos`),
+    restored mid-climb rope state (`KQStateConnerHookRope` + `kq8r_meta.txt`),
+    persisted corpses (`KQObject` `PERS` + `kw_corpse` + `load_corpse_shape`),
+    restarted active speech without frame-2 load `dt` cutoff (`sound_step`
+    step-before-start + `finish_at` letting mixer drain the tail), silenced
+    `STATS.AUD` on initial load (`!first`, `Q209` open), added Daventry's
+    first-kill remark (`1000 0 0 62 1`), and preserved `prior_gone` /
+    `prior_kept_states` / `came_in` across second and subsequent re-saves.
 
 ### M5 — Fight
 

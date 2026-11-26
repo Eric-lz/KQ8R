@@ -3,6 +3,14 @@
 What changed and what was tested. Newest entries at the top.
 Format: date and title, then Changed / Why / Tested how / Result / Still broken / Next.
 
+## M4 4h (2026-11-26): Live check passed & one-way save compatibility decision recorded
+- **Changed:** `docs/DESIGN.md`, `docs/FEATURES.md`, `STATUS.md`, `MODLOG.md` (and local `.agents/rules/agent-memory.md`).
+- **Why:** User confirmed in live play (`4h-F3`/`4h-F4`) that reloaded speech no longer cuts off early and killed monsters no longer respawn after saving/reloading a second time, and decided to keep **one-way save compatibility** (KQ8R loads original `Mask.exe` `save<N>.vol` files, while KQ8R saves use KQ8R's own compact delta `save<N>.vol` format).
+- **Tested how:** Live interactive `cargo play` check by the user (2026-11-26).
+- **Result:** All `4h` saved-game behaviors confirmed working live; full `Mask.exe`-bootable world export is intentionally left out.
+- **Still broken / not tested:** `Q208`/`Q209` remain open in `docs/behaviour/QUESTIONS.md`.
+- **Next:** Study Session A for `Q208`/`Q209`, or continue Session B on Script Coverage Batches 5–7 / `Q202` / `Q206`.
+
 ## M4 4h-F4 (2026-11-26): Preserve gone objects, kept object states, and `came_in` across re-saves
 - **Changed:** `crates/kq8-core/src/active.rs` (`WorldState::{prior_gone,prior_kept_states}`, `WorldState::seed_came_in`, `gone_names()`, `kept_states()`, `is_deleted()`, clearing `prior_gone`/`deleted` in `loadKQ` and `monster_add`, plus unit test `prior_gone_kept_states_and_came_in_survive_resave`), `crates/kq8-viewer/src/load.rs` (`Objects::{restored_gone,restored_kept_names,restored_came_in}`, preserving `a.gone` ∪ `gone_skipped`, `kept_applied`, and re-loaded `arrival.came_in` pairs through `read_objects`), `crates/kq8-viewer/src/door_view.rs` (seeding `active.world.prior_gone`, `active.world.prior_kept_states`, and `seed_came_in` in `setup_doors`), `MODLOG.md`, `STATUS.md`.
 - **Why:** When a world loaded from a saved game or kept world, `load.rs` skipped dead monsters / deleted objects (leaving them out of `anims` while `world.deleted` started empty), baked restored movements/poses into `start_states`, and re-loaded `arrival.came_in` without seeding `world.came_in` — so saving and reloading a *second* time dropped those objects from `gone_names()`, `kept_states()`, and `came_in_files()`, causing previously killed monsters to respawn alongside their corpses.
