@@ -1683,6 +1683,12 @@ pub struct Objects {
     pub restored_world_items: Option<Vec<kq8_core::item::ItemObject>>,
     /// Restored corpses from a kept world or saved game (`fighting.md` rule 32).
     pub restored_corpses: Vec<kq8_core::fight::Corpse>,
+    /// Objects already gone when loading a kept world or saved game (`arrival.gone` ∪ `gone_skipped`).
+    pub restored_gone: std::collections::BTreeSet<String>,
+    /// Lower-case names of objects whose state came from `arrival.states` / kept doors/chests.
+    pub restored_kept_names: Vec<String>,
+    /// `(file, object_name)` pairs re-loaded from `arrival.came_in`.
+    pub restored_came_in: Vec<(String, String)>,
     /// World stem (`Daventry`, `DeadCity`, ...).
     pub world_name: String,
 }
@@ -2215,6 +2221,7 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     // that scripts loaded while playing (Daventry's `waterfa2.kq`) are
     // loaded again after the start script, so they are in the world from
     // the start and get their `Init` with the others (rule 15).
+    let mut restored_came_in: Vec<(String, String)> = Vec::new();
     for file in arrival.as_ref().map(|a| a.came_in.as_slice()).unwrap_or_default() {
         let load = LoadKq {
             file: file.clone(),
@@ -2226,8 +2233,17 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
             line: 0,
             inside_if: false,
         };
+        let placed_before = placer.placed.len();
+        let located_before: std::collections::BTreeSet<String> = placer.located.keys().cloned().collect();
         placer.log.summary(format!("world change: kept world: loadKQ {file} again (loaded while playing on an earlier visit; rules 12, 14.5)"));
         placer.place(&load, None, false, &script.vars);
+        let obj_name = placer
+            .placed
+            .get(placed_before)
+            .map(|(p, _, _)| p.name.clone())
+            .or_else(|| placer.located.keys().find(|k| !located_before.contains(*k)).cloned())
+            .unwrap_or_else(|| file.trim_end_matches(".kq").to_string());
+        restored_came_in.push((file.to_ascii_lowercase(), obj_name));
         script.loads.push(load);
     }
     // K-1 (characters.md rule 3): prototypes of the creatures the scripts'
@@ -2365,10 +2381,14 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     objects.aliases = script.aliases;
     // M6 6e-8 (world-change.md rules 13, 14): a kept world's variables over
     // its own start values, before its objects' Init.
+    let mut restored_gone: std::collections::BTreeSet<String> = gone_skipped.into_iter().map(|s| s.to_ascii_lowercase()).collect();
     let (arrival_music_stack, restored_world_items, restored_corpses) = match arrival {
         Some(a) => {
             for (n, v) in &a.kept_vars {
                 objects.vars.set(n, v.clone());
+            }
+            for g in &a.gone {
+                restored_gone.insert(g.to_ascii_lowercase());
             }
             (a.music_stack, a.world_items, a.corpses)
         }
@@ -2382,6 +2402,9 @@ pub fn load_objects(game: &GameDir, world: &World, terrain: &kq8_data::Terrain, 
     objects.world_name = world.name.clone();
     objects.restored_world_items = restored_world_items;
     objects.restored_corpses = restored_corpses;
+    objects.restored_gone = restored_gone;
+    objects.restored_kept_names = kept_applied.into_iter().map(|s| s.to_ascii_lowercase()).collect();
+    objects.restored_came_in = restored_came_in;
     objects.items = items;
     objects.item_shapes = item_shapes;
     objects.item_lines = item_lines;
@@ -5691,6 +5714,9 @@ impl Placer<'_> {
             arrival_alt_lightmaps: self.arrival_alt_lightmaps,
             restored_world_items: None,
             restored_corpses: Vec::new(),
+            restored_gone: std::collections::BTreeSet::new(),
+            restored_kept_names: Vec::new(),
+            restored_came_in: Vec::new(),
             world_name: String::new(),
         }
     }

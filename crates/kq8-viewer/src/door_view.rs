@@ -988,6 +988,9 @@ pub fn spawn_doors(
     // carries gives his bolt file and shoot offset.
     active.world.world_name = std::mem::take(&mut objects.world_name);
     active.world.corpses = std::mem::take(&mut objects.restored_corpses);
+    active.world.prior_gone = std::mem::take(&mut objects.restored_gone);
+    active.world.prior_kept_states = std::mem::take(&mut objects.restored_kept_names).into_iter().collect();
+    active.world.seed_came_in(std::mem::take(&mut objects.restored_came_in));
     active.world.projectiles = std::mem::take(&mut objects.projectiles);
     active.world.set_connor_fight(objects.connor_fight.clone());
     for (name, mode) in file_dithered {

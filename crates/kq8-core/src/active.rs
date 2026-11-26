@@ -809,6 +809,9 @@ pub struct WorldState {
     /// Every deleted object, lower case (`deleteObject`, 3g-5): events to
     /// it are dropped.
     deleted: BTreeSet<String>,
+    /// Lower-case names already gone when this world loaded from a kept world
+    /// or saved game, so re-saving continues skipping them (`world-change.md` rule 12).
+    pub prior_gone: BTreeSet<String>,
     /// `KQObject::setHidden` on other placed objects (3k-2), by
     /// lower-case name: overrides their file's `hidden=`.
     plain_hidden: BTreeMap<String, bool>,
@@ -824,6 +827,9 @@ pub struct WorldState {
     /// Each animated (not a character) and scripted object as added, by
     /// lower-case name: movement name, place, collision type (K-1).
     start_states: BTreeMap<String, (String, Placement, Option<u32>)>,
+    /// Lower-case names of objects loaded with a kept state from `Arrival`,
+    /// so `kept_states()` continues keeping them across re-saves.
+    pub prior_kept_states: BTreeSet<String>,
     /// Names deleted during the event running now: free only once it has
     /// finished (`clicking.md` rule 22, 3l-7).
     deleted_this_event: BTreeSet<String>,
@@ -1186,7 +1192,7 @@ impl WorldState {
     /// items carried by Connor or used up, characters dead or gone. Lower
     /// case. On a return they are not loaded again.
     pub fn gone_names(&self) -> Vec<String> {
-        let mut out: BTreeSet<String> = self.deleted.clone();
+        let mut out: BTreeSet<String> = self.deleted.union(&self.prior_gone).cloned().collect();
         for o in &self.items.objects {
             if o.carried_by(crate::talk::CONNOR) || matches!(o.place, crate::item::Place::Gone) {
                 out.insert(o.name.to_ascii_lowercase());
@@ -1212,9 +1218,11 @@ impl WorldState {
         anims
             .chain(objects)
             .filter(|(p, collision_type)| {
-                self.start_states.get(&p.name.to_ascii_lowercase()).is_some_and(|(movement, placement, start_type)| {
-                    !p.movement_name().eq_ignore_ascii_case(movement) || p.base != *placement || collision_type != start_type
-                })
+                let key = p.name.to_ascii_lowercase();
+                self.prior_kept_states.contains(&key)
+                    || self.start_states.get(&key).is_some_and(|(movement, placement, start_type)| {
+                        !p.movement_name().eq_ignore_ascii_case(movement) || p.base != *placement || collision_type != start_type
+                    })
             })
             .map(|(p, collision_type)| KeptState {
                 name: p.name.clone(),
@@ -1235,6 +1243,14 @@ impl WorldState {
     pub fn came_in_files(&self) -> Vec<String> {
         let gone: BTreeSet<String> = self.gone_names().into_iter().collect();
         self.came_in.iter().filter(|(_, name)| !gone.contains(&name.to_ascii_lowercase())).map(|(file, _)| file.clone()).collect()
+    }
+
+    /// Seeds runtime-loaded `loadKQ` `(file, object_name)` pairs restored from a
+    /// kept world or saved game so re-saving preserves `came_in`.
+    pub fn seed_came_in(&mut self, pairs: impl IntoIterator<Item = (String, String)>) {
+        for (file, name) in pairs {
+            self.came_in.push((file.to_ascii_lowercase(), name));
+        }
     }
 
     pub fn now(&self) -> f64 {
@@ -2703,6 +2719,8 @@ impl WorldState {
             return "1".into();
         }
         self.dormant.remove(&key);
+        self.prior_gone.remove(&lower);
+        self.deleted.remove(&lower);
         self.came_in.push((key.clone(), name.clone()));
         self.loading.insert(lower.clone());
         self.known.insert(lower);
@@ -2763,6 +2781,7 @@ impl WorldState {
         let p = self.dormant_monsters.iter().find(|m| m.name.eq_ignore_ascii_case(&proto)).map_or([0.0; 3], |m| m.position);
         self.known.insert(lower.clone());
         self.deleted.remove(&lower);
+        self.prior_gone.remove(&lower);
         let mut extra = Vec::new();
         if let Some(c) = self.clickables.iter().find(|c| c.name.eq_ignore_ascii_case(&proto)).cloned() {
             self.clickables.push(Clickable { name: name.clone(), gone: false, ..c });
@@ -4239,9 +4258,9 @@ impl WorldState {
         self.deleted.contains(&name.to_ascii_lowercase())
     }
 
-    /// Whether `name` was deleted (`deleteObject`).
+    /// Whether `name` was deleted (`deleteObject`, including prior saves/visits).
     pub fn is_deleted(&self, name: &str) -> bool {
-        self.is_gone(name)
+        self.is_gone(name) || self.prior_gone.contains(&name.to_ascii_lowercase())
     }
 
     /// Whether `name`'s collider is out of the collision world now
@@ -5090,6 +5109,8 @@ impl Active {
                 accepts: BTreeMap::new(),
                 end_loop_listeners: BTreeMap::new(),
                 deleted: BTreeSet::new(),
+                prior_gone: BTreeSet::new(),
+                prior_kept_states: BTreeSet::new(),
                 switched_off: BTreeSet::new(),
                 connor_stats: None,
                 tower_lines: Vec::new(),
@@ -12953,5 +12974,40 @@ mod talk_tests {
         assert_eq!(a.world.connor_stats.unwrap().stats.0[1], 10);
         assert_eq!((a.world.weapon_mode, a.world.weapon_ready.clone()), (crate::weapons::WeaponMode::None, None));
         assert_eq!(a.world.items.count("Connor", "INVITEM_Fists"), 1);
+    }
+
+    #[test]
+    fn prior_gone_kept_states_and_came_in_survive_resave() {
+        let mut a = active("", &[]);
+        let m = |name: &str| crate::named_anim::tests::movement(name, 0.0, 1.0, false, false, vec![]);
+        let p = NamedAnimPlayer::new("obj", vec![m("open"), m("closed")], 0, Placement::at([0.0; 3]));
+        let mut obj = ActiveObject {
+            player: p,
+            script: None,
+            bounds: None,
+            collision_type: 0x20,
+            collision_mask: 0,
+            accepts_inventory: None,
+            accept_all_items: false,
+            too_far_away_action: 0,
+            do_not_point_at: false,
+            hidden: false,
+            gone: false,
+            delete_when_done: false,
+        };
+        obj.player.phase = 1.0;
+        a.add_objects([obj]);
+        a.world.prior_gone.insert("goblin22".into());
+        a.world.prior_kept_states.insert("obj".into());
+        a.world.seed_came_in([("waterfa2.kq".into(), "Waterfall2".into())]);
+
+        assert!(a.world.is_deleted("goblin22"));
+        assert!(a.world.gone_names().contains(&"goblin22".to_string()));
+        assert_eq!(a.world.kept_states().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), vec!["obj"]);
+        assert_eq!(a.world.came_in_files(), vec!["waterfa2.kq".to_string()]);
+
+        // If a loaded object is later deleted, came_in_files omits it while gone_names keeps both.
+        a.world.prior_gone.insert("waterfall2".into());
+        assert!(a.world.came_in_files().is_empty());
     }
 }
