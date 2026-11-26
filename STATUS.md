@@ -1,9 +1,10 @@
 # STATUS
 
 Hand-over in case the chat is lost. Brought up to date 2026-11-26 after
-**Implementation Session (B)** finished **`Q202`** (pressure plates & trap visitor lifecycle:
-`On` -> `Cue 301` -> `Cue 302` -> pickup `Off`; `855` workspace unit tests + headless
-Dead City `triptrp2` rock throw & pickup check pass) following **M4 step `4h`** (`4h-1`..`4h-5` + fixes
+**Implementation Session (B)** finished quick fixes **`Q202`** (pressure plates & trap visitor
+lifecycle: `On` -> `Cue 301` -> `Cue 302` -> pickup `Off`) and **`Q206`** (Credits layout/score
+formula & `slider.pba` drawing; `855` workspace unit tests, release build, and headless
+Dead City / Options+Credits checks pass) following **M4 step `4h`** (`4h-1`..`4h-5` + fixes
 **`4h-F1`**–**`4h-F4`**) for saved games and binary `PERS` support (`Q207`; one-way save
 compatibility — original `Mask.exe` saves load in KQ8R, while KQ8R saves stay in KQ8R's
 compact delta format by user decision 2026-11-26).
@@ -15,9 +16,9 @@ detailed "what works" list is `docs/FEATURES.md`.
 
 ## Where we are (2026-11-26)
 
-- **2026-11-26 (B): `Q202` — Pressure plates & trap visitor lifecycle (`traps.md` rules 8a–8b, `ranged-weapons.md` 8d):**
-  - Added `Trap::remove_visitor`, `WorldState::{trap_visitor_deleted,item_placed_in_traps}`, `Active::flush_calls`, immediate overlap checks on `make_world_item` / `drop_item_command` / equipment swap-out, trap leave notifications on `delete_one` / inventory pickup (both stack-merge and non-merge), and `Prrock.kq` removal in `Active::rocks_after_flight` after `rockHit.cs` drops `INVITEM_Rock`.
-  - **Verified:** `855` workspace tests pass (`cargo test --workspace`) and headless Dead City `triptrp2` test confirms `On rock1` -> `Cue 301 NoName30` -> `Cue 302 rock1` (`trip2` `down`) and `Off NoName30` (`trip2` `up`) on pickup; live interactive check pending.
+- **2026-11-26 (B): `Q202` & `Q206` — Pressure plates and Credits/slider polish:**
+  - **`Q202` (`traps.md` 8a–8b, `ranged-weapons.md` 8d):** Added `Trap::remove_visitor`, `WorldState::{trap_visitor_deleted,item_placed_in_traps}`, `Active::flush_calls`, immediate overlap checks on `make_world_item` / `drop_item_command` / equipment swap-out, trap leave notifications on `delete_one` / inventory pickup (both stack-merge and non-merge), and `Prrock.kq` removal in `Active::rocks_after_flight` after `rockHit.cs` drops `INVITEM_Rock`. Verified (`855` tests + headless Dead City `triptrp2` `On rock1` -> `Cue 301 NoName30` -> `Cue 302 rock1` -> `Off NoName30`, `trip2` `down` -> `up`).
+  - **`Q206` (`submenus.md` 14, 23–25):** Added `credits_total_score(level, xp)`, dynamic `CreditsPage::line_rects` centering (`min(36, (480 - 50) / n)`, slot height `30`), and `MenuView::push_slider` stretched frame-0 track + native frame-1 knob (`kx = rect[0] + (span * val) / 100`). Verified (`855` tests + headless Options/Credits run; live visual checks pending).
 - **2026-11-25 (B): M4 step 4h — Saved games & binary `PERS` support (`4h-1`..`4h-5`, `Q207`) implemented:**
   - **`4h-1` (binary `PERS` & `kq8 save-verify`):** `crates/kq8-data/src/save_pers.rs` + `kq8-cli` `save_verify.rs` / `map_verify.rs` — `9,686` binary `PERS` chunks across `28` classes, `30` ASCII `.kq` chunks, and `30` kept `.vol` archives in `MASK/save/` parsed with `0` failures (`54` saved maps read with `0` failures).
   - **`4h-2` (mid-world save/restore):** `DoorState`/`ChestState::from_pers`/`to_pers`, `EventQueue` save/restore, `SavedCameraState`, `apply_exact_pose`, loose world-item/music-stack/`current_time` restoration, and `BeginNow` on restore guarded by `WorldVar.cs`.

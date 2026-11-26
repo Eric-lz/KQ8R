@@ -4308,6 +4308,6 @@ Implementing Session A's Batch 4 notes for Gnome (`docs/behaviour/{script-comman
    - Added `Trap::remove_visitor` (`Off` / `Cue 302`, sticky re-shrink).
    - Notified traps on object/item deletion (`WorldState::trap_visitor_deleted`), world-item placement (`WorldState::item_placed_in_traps`, immediate overlap test), and inventory pickup/swap (`connor_inventory::receive`).
    - Removed flying rock projectiles from traps at `Die` (`Active::rocks_after_flight`) after `rockHit.cs` drops `INVITEM_Rock` (so `Cue 301` -> `Cue 302` keeps the plate down, and picking the rock back up sends `Off`).
-2. **`Q206` — Credits layout/score formula and slider drawing** (`submenus.md` rules 14, 23–25):
-   - Add `credits_total_score(level, xp)` and dynamic `CreditsPage::line_rects` vertical centering (`min(36, (480 - 50) / lines)`, slot height `30`).
-   - Stretch `slider.pba` frame 0 across the full slider rect and draw frame 1 at native size (`push_slider`).
+2. **`Q206` — Credits layout/score formula and slider drawing** (`submenus.md` rules 14, 23–25) — **Done (2026-11-26)**:
+   - Added `credits_total_score(level, xp)` and dynamic `CreditsPage::line_rects` vertical centering (`min(36, (480 - 50) / lines)`, slot height `30`).
+   - Stretched `slider.pba` frame 0 across the full slider rect and drew frame 1 at native size (`push_slider`).

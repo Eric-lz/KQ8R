@@ -664,13 +664,27 @@ impl OptionsState {
     }
 }
 
-/// Credits layout constants (`credits.gui`, `submenus.md` rules 23–24).
+/// Credits layout constants (`credits.gui`, `submenus.md` rules 23–24, `Q206`).
 pub const CREDITS_PHOTO_FILE: &str = "kqteam08.pbm";
 pub const CREDITS_PHOTO_RECT: [i32; 4] = [120, 10, 520, 310];
-pub const CREDITS_LARGE_HEIGHT: i32 = 30;
-pub const CREDITS_SMALL_HEIGHT: i32 = 17;
+pub const CREDITS_SLOT_HEIGHT: i32 = 30;
+pub const CREDITS_MAX_STEP: i32 = 36;
+pub const CREDITS_BOTTOM_MARGIN: i32 = 50;
 pub const CREDITS_MAX_LARGE_LINES: usize = 13;
 pub const CREDITS_MAX_SMALL_LINES: usize = 16;
+
+/// Connor's cumulative total score shown on Credits page 25 (`submenus.md` rule 23, `Q206` a).
+pub fn credits_total_score(level: i64, current_xp: i64) -> i64 {
+    if level <= 0 {
+        return 0;
+    }
+    let base = if level < 16 {
+        (10i64 << (level - 1)) - 10
+    } else {
+        level * 150_000 - 2_086_170
+    };
+    base + current_xp
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreditsLine {
@@ -721,19 +735,22 @@ impl CreditsPage {
     }
 
     pub fn line_rects(&self) -> Vec<([i32; 4], &CreditsLine)> {
-        let total_h: i32 = self
-            .lines
-            .iter()
-            .map(|l| if l.small { CREDITS_SMALL_HEIGHT } else { CREDITS_LARGE_HEIGHT })
-            .sum();
-        let mut y = (480 - total_h) / 2;
-        let mut out = Vec::with_capacity(self.lines.len());
-        for line in &self.lines {
-            let h = if line.small { CREDITS_SMALL_HEIGHT } else { CREDITS_LARGE_HEIGHT };
-            out.push(([0, y, 640, y + h], line));
-            y += h;
+        let n = self.lines.len() as i32;
+        if n == 0 {
+            return Vec::new();
         }
-        out
+        let avail_h = 480 - CREDITS_BOTTOM_MARGIN;
+        let line_step = (avail_h / n).min(CREDITS_MAX_STEP);
+        let total_h = line_step * n;
+        let top_y = 480 / 2 - total_h / 2;
+        self.lines
+            .iter()
+            .enumerate()
+            .map(|(k, line)| {
+                let y = top_y + (k as i32) * line_step;
+                ([0, y, 640, y + CREDITS_SLOT_HEIGHT], line)
+            })
+            .collect()
     }
 }
 
@@ -817,8 +834,8 @@ pub const GRA_ROW_RECTS: [[i32; 4]; GRA_ROW_COUNT] = [
     [330, 180, 600, 210], // 4: 800x600
     [40, 220, 600, 250],  // 5: Dynamic Lights
     [40, 250, 600, 280],  // 6: Connor Shadows (0x01)
-    [40, 280, 600, 310],  // 7: Monster Shadows (0x04)
-    [40, 310, 600, 340],  // 8: Character Shadows (0x02)
+    [40, 280, 600, 310],  // 7: Monster Shadows (0x02)
+    [40, 310, 600, 340],  // 8: Character Shadows (0x04)
     [40, 340, 600, 370],  // 9: Object Shadows (0x08)
     [40, 370, 600, 400],  // 10: Brightness
     [40, 430, 600, 470],  // 11: Back to Options Menu
@@ -2412,20 +2429,39 @@ mod tests {
 
     #[test]
     fn credits_timing_score_formatting_and_vertical_centering() {
+        assert_eq!(credits_total_score(0, 50), 0);
+        assert_eq!(credits_total_score(1, 5), 5);
+        assert_eq!(credits_total_score(2, 0), 10);
+        assert_eq!(credits_total_score(15, 0), 163_830);
+        assert_eq!(credits_total_score(16, 0), 313_830);
+        assert_eq!(credits_total_score(16, 400), 314_230);
+
         let p0 = CreditsPage::from_text("*DESIGNER/WRITER\r\nRoberta Williams", false, 1234);
         assert_eq!(p0.lines.len(), 2);
         assert_eq!(p0.lines[0], CreditsLine { text: "DESIGNER/WRITER".into(), small: true });
         assert_eq!(p0.lines[1], CreditsLine { text: "Roberta Williams".into(), small: false });
         assert_eq!(p0.duration_ms, 2000 + 500 * 2);
+        let r0 = p0.line_rects();
+        // 2 lines: step = min(36, 430 / 2) = 36, total_h = 72, top_y = 240 - 36 = 204, slot height 30.
+        assert_eq!(r0[0].0, [0, 204, 640, 234]);
+        assert_eq!(r0[1].0, [0, 240, 640, 270]);
+
+        // Dense 16-line page clamps step to 430 / 16 = 26 -> total_h = 416 -> top_y = 32.
+        let dense = CreditsPage::from_text(&(0..16).map(|i| format!("*Line {i}")).collect::<Vec<_>>().join("\n"), false, 0);
+        let rd = dense.line_rects();
+        assert_eq!(rd.len(), 16);
+        assert_eq!(rd[0].0, [0, 32, 640, 62]);
+        assert_eq!(rd[1].0, [0, 58, 640, 88]);
 
         let final_raw = " \r\n \r\n \r\n \r\n \r\n \r\n \r\n \r\nTeam Mask of Eternity\r\n*You have scored %d out of 6631364 points possible!";
-        let pf = CreditsPage::from_text(final_raw, true, 4200);
+        let pf = CreditsPage::from_text(final_raw, true, credits_total_score(2, 4200));
         assert_eq!(pf.duration_ms, 14000 + 500 * 10);
         assert!(pf.show_photo);
-        assert_eq!(pf.lines[9].text, "You have scored 4200 out of 6631364 points possible!");
+        assert_eq!(pf.lines[9].text, "You have scored 4210 out of 6631364 points possible!");
         let rects = pf.line_rects();
-        // 8*30 + 30 + 17 = 287 px -> top_y = (480 - 287) / 2 = 96 -> line 8 at 96 + 240 = 336 (below photo y=310).
-        assert_eq!(rects[8].0[1], 336);
+        // 10 lines -> step = 36, total_h = 360 -> top_y = 60 -> line 8 at 60 + 288 = 348 (below photo y=310).
+        assert_eq!(rects[8].0, [0, 348, 640, 378]);
+        assert!(rects[8].0[1] >= CREDITS_PHOTO_RECT[3]);
 
         let mut credits = CreditsState {
             pages: vec![p0, pf],

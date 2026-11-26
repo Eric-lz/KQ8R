@@ -27,15 +27,15 @@ use kq8_core::main_menu::{
 };
 use kq8_core::save_game::{KeptWorldSnapshot, SavedWorldSnapshot};
 use kq8_core::submenus::{
-    brightness_factor, decode_thumbnail_bin, move_label_rect, move_value_rect, scan_save_entries,
-    sl_hilite_rect, sl_list_row_rect, ButtonPress, CreditsState, GraphicsState, MenuScreen,
-    MoveKeysFile, MoveKeysState, OptionsState, SaveLoadPopup, SaveLoadState, SubmenuAction,
-    SubmenuTexts, UserOptions, CREDITS_PHOTO_FILE, CREDITS_PHOTO_RECT,
-    GRA_BRIGHTNESS_SLIDER_RECT, GRA_LABEL_RECTS, GRA_MODE_LABEL_RECT, GRA_RES_LABEL_RECT,
-    GRA_ROW_COUNT, GRA_SHADOW_BITS, GRA_TITLE_RECT, GRA_VALUE_RECTS, LOAD_NAME_RECT,
-    MOVE_KEY_COUNT, MOVE_TITLE_RECT, OPT_LABEL_RECTS, OPT_ROW_COUNT, OPT_ROW_RECTS,
-    OPT_SLIDER_RECTS, OPT_TITLE_RECT, OPT_VALUE_RECTS, SAVE_NAME_RECT, SLIDER_KNOB_SIZE,
-    SLIDER_LEFT, SL_BG_PICTURE, SL_BTN_PICTURE, SL_BUTTON_RECTS, SL_DOWN_PICTURE, SL_HIBTN_PICTURE,
+    brightness_factor, credits_total_score, decode_thumbnail_bin, move_label_rect,
+    move_value_rect, scan_save_entries, sl_hilite_rect, sl_list_row_rect, ButtonPress,
+    CreditsState, GraphicsState, MenuScreen, MoveKeysFile, MoveKeysState, OptionsState,
+    SaveLoadPopup, SaveLoadState, SubmenuAction, SubmenuTexts, UserOptions, CREDITS_PHOTO_FILE,
+    CREDITS_PHOTO_RECT, GRA_BRIGHTNESS_SLIDER_RECT, GRA_LABEL_RECTS, GRA_MODE_LABEL_RECT,
+    GRA_RES_LABEL_RECT, GRA_ROW_COUNT, GRA_SHADOW_BITS, GRA_TITLE_RECT, GRA_VALUE_RECTS,
+    LOAD_NAME_RECT, MOVE_KEY_COUNT, MOVE_TITLE_RECT, OPT_LABEL_RECTS, OPT_ROW_COUNT,
+    OPT_ROW_RECTS, OPT_SLIDER_RECTS, OPT_TITLE_RECT, OPT_VALUE_RECTS, SAVE_NAME_RECT,
+    SL_BG_PICTURE, SL_BTN_PICTURE, SL_BUTTON_RECTS, SL_DOWN_PICTURE, SL_HIBTN_PICTURE,
     SL_HILITE_PICTURE, SL_LIST_FONT, SL_LIST_ROWS, SL_NOTMB_PICTURE, SL_POPUP_BG, SL_POPUP_BTN,
     SL_POPUP_FONT, SL_POPUP_HIBTN, SL_SAVE_BAR, SL_SAVE_BAR_RECT, SL_SAVE_RED, SL_SAVE_RED_RECT,
     SL_SCROLL_DOWN_RECT, SL_SCROLL_UP_RECT, SL_TAB_PICTURE, SL_THUMB_RECT, SL_TITLE_FONT,
@@ -777,24 +777,21 @@ impl MenuView {
             return;
         };
         if let Some(track) = frames.first().and_then(Pic::of) {
-            let mut x = rect[0];
-            while x < rect[2] {
-                let r = (x + SLIDER_KNOB_SIZE).min(rect[2]);
-                pieces.push(Piece::Picture {
-                    rect: [x, rect[1], r, rect[3]],
-                    pic: track,
-                    stretch: true,
-                });
-                x += SLIDER_KNOB_SIZE;
-            }
+            pieces.push(Piece::Picture {
+                rect,
+                pic: track,
+                stretch: true,
+            });
         }
         if let Some(knob) = frames.get(1).or_else(|| frames.first()).and_then(Pic::of) {
-            let span = (rect[2] - rect[0] - SLIDER_KNOB_SIZE).max(0);
-            let kx = SLIDER_LEFT + (val.clamp(0, 100) * span) / 100;
+            let kw = knob.width as i32;
+            let kh = knob.height as i32;
+            let span = (rect[2] - rect[0] - kw).max(0);
+            let kx = rect[0] + (span * val.clamp(0, 100)) / 100;
             pieces.push(Piece::Picture {
-                rect: [kx, rect[1], kx + SLIDER_KNOB_SIZE, rect[3]],
+                rect: [kx, rect[1], kx + kw, rect[1] + kh],
                 pic: knob,
-                stretch: true,
+                stretch: false,
             });
         }
     }
@@ -2380,10 +2377,18 @@ pub fn menu_step(
                 menu.summary(&shared, "opened Remap Move Keys screen (submenus.md rules 20-22)");
             }
             SubmenuAction::SwitchScreen(MenuScreen::Credits) => {
-                let score = sim
+                let (level, xp, score) = sim
                     .as_ref()
-                    .and_then(|s| s.active.world.connor_stats.map(|c| c.stats.0[4]))
-                    .unwrap_or(0);
+                    .and_then(|s| {
+                        s.active.world.connor_stats.map(|c| {
+                            (
+                                c.level,
+                                c.stats.0[4],
+                                credits_total_score(c.level, c.stats.0[4]),
+                            )
+                        })
+                    })
+                    .unwrap_or((0, 0, 0));
                 let cs = CreditsState::from_msg(menu.msg400.as_ref(), score);
                 let count = cs.pages.len();
                 menu.credits_state = Some(cs);
@@ -2391,7 +2396,7 @@ pub fn menu_step(
                 menu.last_drawn_key = None;
                 menu.summary(
                     &shared,
-                    format!("opened Credits screen ({count} pages from 400.MSG, score={score}; submenus.md rules 23-25, Q206)"),
+                    format!("opened Credits screen ({count} pages from 400.MSG, level={level}, xp={xp}, score={score}; submenus.md rules 23-25, Q206)"),
                 );
             }
             SubmenuAction::SwitchScreen(target) => {

@@ -4497,6 +4497,13 @@ Replaces the "smaller pictures tiled" stand-in (4c-1, 4c-8).
 |---|---|---|
 | `Trap::remove_visitor` & `WorldState::trap_visitor_deleted` removing deleted or picked-up visitors from traps (`Off` / `Cue 302`, sticky re-shrink) and `WorldState::item_placed_in_traps` testing placed world items for immediate trap overlap (`On` / `Cue 301`), wired into `drop_item_command`, `make_world_item`, `delete_one`, `connor_inventory::receive` (stack-merge, non-merge, and swap-out), and `Active::rocks_after_flight` (`Prrock.kq` deletion after `rockHit.cs` drops `INVITEM_Rock`) | `traps.md` rules 8a–8b; `ranged-weapons.md` section 8d (`Q202` traced 2026-11-24; user original-game check 2026-11-22) | unit tests `trap::tests::remove_visitor_emits_off_or_cue_302_and_reshrinks_sticky`, `active::tests::a_thrown_rock_flies_its_arc_and_keeps_a_plate_down`, and `active::tests::picking_up_thrown_rock_raises_plate_on_merge_and_non_merge_and_no_drop_sends_off` (`855` workspace tests pass); headless Dead City rock-throw + pickup on `triptrp2` (`On rock1` -> `Cue 301 NoName30` -> `Cue 302 rock1` -> `Off NoName30`, `trip2` `down` -> `up`, `RESULT: PASS`); live interactive check **not tested** |
 
+## Q206 2026-11-26: Credits layout/score formula & slider drawing — core `submenus.rs`; viewer `menu_view.rs`
+
+| Behaviour implemented | Source | Verification |
+|---|---|---|
+| `credits_total_score(level, current_xp)` cumulative XP formula (`((10 << (level - 1)) - 10) + xp` for `< 16`, `(level * 150,000 - 2,086,170) + xp` for `>= 16`, `0` if `level <= 0`), dynamic `CreditsPage::line_rects` vertical centering (`min(36, (480 - 50) / n)`, slot height `30`), and `GRA_ROW_RECTS` `0x02`/`0x04` comment fix | `submenus.md` rule 23 (`Q206` a, traced 2026-11-25) | unit test `submenus::tests::credits_timing_score_formatting_and_vertical_centering` (`855` workspace tests pass); headless `--menu` Credits open/exit (`menu.log`: `25 pages from 400.MSG, level=0, xp=0, score=0`, `RESULT: PASS`); live eye check **not tested** |
+| `MenuView::push_slider` stretches `slider.pba` frame 0 across the full slider rect and draws frame 1 (`10×10` knob) at native size (`kx = rect[0] + (span * val) / 100`) | `submenus.md` rule 14 (`Q206` b, traced 2026-11-25) | `cargo build --release -p kq8-viewer` (`0` warnings); headless `--menu` opening `Options` (`menu.log`, `RESULT: PASS`); live eye check **not tested** |
+
 
 
 
