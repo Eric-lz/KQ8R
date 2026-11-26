@@ -1727,6 +1727,7 @@ impl WorldState {
             let mut extra = if is_connor { self.clear_dropped_connor_item(k, &stack, &canonical_kind) } else { String::new() };
             let pos = self.resolve_world_position(position, at);
             self.items.objects[k].place = Place::World { position: pos, angles };
+            self.item_placed_in_traps(&stack, "KQMonster::dropItem");
             if is_connor {
                 if category.as_deref() == Some("LongWeapon") && self.ranged_weapon().is_none() {
                     let line = self.take_ranged_item(crate::weapons::NO_RANGED);
@@ -1840,7 +1841,100 @@ impl WorldState {
         let position = self.resolve_world_position(position, at);
         let name = self.items.make(kind, quantity, Place::World { position, angles })?.name.clone();
         self.known.insert(name.to_ascii_lowercase());
+        self.item_placed_in_traps(&name, at);
         Ok(name)
+    }
+
+    /// Removes a deleted or picked-up visitor from every trap (`traps.md` rules 8a–8b).
+    /// Queues any resulting `Off` or `Cue 302` script call onto `calls_out`.
+    pub(crate) fn trap_visitor_deleted(&mut self, name: &str, why: &str) -> Vec<String> {
+        let mut calls = Vec::new();
+        for i in 0..self.traps.len() {
+            let shrunk_before = self.traps[i].shrunk;
+            let Some(args) = self.traps[i].remove_visitor(name) else { continue };
+            let t = &self.traps[i];
+            let trap_name = t.settings.name.clone();
+            let script = t.settings.script.clone();
+            let inside_list = t.inside.join(", ");
+            let change = if !shrunk_before && t.shrunk { "; shrinks again" } else { "" };
+            let was = std::mem::replace(&mut self.in_trap, true);
+            self.note(format!("trap {trap_name}: {} ({why}, traps.md rules 8a-8b){change}; inside now: [{inside_list}]", args.join(" ")));
+            self.in_trap = was;
+            if let Some(script) = script {
+                let mut all = vec![trap_name.clone()];
+                all.extend(args.iter().cloned());
+                self.calls_out.push((script, all));
+            }
+            calls.push(format!("{trap_name} {}", args.join(" ")));
+        }
+        calls
+    }
+
+    /// Tests a world item just placed at a position for immediate overlap with matching
+    /// traps (`traps.md` rule 8b). Queues any resulting `On` or `Cue 301` call onto `calls_out`.
+    pub(crate) fn item_placed_in_traps(&mut self, name: &str, why: &str) -> Vec<String> {
+        let Some(o) = self.items.get(name).cloned() else { return Vec::new() };
+        let Place::World { position, .. } = o.place else { return Vec::new() };
+        if o.hidden {
+            return Vec::new();
+        }
+        let (min, max) = self.items.click_box(&o).unwrap_or(([0.0; 3], [0.0; 3]));
+        let balls = if min == max {
+            crate::collide::BallStack { radius: 0.0, heights: vec![0.0] }
+        } else {
+            crate::collide::BallStack::from_box(min, max)
+        };
+        let v = Visitor {
+            name: &o.name,
+            collision_type: crate::item::ITEM_TYPE,
+            from: position,
+            position,
+            min,
+            max,
+            balls: &balls,
+        };
+        let mut calls = Vec::new();
+        for i in 0..self.traps.len() {
+            let shrunk_before = self.traps[i].shrunk;
+            let c = self.traps[i].check(&v);
+            let Some(args) = c.call else { continue };
+            let t = &self.traps[i];
+            let trap_name = t.settings.name.clone();
+            let script = t.settings.script.clone();
+            let gone = t.gone;
+            let inside_list = t.inside.join(", ");
+            let change = match (shrunk_before, t.shrunk) {
+                (true, false) => "; grows to full",
+                (false, true) => "; shrinks again",
+                _ => "",
+            };
+            let was = std::mem::replace(&mut self.in_trap, true);
+            self.note(format!(
+                "trap {trap_name}: {} ({why}, traps.md rule 8b) at ({:.0}, {:.0}, {:.0}): touching {}, box ({:.0}, {:.0}, {:.0})..({:.0}, {:.0}, {:.0}){change}; inside now: [{inside_list}]",
+                args.join(" "),
+                position[0],
+                position[1],
+                position[2],
+                c.touching,
+                c.min[0],
+                c.min[1],
+                c.min[2],
+                c.max[0],
+                c.max[1],
+                c.max[2],
+            ));
+            if gone {
+                self.note(format!("trap {trap_name}: one-shot, deleted after its On (rule 11)"));
+            }
+            self.in_trap = was;
+            if let Some(script) = script {
+                let mut all = vec![trap_name.clone()];
+                all.extend(args.iter().cloned());
+                self.calls_out.push((script, all));
+            }
+            calls.push(format!("{trap_name} {}", args.join(" ")));
+        }
+        calls
     }
 
     pub fn door_index(&self, name: &str) -> Option<usize> {
@@ -4203,6 +4297,7 @@ impl WorldState {
             self.items.objects[i].place = Place::Gone;
             let line = format!("{at}: deleteObject {name}: item gone");
             self.item_note(line);
+            self.trap_visitor_deleted(name, "deleteObject");
             self.deleted_this_event.insert(key.clone());
             self.deleted.insert(key);
             return true;
@@ -4247,6 +4342,7 @@ impl WorldState {
             return false;
         };
         self.note(format!("{at}: deleteObject {name}: {what} deleted (not drawn, not clickable, no collision; events to it dropped)"));
+        self.trap_visitor_deleted(name, "deleteObject");
         self.requests.push(Request::Delete { name: name.to_string(), at: at.to_string() });
         self.deleted_this_event.insert(key.clone());
         self.deleted.insert(key);
@@ -4784,10 +4880,7 @@ impl Active {
     /// [`Self::test_command`], which keeps the event open.
     pub fn command_event(&mut self, line: &str, at: &str) -> Option<String> {
         let result = self.test_command(line, at);
-        for (script, args) in ScriptHost::take_calls(&mut self.world) {
-            self.world.note(format!("{at}: runs {script} {} at once", args.join(" ")));
-            self.scripts.call(&script, &args, &mut self.world);
-        }
+        self.flush_calls();
         ScriptHost::event_done(&mut self.world);
         result
     }
@@ -5502,11 +5595,11 @@ impl Active {
         line
     }
 
-    /// U-9b (`ranged-weapons.md` 8d, `traps.md` 8a): after the bolts'
+    /// U-9b (`ranged-weapons.md` 8d, `traps.md` 8a–8b): after the bolts'
     /// step, each thrown rock's move is shown to the traps (type 1: the
-    /// plates' traps get `On`; a rock that dies inside never leaves); each
-    /// landing runs its `Die` script's lines (`rockHit.cs`: `getLoc` and
-    /// `dropItem Connor INVITEM_Rock` at the landing point).
+    /// plates' traps get `On`); each landing runs `rockHit.cs` (`dropItem
+    /// Connor INVITEM_Rock` at the landing point, entering any plate as `Cue
+    /// 301` before `Prrock.kq` is deleted and leaves with `Cue 302` or `Off`).
     pub fn rocks_after_flight(&mut self) {
         use crate::collide::BallStack;
         let point = BallStack { radius: 0.0, heights: vec![0.0] };
@@ -5527,6 +5620,10 @@ impl Active {
             } else {
                 self.world.fight_note("Connor", format!("{at}: not rockHit.cs: nothing run (ours)"));
             }
+            for call in self.world.trap_visitor_deleted(&name, "rock projectile deleted at Die") {
+                self.world.fight_note("Connor", format!("{name}: {call} (traps.md 8a, ranged-weapons.md 8d)"));
+            }
+            self.flush_calls();
         }
     }
 
@@ -5649,6 +5746,20 @@ impl Active {
         self.run_lines(&lines, &at);
     }
 
+    /// Drains `world.calls_out` (trap `On`/`Off`/`Cue`, `loadKQ` `Init`, etc.) when called outside `scripts.call`.
+    fn flush_calls(&mut self) {
+        for _ in 0..64 {
+            let calls = ScriptHost::take_calls(&mut self.world);
+            if calls.is_empty() {
+                break;
+            }
+            for (script, args) in calls {
+                self.world.note(format!("immediate call: {script} {}", args.join(" ")));
+                self.scripts.call(&script, &args, &mut self.world);
+            }
+        }
+    }
+
     /// Runs `lines` as script commands, each logged with `at`.
     fn run_lines(&mut self, lines: &[String], at: &str) {
         for line in lines {
@@ -5657,6 +5768,7 @@ impl Active {
             if ScriptHost::world_command(&mut self.world, &words, at).is_none() {
                 self.world.note(format!("{at}: {line}: not a command this world knows; skipped"));
             }
+            self.flush_calls();
         }
     }
 
@@ -7035,6 +7147,7 @@ impl Active {
         }
         let before = self.world.items.count("Connor", &o.kind);
         crate::connor_inventory::receive(&mut self.world, &o.name, Some(placement.position), "picked up");
+        self.flush_calls();
         let after = self.world.items.count("Connor", &o.kind);
         let sound = self.world.pickup_sound(&o.kind);
         self.world.item_note(format!("{head}: IN REACH: picked up; Connor's {} {before} -> {after}; {sound}; gone from the world", o.kind));
@@ -7146,6 +7259,7 @@ impl Active {
                 self.world.note(format!("{head}: IN REACH: click (empty): {empty}"));
             }
         }
+        self.flush_calls();
         ClickResult::Chest { before, after: self.world.chests[i].chest.state }
     }
 
@@ -8629,9 +8743,14 @@ endif
 
     #[test]
     fn a_thrown_rock_flies_its_arc_and_keeps_a_plate_down() {
-        // ranged-weapons.md 8c-8d, traps.md 8a (U-9b): Dead City's plates.
+        // ranged-weapons.md 8c-8d, traps.md 8a-8b (U-9b + Q202): Dead City's plates.
         use crate::trap::TrapSettings;
         let mut a = fighter();
+        let (rock_types, _) = kq8_data::items::ItemTypes::parse(
+            b"[InventoryItemTypeList]\nnumItems=1\nitem0=KQInventoryItemType\tINVITEM_Rock\t2050\t0\t0\t0\t0\t0\t1\tQuestItem\tIDBMP_X\t1 0 0 1\tNoModeChange\t0\t1\tnone\tnone\tnone\trok.kqs\tnone\t1\t256\n",
+        );
+        a.world.items = crate::item::Items::new(rock_types, [("rok.kqs".into(), [-30.0, -30.0, 0.0], [30.0, 30.0, 40.0])]);
+        a.world.items.make("INVITEM_Rock", 2, Place::Carried("Connor".into())).unwrap();
         a.set_connor_stats(ConnorStats { stats: Stats([50, 10, 7, 0, 0]), level: 5 });
         a.add_traps([Trap::new(TrapSettings {
             name: "triptrp2".into(),
@@ -8662,11 +8781,99 @@ endif
             n += 1;
         }
         let log = a.world.fight_log.join("\n");
+        let trap_log = a.world.trap_log.join("\n");
         assert!(a.world.bolts.is_empty(), "{log}");
         assert!(log.contains("triptrp2 On") || log.contains("On rock"), "the plate's trap gets On: {log}");
         assert!(log.contains("reaches the floor grid"), "{log}");
-        assert_eq!(a.world.traps[0].inside.len(), 1, "it never leaves: {log}");
+        assert!(trap_log.contains("Cue 301 NoName"), "dropped rock enters before projectile leaves: {trap_log}");
+        assert!(log.contains("Cue 302"), "projectile leaving drops count 2 -> 1 without Off: {log}");
+        assert_eq!(a.world.traps[0].inside.len(), 1, "dropped rock keeps plate down: {log}");
         assert!(!log.contains(" Off "), "{log}");
+    }
+
+    #[test]
+    fn picking_up_thrown_rock_raises_plate_on_merge_and_non_merge_and_no_drop_sends_off() {
+        // Q202 (traps.md rules 8a-8b, ranged-weapons.md 8d).
+        use crate::trap::TrapSettings;
+        let script = b"if test $2 == On\n  set plateOn $1\n  set countOn 1\n  return\nendif\nif test $2 == Cue\n  if test $3 == 301\n    set cue301 $4\n  endif\n  if test $3 == 302\n    set cue302 $4\n  endif\n  return\nendif\nif test $2 == Off\n  set plateOff $3\n  return\nendif\n";
+        let (rock_types, _) = kq8_data::items::ItemTypes::parse(
+            b"[InventoryItemTypeList]\nnumItems=1\nitem0=KQInventoryItemType\tINVITEM_Rock\t2050\t0\t0\t0\t0\t0\t1\tQuestItem\tIDBMP_X\t1 0 0 1\tNoModeChange\t0\t1\tnone\tnone\tnone\trok.kqs\tnone\t1\t256\n",
+        );
+        let text = b"[Rock]\nclassType=KQProjectile\nshapeName=rok.kqs\nvelocity=2500\nmaxDistance=2500\nmeshName=rock\nscript=rockHit.cs\nparabola=1\npeakHeightOffset=500\nupVelocity=2500\n";
+        let keys = kq8_data::characters::ProjectileKeys::from_section(&kq8_data::kq_text::parse(text)[0]).unwrap();
+        let make_world = |rock_count: i64| {
+            let mut a = active("", &[]);
+            a.world.sources.insert("triptrp1.cs".into(), script.to_vec());
+            a.world.items = crate::item::Items::new(rock_types.clone(), [("rok.kqs".into(), [-30.0, -30.0, 0.0], [30.0, 30.0, 40.0])]);
+            if rock_count > 0 {
+                a.world.items.make("INVITEM_Rock", rock_count, Place::Carried("Connor".into())).unwrap();
+            }
+            a.add_traps([Trap::new(TrapSettings {
+                name: "triptrp1".into(),
+                position: [0.0, 2000.0, 0.0],
+                min: [-250.0, -250.0, 0.0],
+                max: [250.0, 250.0, 475.0],
+                script: Some("triptrp1.cs".into()),
+                mask: 517,
+                trap_type: 0,
+                inner_percent: None,
+                lookup_call: false,
+                spirit_damage: None,
+            })]);
+            a
+        };
+
+        // Case 1: Connor carries 2 rocks -> stack merge on pickup -> Off.
+        let mut a = make_world(2);
+        a.world.launch_rock("prrock.kq", &keys, [0.0; 3], std::f32::consts::PI, [0.0, 2000.0, 0.0]);
+        for _ in 0..40 {
+            if a.world.bolts.is_empty() {
+                break;
+            }
+            a.world.bolts_step(&FlatGround, &[], &[]);
+            a.rocks_after_flight();
+        }
+        assert_eq!(a.scripts.vars.get("plateOn"), Some("triptrp1"));
+        assert!(a.scripts.vars.get("cue301").is_some());
+        assert!(a.scripts.vars.get("cue302").is_some());
+        assert_eq!(a.scripts.vars.get("plateOff"), None);
+        assert_eq!(a.world.traps[0].inside.len(), 1);
+        let dropped = a.world.traps[0].inside[0].clone();
+        let click = a.click(&dropped, [0.0, 1980.0, 0.0], 500.0, None);
+        assert!(matches!(click, ClickResult::PickedUp(_)), "{click:?}");
+        assert!(a.world.traps[0].inside.is_empty());
+        assert_eq!(a.scripts.vars.get("plateOff"), Some(dropped.as_str()));
+
+        // Case 2: Connor carries 1 rock -> drop leaves 0 in inventory -> non-merging pickup -> Off.
+        let mut b = make_world(1);
+        b.world.launch_rock("prrock.kq", &keys, [0.0; 3], std::f32::consts::PI, [0.0, 2000.0, 0.0]);
+        for _ in 0..40 {
+            if b.world.bolts.is_empty() {
+                break;
+            }
+            b.world.bolts_step(&FlatGround, &[], &[]);
+            b.rocks_after_flight();
+        }
+        assert_eq!(b.world.items.count("Connor", "INVITEM_Rock"), 0);
+        assert_eq!(b.scripts.vars.get("plateOff"), None);
+        let dropped_b = b.world.traps[0].inside[0].clone();
+        let click_b = b.click(&dropped_b, [0.0, 1980.0, 0.0], 500.0, None);
+        assert!(matches!(click_b, ClickResult::PickedUp(_)), "{click_b:?}");
+        assert!(b.world.traps[0].inside.is_empty());
+        assert_eq!(b.scripts.vars.get("plateOff"), Some(dropped_b.as_str()));
+
+        // Case 3: Connor has 0 rocks when projectile lands -> nothing dropped -> projectile Die sends Off.
+        let mut c = make_world(0);
+        c.world.launch_rock("prrock.kq", &keys, [0.0; 3], std::f32::consts::PI, [0.0, 2000.0, 0.0]);
+        for _ in 0..40 {
+            if c.world.bolts.is_empty() {
+                break;
+            }
+            c.world.bolts_step(&FlatGround, &[], &[]);
+            c.rocks_after_flight();
+        }
+        assert!(c.world.traps[0].inside.is_empty());
+        assert!(c.scripts.vars.get("plateOff").is_some());
     }
 
     #[test]

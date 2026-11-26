@@ -196,6 +196,25 @@ impl Trap {
         }
         out
     }
+
+    /// Removes a deleted or picked-up visitor from this trap (`traps.md` rules 8a–8b).
+    /// Returns the script arguments after `$1` (`Off <name>` or `Cue 302 <name>`), or `None`
+    /// if the trap is gone or `name` was not inside.
+    pub fn remove_visitor(&mut self, name: &str) -> Option<Vec<String>> {
+        if self.gone || !self.inside.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            return None;
+        }
+        self.inside.retain(|n| !n.eq_ignore_ascii_case(name));
+        let sticky = self.settings.trap_type & STICKY != 0 && self.settings.inner_percent.is_some();
+        if sticky && self.inside.is_empty() {
+            self.shrunk = true;
+        }
+        Some(if self.inside.is_empty() {
+            vec!["Off".into(), name.into()]
+        } else {
+            vec!["Cue".into(), CUE_LEAVE.into(), name.into()]
+        })
+    }
 }
 
 /// Whether the segment from `a` to `b` meets the box (edges count; a
@@ -410,5 +429,25 @@ mod tests {
         assert!(t.gone);
         assert_eq!(call(&t.check(&at("Connor", 12_000.0, &balls))), None);
         assert_eq!(call(&t.check(&at("Connor", 10_000.0, &balls))), None);
+    }
+
+    #[test]
+    fn remove_visitor_emits_off_or_cue_302_and_reshrinks_sticky() {
+        let balls = BallStack::from_box(MIN, MAX);
+        let mut t = trap(STICKY, Some(0.9));
+        assert!(t.shrunk);
+        assert_eq!(call(&t.check(&at("Prrock", 10_000.0, &balls))).as_deref(), Some("On Prrock"));
+        assert!(!t.shrunk);
+        // Removing one of two visitors emits Cue 302 and keeps the trap grown.
+        assert_eq!(call(&t.check(&at("NoName1", 10_000.0, &balls))).as_deref(), Some("Cue 301 NoName1"));
+        assert_eq!(t.remove_visitor("Prrock").as_deref(), Some(&["Cue".into(), "302".into(), "Prrock".into()][..]));
+        assert!(!t.shrunk);
+        assert_eq!(t.inside, vec!["NoName1".to_string()]);
+        // Removing a visitor that isn't inside does nothing.
+        assert_eq!(t.remove_visitor("Prrock"), None);
+        // Removing the last visitor emits Off and re-shrinks sticky trap.
+        assert_eq!(t.remove_visitor("NoName1").as_deref(), Some(&["Off".into(), "NoName1".into()][..]));
+        assert!(t.inside.is_empty());
+        assert!(t.shrunk);
     }
 }

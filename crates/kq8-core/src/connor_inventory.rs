@@ -132,6 +132,7 @@ pub(crate) fn connor_add(w: &mut WorldState, d: Stats, why: &str) -> String {
 pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &str) {
     let Some(i) = w.items.index(name) else { return };
     let o = w.items.objects[i].clone();
+    let was_in_world = matches!(o.place, Place::World { .. });
     let lay_angles = match o.place {
         Place::World { angles, .. } => angles,
         _ => [0.0; 3],
@@ -148,11 +149,17 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
             w.items.objects[i].place = Place::Gone;
             let into = w.items.objects[k].name.clone();
             w.item_note(format!("inventory ({why}): {} x{} joins {into}: {} {before} -> {}; {} deleted (inventory.md rule 8)", o.name, o.quantity, o.kind, before + o.quantity, o.name));
+            if was_in_world {
+                w.trap_visitor_deleted(&o.name, "picked up & merged into stack");
+            }
             return;
         }
     }
     w.items.objects[i].place = Place::Carried("Connor".into());
     w.items.mark_added(name);
+    if was_in_world {
+        w.trap_visitor_deleted(&o.name, "picked up into inventory");
+    }
     let mut line = format!("inventory ({why}): {} ({}, {}) x{} is a new entry: {} {before} -> {}", o.name, o.kind, t.category, o.quantity, o.kind, before + o.quantity);
     let mine = places(&t.category);
     if !mine.is_empty() {
@@ -179,6 +186,7 @@ pub fn receive(w: &mut WorldState, name: &str, lay_at: Option<[f32; 3]>, why: &s
                     (None, None) => ([0.0; 3], "at (0, 0, 0): no place known"),
                 };
                 w.items.objects[k].place = Place::World { position: at, angles: lay_angles };
+                w.item_placed_in_traps(&old, "swapped out to world");
                 line.push_str(&format!("; {old} ({kind}) taken off and put into the world at ({:.0}, {:.0}, {:.0}) {whence}{undone}", at[0], at[1], at[2]));
             }
         }
